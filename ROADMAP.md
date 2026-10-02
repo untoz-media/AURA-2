@@ -8,10 +8,12 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] Define AURA-2 product direction
 - [x] Define initial architecture
 - [x] Create initial roadmap
-- [ ] Establish development environment
-- [ ] Create base desktop application
+- [x] Establish development environment
+- [x] Create base desktop application
 
 ## M002 — Desktop Foundation
+
+**Status: Complete — AURA-2 0.2.0-alpha.1**
 
 - [x] **M002.1** — Choose desktop stack: Tauri 2 + React + TypeScript + Vite
 - [x] **M002.2** — Create base Windows desktop application
@@ -24,7 +26,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M002.9** — Settings foundation
 - [x] **M002.10** — Background mode
 - [x] **M002.11** — Optional Windows autostart
-- [ ] **M002.12** — First packaged Windows build
+- [x] **M002.12** — First packaged Windows build
 
 ## M003 — Computer Control
 
