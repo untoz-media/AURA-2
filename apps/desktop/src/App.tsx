@@ -1,14 +1,21 @@
 import { FormEvent, useState } from "react";
-
-type AuraStatus = "Idle" | "Listening" | "Thinking" | "Working" | "Waiting";
+import {
+  AuraMark,
+  NavItem,
+  SectionLabel,
+  ShortcutKey,
+  StatusPill,
+  Surface,
+  type AuraStatus,
+} from "./design-system/components";
 
 const modules = [
-  { name: "Computer", description: "Windows control", milestone: "M003" },
-  { name: "Director", description: "OBS control", milestone: "M004" },
-  { name: "Memory", description: "Local context", milestone: "M005" },
-  { name: "Voice", description: "Natural interaction", milestone: "M006" },
-  { name: "Vision", description: "Screen understanding", milestone: "M007" },
-  { name: "Agents", description: "Multi-step actions", milestone: "M008" },
+  { name: "Computer", description: "Windows control", milestone: "M003", glyph: "⌁" },
+  { name: "Director", description: "OBS control", milestone: "M004", glyph: "◉" },
+  { name: "Memory", description: "Local context", milestone: "M005", glyph: "◇" },
+  { name: "Voice", description: "Natural interaction", milestone: "M006", glyph: "∿" },
+  { name: "Vision", description: "Screen understanding", milestone: "M007", glyph: "◎" },
+  { name: "Agents", description: "Multi-step actions", milestone: "M008", glyph: "✦" },
 ];
 
 function App() {
@@ -37,28 +44,28 @@ function App() {
   }
 
   return (
-    <main className="shell">
+    <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="aura-mark">A</div>
-          <div>
+        <div className="brand-lockup">
+          <AuraMark compact />
+          <div className="brand-copy">
             <strong>AURA</strong>
             <span>2 · pre-Beta</span>
           </div>
         </div>
 
-        <nav>
-          <button className="nav-item active">Home</button>
-          <button className="nav-item">Actions</button>
-          <button className="nav-item">Automations</button>
-          <button className="nav-item">Memory</button>
+        <nav className="primary-nav" aria-label="Primary navigation">
+          <NavItem active icon="⌂">Home</NavItem>
+          <NavItem icon="✦">Actions</NavItem>
+          <NavItem icon="↻">Automations</NavItem>
+          <NavItem icon="◇">Memory</NavItem>
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="nav-item">Settings</button>
+          <NavItem icon="⚙">Settings</NavItem>
           <div className="local-badge">
-            <span className="dot" />
-            Local-first
+            <span className="local-dot" />
+            <span>Local-first</span>
           </div>
         </div>
       </aside>
@@ -69,22 +76,19 @@ function App() {
             <span className="eyebrow">AURA-2 DESKTOP</span>
             <h1>Good evening.</h1>
           </div>
-          <div className="status-pill">
-            <span className={`status-dot ${status.toLowerCase()}`} />
-            {status}
-          </div>
+          <StatusPill status={status} />
         </header>
 
         <section className="hero">
-          <div className="orb" aria-hidden="true">
-            <div className="orb-core" />
+          <div className={`aura-presence ${status.toLowerCase()}`}>
+            <AuraMark />
           </div>
 
           <p className="hero-kicker">YOUR PC. NOW IT UNDERSTANDS YOU.</p>
           <h2>What do you want to do?</h2>
 
           <form className="command-bar" onSubmit={submitCommand}>
-            <span className="spark">✦</span>
+            <span className="command-spark" aria-hidden="true">✦</span>
             <input
               autoFocus
               value={command}
@@ -92,32 +96,32 @@ function App() {
               placeholder="Ask AURA to do something on this computer…"
               aria-label="AURA command"
             />
-            <kbd>Enter</kbd>
+            <ShortcutKey>Enter</ShortcutKey>
           </form>
 
-          <div className="shortcut">
-            Press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> from anywhere
+          <div className="shortcut-hint">
+            Press <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
+            <ShortcutKey>Space</ShortcutKey> from anywhere
           </div>
         </section>
 
         <section className="lower-grid">
-          <article className="activity-card">
-            <div className="card-heading">
-              <span>Current activity</span>
-              <span className="live-dot" />
-            </div>
+          <Surface className="activity-card">
+            <SectionLabel trailing={<span className="activity-live-dot" />}>
+              Current activity
+            </SectionLabel>
             <p>{lastAction}</p>
-          </article>
+          </Surface>
 
-          <article className="modules-card">
-            <div className="card-heading">
-              <span>AURA modules</span>
-              <span>{modules.length}</span>
-            </div>
+          <Surface className="modules-card">
+            <SectionLabel trailing={<span>{modules.length} modules</span>}>
+              AURA modules
+            </SectionLabel>
             <div className="module-grid">
               {modules.map((module) => (
-                <div className="module" key={module.name}>
-                  <div>
+                <div className="module-tile" key={module.name}>
+                  <span className="module-glyph" aria-hidden="true">{module.glyph}</span>
+                  <div className="module-copy">
                     <strong>{module.name}</strong>
                     <span>{module.description}</span>
                   </div>
@@ -125,7 +129,7 @@ function App() {
                 </div>
               ))}
             </div>
-          </article>
+          </Surface>
         </section>
       </section>
     </main>
