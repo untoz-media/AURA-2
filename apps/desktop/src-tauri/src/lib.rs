@@ -209,8 +209,14 @@ fn set_background_state(
     app: &tauri::AppHandle,
     background_enabled: bool,
 ) -> Result<RuntimeSnapshot, String> {
-    let state = app.state::<RuntimeState>();
+    save_preferences(
+        app,
+        &DesktopPreferences {
+            background_enabled,
+        },
+    )?;
 
+    let state = app.state::<RuntimeState>();
     {
         let mut current = state
             .background_enabled
@@ -218,13 +224,6 @@ fn set_background_state(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *current = background_enabled;
     }
-
-    save_preferences(
-        app,
-        &DesktopPreferences {
-            background_enabled,
-        },
-    )?;
 
     let snapshot = emit_runtime_state(app);
 
