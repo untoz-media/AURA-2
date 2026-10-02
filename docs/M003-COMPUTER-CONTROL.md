@@ -133,3 +133,21 @@ Permission classification is intentionally conservative:
 With the default policy, only navigation-only keys execute immediately. Immediate injection is restricted to commands submitted through the Overlay, which is hidden before `SendInput` runs so focus can return to the user's previous application.
 
 Text is sent through Unicode keyboard events, capped at 500 characters and control characters are rejected.
+
+
+## M003.5
+
+M003.5 adds controlled native Windows pointer and mouse-wheel actions.
+
+AURA can parse absolute cursor movement, bounded scrolling and click intents. Coordinates are validated against the Windows virtual desktop so multi-monitor layouts with negative coordinates are supported.
+
+Permission classification:
+
+- pointer movement → `Act`
+- scrolling → `Act`
+- left/right/double click → `Modify`
+- click at coordinates → `Modify`
+
+Under the current default policy, movement and scrolling can execute immediately. Click actions stay in `Waiting` until M003.9 provides explicit confirmation.
+
+The implementation uses `SetCursorPos`, `GetSystemMetrics` and `SendInput/MOUSEINPUT`; no click loops, drag-and-drop or visual auto-targeting are included in M003.5.

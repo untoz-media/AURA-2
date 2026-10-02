@@ -5,6 +5,7 @@ mod permissions;
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
 use computer::keyboard::{press_shortcut, type_text};
+use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionDecision, PermissionPolicy};
@@ -380,7 +381,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.4 Keyboard Actions",
+        stage: "M003.5 Mouse Actions",
         local_first: true,
     }
 }
@@ -839,6 +840,115 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::Mouse(action) => {
+                            let needs_overlay = matches!(
+                                action,
+                                MouseAction::Scroll { .. }
+                                    | MouseAction::Click { .. }
+                                    | MouseAction::DoubleClick
+                                    | MouseAction::ClickAt { .. }
+                            );
+
+                            if needs_overlay && worker_source != "overlay" {
+                                let message =
+                                    "This mouse action was not sent. Use the AURA Overlay so the action targets the app you were using."
+                                        .to_string();
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "computer.mouse_requires_overlay",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
+                            if worker_source == "overlay" {
+                                hide_overlay_window(&worker_app);
+                                thread::sleep(Duration::from_millis(90));
+                            }
+
+                            let action_label = match action {
+                                MouseAction::MoveTo(point) => {
+                                    format!("Moving pointer to ({}, {})…", point.x, point.y)
+                                }
+                                MouseAction::Scroll { notches } if notches < 0 => {
+                                    format!("Scrolling down {}…", notches.abs())
+                                }
+                                MouseAction::Scroll { notches } => {
+                                    format!("Scrolling up {}…", notches)
+                                }
+                                MouseAction::Click { .. } => "Clicking…".to_string(),
+                                MouseAction::DoubleClick => "Double-clicking…".to_string(),
+                                MouseAction::ClickAt { point, .. } => {
+                                    format!("Clicking at ({}, {})…", point.x, point.y)
+                                }
+                            };
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: action_label,
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_mouse_action(action) {
+                                Ok(()) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: "Mouse action completed.".to_string(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not perform mouse action: {}", error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.mouse_input_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::CloseApp(target) => {
                             let display_name = target.display_name();
 
@@ -926,6 +1036,23 @@ fn process_user_command(
                         "Typing {} characters requires confirmation before AURA sends text to another application.",
                         value.chars().count()
                     ),
+                    ActionIntent::Mouse(MouseAction::Click { .. }) => {
+                        "Clicking requires confirmation because it can activate controls or submit actions."
+                            .to_string()
+                    }
+                    ActionIntent::Mouse(MouseAction::DoubleClick) => {
+                        "Double-clicking requires confirmation because it can open or activate content."
+                            .to_string()
+                    }
+                    ActionIntent::Mouse(MouseAction::ClickAt { point, .. }) => format!(
+                        "Clicking at ({}, {}) requires confirmation because it can activate a UI control.",
+                        point.x, point.y
+                    ),
+                    ActionIntent::Mouse(MouseAction::MoveTo(_))
+                    | ActionIntent::Mouse(MouseAction::Scroll { .. }) => {
+                        "This mouse action requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                 };
 
                 emit_core_event(
@@ -967,6 +1094,19 @@ fn process_user_command(
                 },
             );
         }
+        RouteResult::InvalidMouse(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!("Mouse command rejected: {}", message),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+        }
         RouteResult::UnsupportedApp(target) => {
             emit_core_event(
                 &app,
@@ -991,7 +1131,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports known app launches, close requests, window discovery/switching and controlled keyboard actions."
+                        "No deterministic computer action matched yet. M003 currently supports app control, window switching, keyboard actions and controlled mouse actions."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
