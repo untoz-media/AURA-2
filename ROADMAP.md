@@ -15,7 +15,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 - [x] **M002.1** — Choose desktop stack: Tauri 2 + React + TypeScript + Vite
 - [x] **M002.2** — Create base Windows desktop application
-- [ ] **M002.3** — AURA Design System
+- [x] **M002.3** — AURA Design System
 - [ ] **M002.4** — Core ↔ Desktop communication
 - [ ] **M002.5** — System tray integration
 - [x] **M002.6** — Global keyboard shortcut foundation
