@@ -3,6 +3,7 @@ mod core;
 mod permissions;
 
 use computer::app_launcher::launch_app;
+use computer::app_lifecycle::close_app;
 use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
@@ -377,7 +378,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.1 Action Router & App Launching",
+        stage: "M003.2 Application Lifecycle",
         local_first: true,
     }
 }
@@ -553,19 +554,86 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::CloseApp(target) => {
+                            let display_name = target.display_name();
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Closing {}…", display_name),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match close_app(target) {
+                                Ok(()) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!("Closed {}.", display_name),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not close {}: {}",
+                                        display_name, error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.app_close_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                     }
                 });
             }
             PermissionDecision::Ask => {
+                let message = match &action.intent {
+                    ActionIntent::CloseApp(target) => format!(
+                        "Closing {} requires confirmation because unsaved work could be lost. Confirmation controls arrive in M003.9.",
+                        target.display_name()
+                    ),
+                    ActionIntent::LaunchApp(target) => format!(
+                        "Opening {} requires confirmation under the current permission policy.",
+                        target.display_name()
+                    ),
+                };
+
                 emit_core_event(
                     &app,
                     CoreEvent {
                         id: id.clone(),
                         kind: "command.awaiting_confirmation",
                         status: AuraRuntimeStatus::Waiting,
-                        message:
-                            "This action requires confirmation. The confirmation UI arrives later in M003."
-                                .to_string(),
+                        message,
                         command: Some(text.clone()),
                         timestamp_ms: unix_timestamp_ms(),
                     },
@@ -593,7 +661,7 @@ fn process_user_command(
                     kind: "command.failed",
                     status: AuraRuntimeStatus::Idle,
                     message: format!(
-                        "I do not have a safe launcher for “{}” yet. Try OBS, Brave, Chrome, File Explorer, Windows Terminal, Notepad or Calculator.",
+                        "I do not have a safe application target for “{}” yet. Try OBS, Brave, Chrome, File Explorer, Windows Terminal, Notepad or Calculator.",
                         target
                     ),
                     command: Some(text.clone()),
@@ -609,7 +677,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003.1 currently supports opening known applications."
+                        "No deterministic computer action matched yet. M003 currently supports opening known applications and routing safe close requests."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),

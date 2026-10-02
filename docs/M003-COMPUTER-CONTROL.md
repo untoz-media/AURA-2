@@ -79,3 +79,22 @@ Default policy:
 - Sensitive → Ask
 
 Only the `Act` class is executed in M003.1. The confirmation UI for `Ask` decisions arrives later in M003.
+
+
+## M003.2
+
+M003.2 adds application lifecycle control for known app targets.
+
+Close commands are deterministic and bilingual, but are classified as `PermissionClass::Modify`. Under the default permission policy this produces a `Waiting` state until M003.9 provides the explicit confirmation UI.
+
+The Windows lifecycle implementation is intentionally conservative:
+
+- known executable image names only
+- no arbitrary PIDs
+- no wildcard targets
+- no shell interpolation
+- no PowerShell or cmd.exe
+- no forced `/F` termination
+- File Explorer is protected from generic termination
+
+The close engine is implemented in `computer/app_lifecycle.rs`.
