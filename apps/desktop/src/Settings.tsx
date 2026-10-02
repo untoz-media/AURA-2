@@ -19,6 +19,7 @@ type Props = {
   appStatus: AppStatus | null;
   runtimeState: RuntimeState;
   onPausedChange: (paused: boolean) => Promise<RuntimeState>;
+  onBackgroundChange: (backgroundEnabled: boolean) => Promise<RuntimeState>;
 };
 
 const sections: Array<{
@@ -99,6 +100,7 @@ export default function Settings({
   appStatus,
   runtimeState,
   onPausedChange,
+  onBackgroundChange,
 }: Props) {
   return (
     <section className="settings-layout">
@@ -141,8 +143,14 @@ export default function Settings({
               />
               <SettingRow
                 title="Run in background"
-                description="Keep AURA available from the tray after closing the main window."
-                trailing={<Badge tone="ready">Active</Badge>}
+                description="Keep AURA, the tray and the Overlay available after closing the main window."
+                trailing={
+                  <Toggle
+                    checked={runtimeState.backgroundEnabled}
+                    onChange={(value) => void onBackgroundChange(value)}
+                    label="Run AURA in background"
+                  />
+                }
               />
               <SettingRow
                 title="Start with Windows"

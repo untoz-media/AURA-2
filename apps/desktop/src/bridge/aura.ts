@@ -6,6 +6,7 @@ import type {
   CommandRequest,
   CoreError,
   CoreEvent,
+  LifecycleEvent,
   RuntimeState,
 } from "./types";
 
@@ -13,6 +14,7 @@ export const AURA_EVENTS = {
   core: "aura:core-event",
   error: "aura:core-error",
   runtime: "aura:runtime-state",
+  lifecycle: "aura:lifecycle-event",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -25,6 +27,12 @@ export async function getRuntimeState(): Promise<RuntimeState> {
 
 export async function setRuntimePaused(paused: boolean): Promise<RuntimeState> {
   return invoke<RuntimeState>("set_runtime_paused", { paused });
+}
+
+export async function setBackgroundEnabled(
+  backgroundEnabled: boolean,
+): Promise<RuntimeState> {
+  return invoke<RuntimeState>("set_background_enabled", { backgroundEnabled });
 }
 
 export async function submitAuraCommand(
@@ -45,6 +53,15 @@ export async function listenToOpenSettings(
   handler: () => void,
 ): Promise<UnlistenFn> {
   return listen("aura:open-settings", () => handler());
+}
+
+export async function listenToLifecycle(
+  handler: (event: LifecycleEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<LifecycleEvent>(
+    AURA_EVENTS.lifecycle,
+    ({ payload }) => handler(payload),
+  );
 }
 
 export async function listenToAuraCore(

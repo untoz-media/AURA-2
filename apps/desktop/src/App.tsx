@@ -34,6 +34,7 @@ function App() {
     bridgeError,
     submitCommand,
     setPaused,
+    setBackgroundMode,
   } = useAuraBridge();
 
   useEffect(() => {
@@ -196,6 +197,7 @@ function App() {
             appStatus={appStatus}
             runtimeState={runtimeState}
             onPausedChange={setPaused}
+            onBackgroundChange={setBackgroundMode}
           />
         )}
       </section>
