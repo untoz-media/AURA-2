@@ -1,0 +1,20 @@
+<svg width="320" height="180" viewBox="0 0 320 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="auraGradient" x1="58" y1="48" x2="262" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20C7FF"/>
+      <stop offset="0.48" stop-color="#5F7CFF"/>
+      <stop offset="1" stop-color="#9B5CFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M66 90C92 90 100 76 111 57C122 38 138 28 160 28C182 28 198 38 209 57C220 76 228 90 254 90C228 90 220 104 209 123C198 142 182 152 160 152C138 152 122 142 111 123C100 104 92 90 66 90Z" stroke="url(#auraGradient)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+  <circle cx="160" cy="90" r="44" stroke="url(#auraGradient)" stroke-width="5.5" filter="url(#softGlow)"/>
+  <circle cx="160" cy="90" r="14" fill="#F7F9FF" filter="url(#softGlow)"/>
+  <path d="M66 90H84" stroke="#20C7FF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M236 90H254" stroke="#9B5CFF" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="48" cy="90" r="6" fill="#20C7FF" filter="url(#softGlow)"/>
+  <circle cx="272" cy="90" r="6" fill="#9B5CFF" filter="url(#softGlow)"/>
+</svg>
