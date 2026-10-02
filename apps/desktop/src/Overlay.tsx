@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { hideOverlay, openMainWindow } from "./bridge/aura";
 import { useAuraBridge } from "./bridge/useAuraBridge";
+import ConfirmationCard from "./ConfirmationCard";
 import {
   AuraMark,
   ShortcutKey,
@@ -10,7 +11,15 @@ import {
 export default function Overlay() {
   const [command, setCommand] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const { status, activity, runtimeState, submitCommand } = useAuraBridge();
+  const {
+    status,
+    activity,
+    runtimeState,
+    pendingConfirmation,
+    submitCommand,
+    approveConfirmation,
+    cancelConfirmation,
+  } = useAuraBridge();
 
   useEffect(() => {
     const focusInput = () => inputRef.current?.focus();
@@ -65,22 +74,31 @@ export default function Overlay() {
           </div>
         </div>
 
-        <form className="overlay-command" onSubmit={handleSubmit}>
-          <span className="overlay-spark" aria-hidden="true">✦</span>
-          <input
-            ref={inputRef}
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            placeholder={
-              runtimeState.paused
-                ? "AURA is paused"
-                : "What do you want to do?"
-            }
-            disabled={runtimeState.paused || status === "Working"}
-            aria-label="AURA quick command"
+        {pendingConfirmation ? (
+          <ConfirmationCard
+            compact
+            confirmation={pendingConfirmation}
+            onAllow={(id) => void approveConfirmation(id)}
+            onCancel={(id) => void cancelConfirmation(id)}
           />
-          <ShortcutKey>Enter</ShortcutKey>
-        </form>
+        ) : (
+          <form className="overlay-command" onSubmit={handleSubmit}>
+            <span className="overlay-spark" aria-hidden="true">✦</span>
+            <input
+              ref={inputRef}
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder={
+                runtimeState.paused
+                  ? "AURA is paused"
+                  : "What do you want to do?"
+              }
+              disabled={runtimeState.paused || status === "Working"}
+              aria-label="AURA quick command"
+            />
+            <ShortcutKey>Enter</ShortcutKey>
+          </form>
+        )}
 
         <div className="overlay-hint">
           <span><ShortcutKey>Esc</ShortcutKey> close</span>
