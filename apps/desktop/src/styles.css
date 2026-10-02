@@ -370,3 +370,7 @@ input:focus-visible {
     animation-iteration-count: 1 !important;
   }
 }
+
+.runtime-paused {
+  color: var(--status-waiting);
+}

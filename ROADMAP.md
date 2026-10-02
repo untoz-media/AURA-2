@@ -17,7 +17,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M002.2** — Create base Windows desktop application
 - [x] **M002.3** — AURA Design System
 - [x] **M002.4** — Core ↔ Desktop communication
-- [ ] **M002.5** — System tray integration
+- [x] **M002.5** — System tray integration
 - [x] **M002.6** — Global keyboard shortcut foundation
 - [ ] **M002.7** — AURA Overlay
 - [x] **M002.8** — Runtime status UI foundation
