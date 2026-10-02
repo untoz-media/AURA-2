@@ -6,6 +6,7 @@ import {
   listenToAuraCore,
   listenToLifecycle,
   resetPermissionPolicy,
+  resolveConfirmation,
   setAutostartEnabled,
   setBackgroundEnabled,
   setPermissionDecision,
@@ -21,6 +22,7 @@ import type {
   PermissionClass,
   PermissionDecision,
   PermissionPolicy,
+  PendingConfirmation,
   RuntimeState,
 } from "./types";
 
@@ -43,6 +45,8 @@ export function useAuraBridge() {
     destructive: "ask",
     sensitive: "ask",
   });
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<PendingConfirmation | null>(null);
   const [bridgeError, setBridgeError] = useState<CoreError | null>(null);
 
   useEffect(() => {
@@ -80,6 +84,27 @@ export function useAuraBridge() {
         setStatus(event.status);
         setActivity(event.message);
         setBridgeError(null);
+
+        if (
+          event.kind === "command.awaiting_confirmation"
+          && event.command
+        ) {
+          setPendingConfirmation({
+            id: event.id,
+            command: event.command,
+            message: event.message,
+          });
+        } else if (
+          pendingConfirmation?.id === event.id
+          && [
+            "command.confirmed",
+            "command.cancelled",
+            "command.completed",
+            "command.failed",
+          ].includes(event.kind)
+        ) {
+          setPendingConfirmation(null);
+        }
       },
       (error: CoreError) => {
         if (cancelled) return;
@@ -202,12 +227,25 @@ export function useAuraBridge() {
     return policy;
   }, []);
 
+  const approveConfirmation = useCallback(async (id: string) => {
+    const ack = await resolveConfirmation(id, true);
+    if (ack) {
+      setStatus(ack.status);
+    }
+    return ack;
+  }, []);
+
+  const cancelConfirmation = useCallback(async (id: string) => {
+    await resolveConfirmation(id, false);
+  }, []);
+
   return {
     status,
     activity,
     appStatus,
     runtimeState,
     permissionPolicy,
+    pendingConfirmation,
     bridgeError,
     submitCommand,
     setPaused,
@@ -215,5 +253,7 @@ export function useAuraBridge() {
     setAutostart,
     setPermission,
     resetPermissions,
+    approveConfirmation,
+    cancelConfirmation,
   };
 }
