@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, BOOL, HWND, LPARAM},
+    Foundation::{CloseHandle, HWND, LPARAM},
     System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     },
@@ -40,7 +40,7 @@ impl std::fmt::Display for WindowError {
     }
 }
 
-unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> i32 {
     if IsWindowVisible(hwnd) == 0 {
         return 1;
     }
