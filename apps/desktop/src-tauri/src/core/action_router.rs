@@ -3,6 +3,7 @@ use crate::computer::{
     audio::MediaAction,
     keyboard::KeyboardShortcut,
     mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
+    system::{SettingsPage, SystemAction},
 };
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
@@ -16,6 +17,7 @@ pub enum ActionIntent {
     TypeText(String),
     Mouse(MouseAction),
     Media(MediaAction),
+    System(SystemAction),
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +42,79 @@ enum AppOperation {
     Launch,
     Close,
     Switch,
+}
+
+fn system_request(input: &str) -> Option<SystemAction> {
+    let normalized = input.trim().to_lowercase();
+
+    match normalized.as_str() {
+        "system status" | "pc status" | "computer status"
+        | "estado do sistema" | "estado do pc" => Some(SystemAction::GetStatus),
+
+        "battery status" | "battery" | "estado da bateria"
+        | "qual é a bateria" | "qual e a bateria" => Some(SystemAction::GetBattery),
+
+        "show desktop" | "show the desktop" | "mostrar ambiente de trabalho"
+        | "mostra o ambiente de trabalho" => Some(SystemAction::ShowDesktop),
+
+        "open task manager" | "abre o gestor de tarefas" | "abrir gestor de tarefas"
+        | "abre o task manager" => Some(SystemAction::OpenTaskManager),
+
+        "open settings" | "open windows settings" | "abre as definições"
+        | "abre as definicoes" | "abrir definições" | "abrir definicoes" => {
+            Some(SystemAction::OpenSettings(SettingsPage::Home))
+        }
+
+        "open display settings" | "abre as definições de ecrã"
+        | "abre as definicoes de ecra" | "abre as definições de display"
+        | "abre as definicoes de display" => {
+            Some(SystemAction::OpenSettings(SettingsPage::Display))
+        }
+
+        "open bluetooth settings" | "abre as definições de bluetooth"
+        | "abre as definicoes de bluetooth" => {
+            Some(SystemAction::OpenSettings(SettingsPage::Bluetooth))
+        }
+
+        "open network settings" | "abre as definições de rede"
+        | "abre as definicoes de rede" => {
+            Some(SystemAction::OpenSettings(SettingsPage::Network))
+        }
+
+        "open sound settings" | "open audio settings"
+        | "abre as definições de som" | "abre as definicoes de som"
+        | "abre as definições de áudio" | "abre as definicoes de audio" => {
+            Some(SystemAction::OpenSettings(SettingsPage::Sound))
+        }
+
+        "lock pc" | "lock computer" | "lock windows"
+        | "bloqueia o pc" | "bloquear o pc" => Some(SystemAction::Lock),
+
+        "sleep pc" | "sleep computer" | "put pc to sleep"
+        | "suspende o pc" | "suspender o pc" => Some(SystemAction::Sleep),
+
+        "restart pc" | "restart computer" | "reinicia o pc"
+        | "reiniciar o pc" => Some(SystemAction::Restart),
+
+        "shutdown pc" | "shut down pc" | "turn off pc"
+        | "desliga o pc" | "desligar o pc" => Some(SystemAction::Shutdown),
+
+        _ => None,
+    }
+}
+
+fn permission_for_system(action: SystemAction) -> PermissionClass {
+    match action {
+        SystemAction::GetStatus | SystemAction::GetBattery => PermissionClass::Read,
+
+        SystemAction::ShowDesktop
+        | SystemAction::OpenTaskManager
+        | SystemAction::OpenSettings(_) => PermissionClass::Act,
+
+        SystemAction::Lock | SystemAction::Sleep => PermissionClass::Sensitive,
+
+        SystemAction::Restart | SystemAction::Shutdown => PermissionClass::Destructive,
+    }
 }
 
 fn normalize_command(input: &str) -> String {
@@ -440,6 +515,15 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if let Some(action) = system_request(input) {
+        let permission = permission_for_system(action);
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::System(action),
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(media) = media_request(input) {
         return match media {
             Ok(ActionIntent::Media(action)) => {
@@ -538,6 +622,58 @@ mod tests {
         keyboard::{KeyCode, ModifierKey},
         mouse::{MouseAction, MouseButton, ScreenPoint},
     };
+
+    #[test]
+    fn routes_system_status_as_read() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("System status", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::System(SystemAction::GetStatus),
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_display_settings_as_act() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Open display settings", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::System(SystemAction::OpenSettings(SettingsPage::Display)),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_lock_as_sensitive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Lock PC", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::System(SystemAction::Lock),
+                permission: PermissionClass::Sensitive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_shutdown_as_destructive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Shut down PC", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::System(SystemAction::Shutdown),
+                permission: PermissionClass::Destructive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+    }
 
     #[test]
     fn routes_exact_volume_as_act() {
