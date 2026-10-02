@@ -62,6 +62,13 @@ export async function resetPermissionPolicy(): Promise<PermissionPolicy> {
   return invoke<PermissionPolicy>("reset_permission_policy");
 }
 
+export async function resolveConfirmation(
+  id: string,
+  approved: boolean,
+): Promise<CommandAck | null> {
+  return invoke<CommandAck | null>("resolve_confirmation", { id, approved });
+}
+
 export async function submitAuraCommand(
   request: CommandRequest,
 ): Promise<CommandAck> {
