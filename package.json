@@ -1,0 +1,14 @@
+{
+  "name": "aura-2",
+  "version": "0.2.0-alpha.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm --workspace @untoz/aura-desktop run tauri:dev",
+    "build": "npm --workspace @untoz/aura-desktop run tauri:build",
+    "frontend:dev": "npm --workspace @untoz/aura-desktop run dev",
+    "frontend:build": "npm --workspace @untoz/aura-desktop run build"
+  }
+}
