@@ -180,3 +180,14 @@ High-impact system actions are also routed now:
 The current default policy keeps all of those in `Waiting` until the M003.9 confirmation flow is implemented.
 
 System status uses native Win32 APIs including `GlobalMemoryStatusEx`, `GetTickCount64` and `GetSystemPowerStatus`. Known Settings pages use fixed `ms-settings:` URIs and no arbitrary command-line arguments are accepted.
+
+
+## M003.8
+
+M003.8 turns the initial static permission defaults into a persistent runtime policy engine.
+
+Settings → Permissions can now configure Read, Act and Modify as `Allow`, `Ask` or `Never`. Sensitive and Destructive actions intentionally expose only `Ask` and `Never`; permanent Allow is rejected by the Core even if an invalid configuration is injected manually.
+
+The policy is stored locally as `permission-policy.json` and loaded at startup. Every command is routed against a snapshot of the current runtime policy rather than `PermissionPolicy::default()`.
+
+The bridge exposes policy read/update/reset commands. M003.9 will consume `Ask` decisions through a real pending-action confirmation workflow.

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getAppStatus,
+  getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
   listenToLifecycle,
+  resetPermissionPolicy,
   setAutostartEnabled,
   setBackgroundEnabled,
+  setPermissionDecision,
   setRuntimePaused,
   submitAuraCommand,
 } from "./aura";
@@ -15,6 +18,9 @@ import type {
   CoreError,
   CoreEvent,
   LifecycleEvent,
+  PermissionClass,
+  PermissionDecision,
+  PermissionPolicy,
   RuntimeState,
 } from "./types";
 
@@ -30,6 +36,13 @@ export function useAuraBridge() {
     backgroundEnabled: true,
     autostartEnabled: false,
   });
+  const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
+    read: "allow",
+    act: "allow",
+    modify: "ask",
+    destructive: "ask",
+    sensitive: "ask",
+  });
   const [bridgeError, setBridgeError] = useState<CoreError | null>(null);
 
   useEffect(() => {
@@ -37,11 +50,12 @@ export function useAuraBridge() {
     let cleanupCore: (() => void) | undefined;
     let cleanupLifecycle: (() => void) | undefined;
 
-    Promise.all([getAppStatus(), getRuntimeState()])
-      .then(([app, runtime]) => {
+    Promise.all([getAppStatus(), getRuntimeState(), getPermissionPolicy()])
+      .then(([app, runtime, permissions]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
+        setPermissionPolicyState(permissions);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -173,15 +187,33 @@ export function useAuraBridge() {
     return state;
   }, []);
 
+  const setPermission = useCallback(async (
+    permissionClass: PermissionClass,
+    decision: PermissionDecision,
+  ) => {
+    const policy = await setPermissionDecision(permissionClass, decision);
+    setPermissionPolicyState(policy);
+    return policy;
+  }, []);
+
+  const resetPermissions = useCallback(async () => {
+    const policy = await resetPermissionPolicy();
+    setPermissionPolicyState(policy);
+    return policy;
+  }, []);
+
   return {
     status,
     activity,
     appStatus,
     runtimeState,
+    permissionPolicy,
     bridgeError,
     submitCommand,
     setPaused,
     setBackgroundMode,
     setAutostart,
+    setPermission,
+    resetPermissions,
   };
 }

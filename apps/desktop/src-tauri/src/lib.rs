@@ -10,7 +10,7 @@ use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::action_router::{route_command, ActionIntent, RouteResult};
-use permissions::{PermissionDecision, PermissionPolicy};
+use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -39,6 +39,7 @@ struct RuntimeState {
     paused: Mutex<bool>,
     background_enabled: Mutex<bool>,
     autostart_enabled: Mutex<bool>,
+    permission_policy: Mutex<PermissionPolicy>,
 }
 
 impl Default for RuntimeState {
@@ -47,6 +48,7 @@ impl Default for RuntimeState {
             paused: Mutex::new(false),
             background_enabled: Mutex::new(true),
             autostart_enabled: Mutex::new(false),
+            permission_policy: Mutex::new(PermissionPolicy::default()),
         }
     }
 }
@@ -143,6 +145,39 @@ fn unix_timestamp_ms() -> u64 {
 fn next_command_id() -> String {
     let counter = COMMAND_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("cmd-{}-{}", unix_timestamp_ms(), counter)
+}
+
+fn permission_policy_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    Ok(directory.join("permission-policy.json"))
+}
+
+fn load_permission_policy(app: &tauri::AppHandle) -> PermissionPolicy {
+    let Ok(path) = permission_policy_path(app) else {
+        return PermissionPolicy::default();
+    };
+
+    let Ok(content) = fs::read_to_string(path) else {
+        return PermissionPolicy::default();
+    };
+
+    serde_json::from_str::<PermissionPolicy>(&content)
+        .unwrap_or_default()
+        .sanitized()
+}
+
+fn save_permission_policy(
+    app: &tauri::AppHandle,
+    policy: &PermissionPolicy,
+) -> Result<(), String> {
+    let path = permission_policy_path(app)?;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let content = serde_json::to_string_pretty(policy).map_err(|error| error.to_string())?;
+    fs::write(path, content).map_err(|error| error.to_string())
 }
 
 fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -383,7 +418,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.7 System Commands",
+        stage: "M003.8 Permission Engine",
         local_first: true,
     }
 }
@@ -425,6 +460,73 @@ fn set_autostart_enabled(
     autostart_enabled: bool,
 ) -> Result<RuntimeSnapshot, String> {
     set_autostart_state(&app, autostart_enabled)
+}
+
+#[tauri::command]
+fn get_permission_policy(state: State<'_, RuntimeState>) -> PermissionPolicy {
+    state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+#[tauri::command]
+fn set_permission_decision(
+    app: tauri::AppHandle,
+    state: State<'_, RuntimeState>,
+    class: PermissionClass,
+    decision: PermissionDecision,
+) -> Result<PermissionPolicy, String> {
+    let mut next = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    next.set(class, decision).map_err(str::to_string)?;
+    save_permission_policy(&app, &next)?;
+
+    {
+        let mut current = state
+            .permission_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *current = next.clone();
+    }
+
+    emit_lifecycle_event(
+        &app,
+        "permissions.updated",
+        "AURA permission policy updated.",
+    );
+
+    Ok(next)
+}
+
+#[tauri::command]
+fn reset_permission_policy(
+    app: tauri::AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<PermissionPolicy, String> {
+    let next = PermissionPolicy::default();
+    save_permission_policy(&app, &next)?;
+
+    {
+        let mut current = state
+            .permission_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *current = next.clone();
+    }
+
+    emit_lifecycle_event(
+        &app,
+        "permissions.reset",
+        "AURA permission policy restored to safe defaults.",
+    );
+
+    Ok(next)
 }
 
 #[tauri::command]
@@ -491,7 +593,11 @@ fn process_user_command(
         },
     );
 
-    let policy = PermissionPolicy::default();
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
 
     match route_command(&text, &policy) {
         RouteResult::Action(action) => match action.decision {
@@ -1273,7 +1379,7 @@ fn process_user_command(
                     },
                 );
             }
-            PermissionDecision::Block => {
+            PermissionDecision::Never => {
                 emit_core_event(
                     &app,
                     CoreEvent {
@@ -1385,6 +1491,7 @@ pub fn run() {
         )
         .setup(|app| {
             let preferences = load_preferences(app.handle());
+            let permission_policy = load_permission_policy(app.handle());
             {
                 let runtime = app.state::<RuntimeState>();
                 let mut background_enabled = runtime
@@ -1399,6 +1506,12 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *autostart_enabled = registered;
+
+                let mut current_policy = runtime
+                    .permission_policy
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                *current_policy = permission_policy;
             }
 
             let launched_in_background = std::env::args().any(|arg| arg == "--background");
@@ -1509,6 +1622,9 @@ pub fn run() {
             set_runtime_paused,
             set_background_enabled,
             set_autostart_enabled,
+            get_permission_policy,
+            set_permission_decision,
+            reset_permission_policy,
             process_user_command,
             open_main_window,
             hide_overlay

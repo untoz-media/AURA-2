@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import type { AppStatus, RuntimeState } from "./bridge/types";
+import type {
+  AppStatus,
+  PermissionClass,
+  PermissionDecision,
+  PermissionPolicy,
+  RuntimeState,
+} from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
 type SettingsSection =
@@ -21,6 +27,12 @@ type Props = {
   onPausedChange: (paused: boolean) => Promise<RuntimeState>;
   onBackgroundChange: (backgroundEnabled: boolean) => Promise<RuntimeState>;
   onAutostartChange: (autostartEnabled: boolean) => Promise<RuntimeState>;
+  permissionPolicy: PermissionPolicy;
+  onPermissionChange: (
+    permissionClass: PermissionClass,
+    decision: PermissionDecision,
+  ) => Promise<PermissionPolicy>;
+  onResetPermissions: () => Promise<PermissionPolicy>;
 };
 
 const sections: Array<{
@@ -85,6 +97,31 @@ function Toggle({
   );
 }
 
+function PermissionSelect({
+  value,
+  onChange,
+  allowPermanent = true,
+  label,
+}: {
+  value: PermissionDecision;
+  onChange: (decision: PermissionDecision) => void;
+  allowPermanent?: boolean;
+  label: string;
+}) {
+  return (
+    <select
+      className="permission-select"
+      value={value}
+      aria-label={label}
+      onChange={(event) => onChange(event.target.value as PermissionDecision)}
+    >
+      {allowPermanent && <option value="allow">Allow</option>}
+      <option value="ask">Ask</option>
+      <option value="never">Never</option>
+    </select>
+  );
+}
+
 function Badge({
   children,
   tone = "neutral",
@@ -103,6 +140,9 @@ export default function Settings({
   onPausedChange,
   onBackgroundChange,
   onAutostartChange,
+  permissionPolicy,
+  onPermissionChange,
+  onResetPermissions,
 }: Props) {
   return (
     <section className="settings-layout">
@@ -242,12 +282,88 @@ export default function Settings({
               <p>Rules that will determine what AURA may do on your computer.</p>
             </header>
             <Surface className="settings-card">
-              <SectionLabel>Action levels</SectionLabel>
-              <SettingRow title="Read" description="Inspect allowed local information." trailing={<Badge tone="planned">Ask / Allow / Block</Badge>} />
-              <SettingRow title="Act" description="Open apps and perform reversible actions." trailing={<Badge tone="planned">M003</Badge>} />
-              <SettingRow title="Modify" description="Change files, app state or settings." trailing={<Badge tone="planned">M003+</Badge>} />
-              <SettingRow title="Destructive" description="Delete or perform difficult-to-reverse actions." trailing={<Badge tone="warning">Always confirm</Badge>} />
-              <SettingRow title="Sensitive" description="Access protected or privacy-sensitive capabilities." trailing={<Badge tone="warning">Always confirm</Badge>} />
+              <SectionLabel trailing={<Badge tone="ready">Active</Badge>}>
+                Action levels
+              </SectionLabel>
+              <SettingRow
+                title="Read"
+                description="Inspect allowed local and system information."
+                trailing={
+                  <PermissionSelect
+                    value={permissionPolicy.read}
+                    onChange={(decision) => void onPermissionChange("read", decision)}
+                    label="Read permission"
+                  />
+                }
+              />
+              <SettingRow
+                title="Act"
+                description="Open apps and perform reversible computer actions."
+                trailing={
+                  <PermissionSelect
+                    value={permissionPolicy.act}
+                    onChange={(decision) => void onPermissionChange("act", decision)}
+                    label="Act permission"
+                  />
+                }
+              />
+              <SettingRow
+                title="Modify"
+                description="Change application state, type text or activate controls."
+                trailing={
+                  <PermissionSelect
+                    value={permissionPolicy.modify}
+                    onChange={(decision) => void onPermissionChange("modify", decision)}
+                    label="Modify permission"
+                  />
+                }
+              />
+              <SettingRow
+                title="Sensitive"
+                description="Session or privacy-sensitive actions. Permanent Allow is intentionally unavailable."
+                trailing={
+                  <PermissionSelect
+                    value={permissionPolicy.sensitive}
+                    onChange={(decision) => void onPermissionChange("sensitive", decision)}
+                    allowPermanent={false}
+                    label="Sensitive permission"
+                  />
+                }
+              />
+              <SettingRow
+                title="Destructive"
+                description="High-impact actions. Permanent Allow is intentionally unavailable."
+                trailing={
+                  <PermissionSelect
+                    value={permissionPolicy.destructive}
+                    onChange={(decision) => void onPermissionChange("destructive", decision)}
+                    allowPermanent={false}
+                    label="Destructive permission"
+                  />
+                }
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Policy</SectionLabel>
+              <SettingRow
+                title="Safe defaults"
+                description="Read and Act are allowed; Modify, Sensitive and Destructive require confirmation."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    onClick={() => void onResetPermissions()}
+                  >
+                    Reset
+                  </button>
+                }
+              />
+              <SettingRow
+                title="Storage"
+                description="Permission policy is stored locally on this PC."
+                trailing={<Badge tone="ready">Local</Badge>}
+              />
             </Surface>
           </>
         )}

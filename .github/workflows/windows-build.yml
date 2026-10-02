@@ -38,6 +38,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Generate Tauri icons
+        run: npm run icons
+
+      - name: Test Rust Core
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+
       - name: Build AURA-2
         run: npm run build
 

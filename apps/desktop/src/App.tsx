@@ -31,11 +31,14 @@ function App() {
     activity,
     appStatus,
     runtimeState,
+    permissionPolicy,
     bridgeError,
     submitCommand,
     setPaused,
     setBackgroundMode,
     setAutostart,
+    setPermission,
+    resetPermissions,
   } = useAuraBridge();
 
   useEffect(() => {
@@ -200,6 +203,9 @@ function App() {
             onPausedChange={setPaused}
             onBackgroundChange={setBackgroundMode}
             onAutostartChange={setAutostart}
+            permissionPolicy={permissionPolicy}
+            onPermissionChange={setPermission}
+            onResetPermissions={resetPermissions}
           />
         )}
       </section>
