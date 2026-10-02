@@ -22,18 +22,6 @@ impl std::fmt::Display for CloseError {
     }
 }
 
-fn process_images(target: AppTarget) -> &'static [&'static str] {
-    match target {
-        AppTarget::ObsStudio => &["obs64.exe"],
-        AppTarget::Brave => &["brave.exe"],
-        AppTarget::Chrome => &["chrome.exe"],
-        AppTarget::WindowsTerminal => &["WindowsTerminal.exe"],
-        AppTarget::Notepad => &["notepad.exe"],
-        AppTarget::Calculator => &["CalculatorApp.exe", "Calculator.exe"],
-        AppTarget::FileExplorer => &[],
-    }
-}
-
 fn image_is_running(image_name: &str) -> Result<bool, CloseError> {
     let filter = format!("IMAGENAME eq {image_name}");
     let output = Command::new("tasklist.exe")
@@ -70,11 +58,11 @@ fn end_image(image_name: &str) -> Result<(), CloseError> {
 }
 
 pub fn close_app(target: AppTarget) -> Result<(), CloseError> {
-    if target == AppTarget::FileExplorer {
+    if target.is_close_protected() {
         return Err(CloseError::ProtectedTarget("File Explorer"));
     }
 
-    let images = process_images(target);
+    let images = target.process_images();
     let mut found = false;
     let mut last_error: Option<CloseError> = None;
 
@@ -116,7 +104,7 @@ mod tests {
 
     #[test]
     fn known_targets_have_fixed_process_images() {
-        assert_eq!(process_images(AppTarget::ObsStudio), &["obs64.exe"]);
-        assert_eq!(process_images(AppTarget::Brave), &["brave.exe"]);
+        assert_eq!(AppTarget::ObsStudio.process_images(), &["obs64.exe"]);
+        assert_eq!(AppTarget::Brave.process_images(), &["brave.exe"]);
     }
 }
