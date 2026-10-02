@@ -122,25 +122,7 @@ fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
         return Some(Ok(ActionIntent::Media(MediaAction::GetVolume)));
     }
 
-    const SET_VOLUME_PREFIXES: &[&str] = &[
-        "set volume to ",
-        "set the volume to ",
-        "volume ",
-        "define o volume para ",
-        "define volume para ",
-        "mete o volume a ",
-        "mete volume a ",
-    ];
-
-    if let Some(value) = value_after_prefix(input, SET_VOLUME_PREFIXES) {
-        return Some(
-            parse_percent(value)
-                .map(MediaAction::SetVolume)
-                .map(ActionIntent::Media),
-        );
-    }
-
-    let action = match normalized.as_str() {
+    let exact_action = match normalized.as_str() {
         "volume up" | "increase volume" | "aumenta o volume" | "aumentar o volume" => {
             Some(MediaAction::VolumeUp)
         }
@@ -166,7 +148,25 @@ fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
         _ => None,
     };
 
-    action.map(|action| Ok(ActionIntent::Media(action)))
+    if let Some(action) = exact_action {
+        return Some(Ok(ActionIntent::Media(action)));
+    }
+
+    const SET_VOLUME_PREFIXES: &[&str] = &[
+        "set volume to ",
+        "set the volume to ",
+        "volume ",
+        "define o volume para ",
+        "define volume para ",
+        "mete o volume a ",
+        "mete volume a ",
+    ];
+
+    value_after_prefix(input, SET_VOLUME_PREFIXES).map(|value| {
+        parse_percent(value)
+            .map(MediaAction::SetVolume)
+            .map(ActionIntent::Media)
+    })
 }
 
 fn permission_for_media(action: MediaAction) -> PermissionClass {
