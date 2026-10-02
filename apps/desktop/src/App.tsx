@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { useAuraBridge } from "./bridge/useAuraBridge";
 import {
   AuraMark,
   NavItem,
@@ -6,7 +7,6 @@ import {
   ShortcutKey,
   StatusPill,
   Surface,
-  type AuraStatus,
 } from "./design-system/components";
 
 const modules = [
@@ -19,28 +19,22 @@ const modules = [
 ];
 
 function App() {
-  const [status, setStatus] = useState<AuraStatus>("Idle");
   const [command, setCommand] = useState("");
-  const [lastAction, setLastAction] = useState(
-    "Desktop foundation online. Action routing arrives in M003.",
-  );
+  const {
+    status,
+    activity,
+    appStatus,
+    bridgeError,
+    submitCommand,
+  } = useAuraBridge();
 
-  function submitCommand(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const value = command.trim();
-
     if (!value) return;
 
-    setStatus("Thinking");
-    setLastAction(`Received: “${value}”`);
     setCommand("");
-
-    window.setTimeout(() => {
-      setStatus("Idle");
-      setLastAction(
-        "Command captured locally. System execution will be connected in M003.",
-      );
-    }, 650);
+    await submitCommand(value);
   }
 
   return (
@@ -65,7 +59,7 @@ function App() {
           <NavItem icon="⚙">Settings</NavItem>
           <div className="local-badge">
             <span className="local-dot" />
-            <span>Local-first</span>
+            <span>{appStatus?.localFirst === false ? "Hybrid" : "Local-first"}</span>
           </div>
         </div>
       </aside>
@@ -73,7 +67,9 @@ function App() {
       <section className="workspace">
         <header className="topbar" data-tauri-drag-region>
           <div>
-            <span className="eyebrow">AURA-2 DESKTOP</span>
+            <span className="eyebrow">
+              {appStatus ? `${appStatus.name} · ${appStatus.stage}` : "AURA-2 DESKTOP"}
+            </span>
             <h1>Good evening.</h1>
           </div>
           <StatusPill status={status} />
@@ -87,7 +83,7 @@ function App() {
           <p className="hero-kicker">YOUR PC. NOW IT UNDERSTANDS YOU.</p>
           <h2>What do you want to do?</h2>
 
-          <form className="command-bar" onSubmit={submitCommand}>
+          <form className="command-bar" onSubmit={handleSubmit}>
             <span className="command-spark" aria-hidden="true">✦</span>
             <input
               autoFocus
@@ -95,6 +91,7 @@ function App() {
               onChange={(event) => setCommand(event.target.value)}
               placeholder="Ask AURA to do something on this computer…"
               aria-label="AURA command"
+              disabled={status === "Working"}
             />
             <ShortcutKey>Enter</ShortcutKey>
           </form>
@@ -107,10 +104,17 @@ function App() {
 
         <section className="lower-grid">
           <Surface className="activity-card">
-            <SectionLabel trailing={<span className="activity-live-dot" />}>
+            <SectionLabel
+              trailing={
+                <span
+                  className={bridgeError ? "activity-error-dot" : "activity-live-dot"}
+                  aria-label={bridgeError ? "Bridge error" : "Bridge connected"}
+                />
+              }
+            >
               Current activity
             </SectionLabel>
-            <p>{lastAction}</p>
+            <p>{activity}</p>
           </Surface>
 
           <Surface className="modules-card">
