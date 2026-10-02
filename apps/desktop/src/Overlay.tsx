@@ -13,7 +13,8 @@ export default function Overlay() {
   const { status, activity, runtimeState, submitCommand } = useAuraBridge();
 
   useEffect(() => {
-    inputRef.current?.focus();
+    const focusInput = () => inputRef.current?.focus();
+    focusInput();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -22,7 +23,12 @@ export default function Overlay() {
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("focus", focusInput);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("focus", focusInput);
+    };
   }, []);
 
   async function handleSubmit(event: FormEvent) {
