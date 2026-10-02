@@ -1,4 +1,7 @@
-use crate::computer::app_launcher::AppTarget;
+use crate::computer::{
+    app_launcher::AppTarget,
+    keyboard::KeyboardShortcut,
+};
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
 #[derive(Debug, Clone)]
@@ -7,6 +10,8 @@ pub enum ActionIntent {
     CloseApp(AppTarget),
     SwitchToApp(AppTarget),
     ListWindows,
+    PressShortcut(KeyboardShortcut),
+    TypeText(String),
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +25,7 @@ pub struct RoutedAction {
 pub enum RouteResult {
     Action(RoutedAction),
     UnsupportedApp(String),
+    InvalidKeyboard(String),
     NoMatch,
 }
 
@@ -44,6 +50,87 @@ fn strip_article(value: &str) -> &str {
         .or_else(|| value.strip_prefix("a "))
         .unwrap_or(value)
         .trim()
+}
+
+fn value_after_prefix<'a>(input: &'a str, prefixes: &[&str]) -> Option<&'a str> {
+    let trimmed = input.trim();
+    let lowered = trimmed.to_lowercase();
+
+    for prefix in prefixes {
+        if lowered.starts_with(prefix) {
+            return trimmed.get(prefix.len()..).map(str::trim);
+        }
+    }
+
+    None
+}
+
+fn unwrap_text_quotes(value: &str) -> &str {
+    let trimmed = value.trim();
+
+    if trimmed.len() >= 2 {
+        let bytes = trimmed.as_bytes();
+        let matching_quotes =
+            (bytes[0] == b'"' && bytes[trimmed.len() - 1] == b'"')
+                || (bytes[0] == b'\'' && bytes[trimmed.len() - 1] == b'\'');
+
+        if matching_quotes {
+            return &trimmed[1..trimmed.len() - 1];
+        }
+    }
+
+    trimmed
+}
+
+fn keyboard_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    const PRESS_PREFIXES: &[&str] = &[
+        "carrega em ",
+        "pressiona ",
+        "pressionar ",
+        "press ",
+        "carrega ",
+    ];
+
+    const TYPE_PREFIXES: &[&str] = &[
+        "type ",
+        "write ",
+        "escreve ",
+        "escrever ",
+        "digita ",
+        "digitar ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, PRESS_PREFIXES) {
+        return Some(
+            KeyboardShortcut::parse(value)
+                .map(ActionIntent::PressShortcut)
+                .map_err(|error| error.to_string()),
+        );
+    }
+
+    value_after_prefix(input, TYPE_PREFIXES).map(|value| {
+        let text = unwrap_text_quotes(value);
+        if text.is_empty() {
+            Err("Text input cannot be empty.".to_string())
+        } else {
+            Ok(ActionIntent::TypeText(text.to_string()))
+        }
+    })
+}
+
+fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
+    match intent {
+        ActionIntent::PressShortcut(shortcut) if shortcut.is_delete_action() => {
+            Some(PermissionClass::Destructive)
+        }
+        ActionIntent::PressShortcut(shortcut) if shortcut.is_navigation_only() => {
+            Some(PermissionClass::Act)
+        }
+        ActionIntent::PressShortcut(_) | ActionIntent::TypeText(_) => {
+            Some(PermissionClass::Modify)
+        }
+        _ => None,
+    }
 }
 
 fn is_list_windows_command(input: &str) -> bool {
@@ -115,6 +202,22 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if let Some(keyboard) = keyboard_request(input) {
+        return match keyboard {
+            Ok(intent) => {
+                let permission = permission_for_keyboard(&intent)
+                    .expect("keyboard intent should have a permission class");
+
+                RouteResult::Action(RoutedAction {
+                    intent,
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Err(message) => RouteResult::InvalidKeyboard(message),
+        };
+    }
+
     let normalized = normalize_command(input);
 
     if is_list_windows_command(&normalized) {
@@ -163,6 +266,7 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::computer::keyboard::{KeyCode, ModifierKey};
 
     #[test]
     fn routes_english_obs_launch() {
@@ -204,14 +308,60 @@ mod tests {
     }
 
     #[test]
-    fn routes_portuguese_switch() {
+    fn routes_safe_f11_as_act() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
-            route_command("Vai para o Brave", &policy),
+            route_command("Press F11", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::SwitchToApp(AppTarget::Brave),
+                intent: ActionIntent::PressShortcut(KeyboardShortcut {
+                    key: KeyCode::Function(11),
+                    ..
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_ctrl_s_as_modify() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Press Ctrl+S", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::PressShortcut(KeyboardShortcut {
+                    modifiers,
+                    key: KeyCode::Letter('s'),
+                }),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            }) if modifiers == vec![ModifierKey::Ctrl]
+        ));
+    }
+
+    #[test]
+    fn routes_delete_as_destructive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Press Delete", &policy),
+            RouteResult::Action(RoutedAction {
+                permission: PermissionClass::Destructive,
+                decision: PermissionDecision::Ask,
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn preserves_typed_text_case() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Type \"Hello AURA\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TypeText(text),
+                permission: PermissionClass::Modify,
+                ..
+            }) if text == "Hello AURA"
         ));
     }
 
