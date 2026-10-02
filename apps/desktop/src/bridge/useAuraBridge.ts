@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getAppStatus,
+  getRuntimeState,
   listenToAuraCore,
+  setRuntimePaused,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -9,24 +11,31 @@ import type {
   AuraStatus,
   CoreError,
   CoreEvent,
+  RuntimeState,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
-  "Desktop foundation online. Core ↔ Desktop bridge is ready.";
+  "Desktop foundation online. AURA Core and system tray are ready.";
 
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
+  const [runtimeState, setRuntimeState] = useState<RuntimeState>({ paused: false });
   const [bridgeError, setBridgeError] = useState<CoreError | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
 
-    getAppStatus()
-      .then((value) => {
-        if (!cancelled) setAppStatus(value);
+    Promise.all([getAppStatus(), getRuntimeState()])
+      .then(([app, runtime]) => {
+        if (cancelled) return;
+        setAppStatus(app);
+        setRuntimeState(runtime);
+        if (runtime.paused) {
+          setActivity("AURA is paused. Resume it from the system tray or settings.");
+        }
       })
       .catch((error) => {
         if (!cancelled) {
@@ -49,6 +58,17 @@ export function useAuraBridge() {
         setStatus("Idle");
         setBridgeError(error);
         setActivity(error.message);
+      },
+      (runtime: RuntimeState) => {
+        if (cancelled) return;
+        setRuntimeState(runtime);
+        setStatus("Idle");
+        setBridgeError(null);
+        setActivity(
+          runtime.paused
+            ? "AURA paused. New commands and future background actions are disabled."
+            : "AURA resumed and ready.",
+        );
       },
     )
       .then((unlisten) => {
@@ -97,11 +117,19 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const setPaused = useCallback(async (paused: boolean) => {
+    const state = await setRuntimePaused(paused);
+    setRuntimeState(state);
+    return state;
+  }, []);
+
   return {
     status,
     activity,
     appStatus,
+    runtimeState,
     bridgeError,
     submitCommand,
+    setPaused,
   };
 }
