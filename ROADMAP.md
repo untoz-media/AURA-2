@@ -36,7 +36,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M003.2** — Application lifecycle (close apps)
 - [x] **M003.3** — Window discovery & switching
 - [x] **M003.4** — Keyboard actions
-- [ ] **M003.5** — Mouse actions
+- [x] **M003.5** — Mouse actions
 - [ ] **M003.6** — Volume & media controls
 - [ ] **M003.7** — System commands
 - [ ] **M003.8** — Permission engine
