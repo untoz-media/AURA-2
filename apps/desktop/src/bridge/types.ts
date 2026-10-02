@@ -4,7 +4,9 @@ export type CoreEventKind =
   | "command.accepted"
   | "command.processing"
   | "command.completed"
-  | "command.failed";
+  | "command.failed"
+  | "command.awaiting_confirmation"
+  | "command.unhandled";
 
 export type CoreEvent = {
   id: string;
