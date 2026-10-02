@@ -24,6 +24,7 @@ function App() {
     status,
     activity,
     appStatus,
+    runtimeState,
     bridgeError,
     submitCommand,
   } = useAuraBridge();
@@ -59,7 +60,7 @@ function App() {
           <NavItem icon="⚙">Settings</NavItem>
           <div className="local-badge">
             <span className="local-dot" />
-            <span>{appStatus?.localFirst === false ? "Hybrid" : "Local-first"}</span>
+            <span className={runtimeState.paused ? "runtime-paused" : ""}>{runtimeState.paused ? "Paused" : appStatus?.localFirst === false ? "Hybrid" : "Local-first"}</span>
           </div>
         </div>
       </aside>
@@ -89,9 +90,9 @@ function App() {
               autoFocus
               value={command}
               onChange={(event) => setCommand(event.target.value)}
-              placeholder="Ask AURA to do something on this computer…"
+              placeholder={runtimeState.paused ? "AURA is paused…" : "Ask AURA to do something on this computer…"}
               aria-label="AURA command"
-              disabled={status === "Working"}
+              disabled={status === "Working" || runtimeState.paused}
             />
             <ShortcutKey>Enter</ShortcutKey>
           </form>
