@@ -13,12 +13,18 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M002 — Desktop Foundation
 
-- [ ] Native Windows desktop shell
-- [ ] AURA Overlay
-- [ ] System tray integration
-- [ ] Global keyboard shortcut
-- [ ] Local background service
-- [ ] Command routing layer
+- [x] **M002.1** — Choose desktop stack: Tauri 2 + React + TypeScript + Vite
+- [x] **M002.2** — Create base Windows desktop application
+- [ ] **M002.3** — AURA Design System
+- [ ] **M002.4** — Core ↔ Desktop communication
+- [ ] **M002.5** — System tray integration
+- [x] **M002.6** — Global keyboard shortcut foundation
+- [ ] **M002.7** — AURA Overlay
+- [x] **M002.8** — Runtime status UI foundation
+- [ ] **M002.9** — Settings foundation
+- [ ] **M002.10** — Background mode
+- [ ] **M002.11** — Optional Windows autostart
+- [ ] **M002.12** — First packaged Windows build
 
 ## M003 — Computer Control
 
