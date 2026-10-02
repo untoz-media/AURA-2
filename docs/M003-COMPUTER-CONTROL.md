@@ -162,3 +162,21 @@ Exact volume and mute state use the Windows Core Audio default render endpoint t
 Global Play/Pause, Next, Previous and Stop actions use Windows media virtual keys through `SendInput`.
 
 All media/volume mutations are classified as `Act`; volume-state reads are `Read`.
+
+
+## M003.7
+
+M003.7 adds deterministic Windows system commands and read-only PC status.
+
+AURA can now read RAM usage, uptime and power/battery state; show the desktop; open Task Manager; and open known Windows Settings pages.
+
+High-impact system actions are also routed now:
+
+- Lock → `Sensitive`
+- Sleep → `Sensitive`
+- Restart → `Destructive`
+- Shutdown → `Destructive`
+
+The current default policy keeps all of those in `Waiting` until the M003.9 confirmation flow is implemented.
+
+System status uses native Win32 APIs including `GlobalMemoryStatusEx`, `GetTickCount64` and `GetSystemPowerStatus`. Known Settings pages use fixed `ms-settings:` URIs and no arbitrary command-line arguments are accepted.
