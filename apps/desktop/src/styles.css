@@ -374,3 +374,43 @@ input:focus-visible {
 .runtime-paused {
   color: var(--status-waiting);
 }
+
+
+.permission-select {
+  min-width: 112px;
+  padding: 8px 30px 8px 10px;
+  border: 1px solid var(--aura-border-2);
+  border-radius: var(--radius-md);
+  color: var(--aura-text-2);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.permission-select:hover {
+  border-color: var(--aura-border-focus);
+}
+
+.permission-select:focus-visible {
+  outline: 2px solid var(--aura-border-focus);
+  outline-offset: 2px;
+}
+
+.permission-select option {
+  color: #f7f9ff;
+  background: #101320;
+}
+
+.settings-action-button {
+  padding: 8px 12px;
+  border: 1px solid var(--aura-border-2);
+  border-radius: var(--radius-md);
+  color: var(--aura-text-2);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+}
+
+.settings-action-button:hover {
+  border-color: var(--aura-border-focus);
+  background: rgba(255, 255, 255, 0.07);
+}
