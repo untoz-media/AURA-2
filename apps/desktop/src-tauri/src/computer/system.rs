@@ -3,9 +3,9 @@ use std::{mem::size_of, process::Command};
 use windows_sys::Win32::{
     System::{
         Power::{GetSystemPowerStatus, SetSuspendState, SYSTEM_POWER_STATUS},
+        Shutdown::LockWorkStation,
         SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX},
     },
-    UI::WindowsAndMessaging::LockWorkStation,
 };
 
 use super::keyboard::{press_shortcut, KeyboardShortcut};
