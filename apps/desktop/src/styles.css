@@ -103,12 +103,22 @@ input:focus-visible {
 }
 
 .local-dot,
-.activity-live-dot {
+.activity-live-dot,
+.activity-error-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+.local-dot,
+.activity-live-dot {
   background: var(--status-success);
+}
+
+.activity-error-dot {
+  background: var(--status-danger);
+  box-shadow: 0 0 10px rgba(255, 110, 127, 0.45);
 }
 
 .local-dot {
