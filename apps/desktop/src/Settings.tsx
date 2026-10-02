@@ -20,6 +20,7 @@ type Props = {
   runtimeState: RuntimeState;
   onPausedChange: (paused: boolean) => Promise<RuntimeState>;
   onBackgroundChange: (backgroundEnabled: boolean) => Promise<RuntimeState>;
+  onAutostartChange: (autostartEnabled: boolean) => Promise<RuntimeState>;
 };
 
 const sections: Array<{
@@ -101,6 +102,7 @@ export default function Settings({
   runtimeState,
   onPausedChange,
   onBackgroundChange,
+  onAutostartChange,
 }: Props) {
   return (
     <section className="settings-layout">
@@ -154,8 +156,14 @@ export default function Settings({
               />
               <SettingRow
                 title="Start with Windows"
-                description="Launch AURA automatically when you sign in."
-                trailing={<Badge tone="planned">M002.11</Badge>}
+                description="Launch AURA silently in the background when you sign in to Windows."
+                trailing={
+                  <Toggle
+                    checked={runtimeState.autostartEnabled}
+                    onChange={(value) => void onAutostartChange(value)}
+                    label="Start AURA with Windows"
+                  />
+                }
               />
             </Surface>
 

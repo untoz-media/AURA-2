@@ -4,6 +4,7 @@ import {
   getRuntimeState,
   listenToAuraCore,
   listenToLifecycle,
+  setAutostartEnabled,
   setBackgroundEnabled,
   setRuntimePaused,
   submitAuraCommand,
@@ -27,6 +28,7 @@ export function useAuraBridge() {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>({
     paused: false,
     backgroundEnabled: true,
+    autostartEnabled: false,
   });
   const [bridgeError, setBridgeError] = useState<CoreError | null>(null);
 
@@ -165,6 +167,12 @@ export function useAuraBridge() {
     return state;
   }, []);
 
+  const setAutostart = useCallback(async (autostartEnabled: boolean) => {
+    const state = await setAutostartEnabled(autostartEnabled);
+    setRuntimeState(state);
+    return state;
+  }, []);
+
   return {
     status,
     activity,
@@ -174,5 +182,6 @@ export function useAuraBridge() {
     submitCommand,
     setPaused,
     setBackgroundMode,
+    setAutostart,
   };
 }

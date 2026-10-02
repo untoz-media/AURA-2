@@ -35,6 +35,12 @@ export async function setBackgroundEnabled(
   return invoke<RuntimeState>("set_background_enabled", { backgroundEnabled });
 }
 
+export async function setAutostartEnabled(
+  autostartEnabled: boolean,
+): Promise<RuntimeState> {
+  return invoke<RuntimeState>("set_autostart_enabled", { autostartEnabled });
+}
+
 export async function submitAuraCommand(
   request: CommandRequest,
 ): Promise<CommandAck> {
