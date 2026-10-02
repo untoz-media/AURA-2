@@ -1,3 +1,4 @@
+import type { AuraStatus } from "../bridge/types";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -5,7 +6,6 @@ import type {
   ReactNode,
 } from "react";
 
-export type AuraStatus = "Idle" | "Listening" | "Thinking" | "Working" | "Waiting";
 
 type NavItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   active?: boolean;
