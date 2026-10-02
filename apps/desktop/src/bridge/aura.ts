@@ -6,15 +6,25 @@ import type {
   CommandRequest,
   CoreError,
   CoreEvent,
+  RuntimeState,
 } from "./types";
 
 export const AURA_EVENTS = {
   core: "aura:core-event",
   error: "aura:core-error",
+  runtime: "aura:runtime-state",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
   return invoke<AppStatus>("get_app_status");
+}
+
+export async function getRuntimeState(): Promise<RuntimeState> {
+  return invoke<RuntimeState>("get_runtime_state");
+}
+
+export async function setRuntimePaused(paused: boolean): Promise<RuntimeState> {
+  return invoke<RuntimeState>("set_runtime_paused", { paused });
 }
 
 export async function submitAuraCommand(
@@ -26,6 +36,7 @@ export async function submitAuraCommand(
 export async function listenToAuraCore(
   onEvent: (event: CoreEvent) => void,
   onError: (error: CoreError) => void,
+  onRuntime: (state: RuntimeState) => void,
 ): Promise<UnlistenFn> {
   const unlistenCore = await listen<CoreEvent>(
     AURA_EVENTS.core,
@@ -37,8 +48,14 @@ export async function listenToAuraCore(
     ({ payload }) => onError(payload),
   );
 
+  const unlistenRuntime = await listen<RuntimeState>(
+    AURA_EVENTS.runtime,
+    ({ payload }) => onRuntime(payload),
+  );
+
   return () => {
     unlistenCore();
     unlistenError();
+    unlistenRuntime();
   };
 }
