@@ -151,3 +151,14 @@ Permission classification:
 Under the current default policy, movement and scrolling can execute immediately. Click actions stay in `Waiting` until M003.9 provides explicit confirmation.
 
 The implementation uses `SetCursorPos`, `GetSystemMetrics` and `SendInput/MOUSEINPUT`; no click loops, drag-and-drop or visual auto-targeting are included in M003.5.
+
+
+## M003.6
+
+M003.6 adds bidirectional Windows audio state and global media controls.
+
+Exact volume and mute state use the Windows Core Audio default render endpoint through `IMMDeviceEnumerator` and `IAudioEndpointVolume`. AURA can read the current master level, set an exact 0–100% volume, step volume up/down and mute/unmute.
+
+Global Play/Pause, Next, Previous and Stop actions use Windows media virtual keys through `SendInput`.
+
+All media/volume mutations are classified as `Act`; volume-state reads are `Read`.
