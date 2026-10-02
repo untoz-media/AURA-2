@@ -15,6 +15,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
 };
@@ -24,6 +25,7 @@ static COMMAND_COUNTER: AtomicU64 = AtomicU64::new(1);
 struct RuntimeState {
     paused: Mutex<bool>,
     background_enabled: Mutex<bool>,
+    autostart_enabled: Mutex<bool>,
 }
 
 impl Default for RuntimeState {
@@ -31,6 +33,7 @@ impl Default for RuntimeState {
         Self {
             paused: Mutex::new(false),
             background_enabled: Mutex::new(true),
+            autostart_enabled: Mutex::new(false),
         }
     }
 }
@@ -58,6 +61,7 @@ struct AppStatus {
 struct RuntimeSnapshot {
     paused: bool,
     background_enabled: bool,
+    autostart_enabled: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -171,6 +175,10 @@ fn runtime_snapshot(state: &RuntimeState) -> RuntimeSnapshot {
             .background_enabled
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        autostart_enabled: *state
+            .autostart_enabled
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
     }
 }
 
@@ -240,6 +248,44 @@ fn set_background_state(
             "Background mode disabled. Closing the main window will quit AURA.",
         );
     }
+
+    Ok(snapshot)
+}
+
+fn set_autostart_state(
+    app: &tauri::AppHandle,
+    autostart_enabled: bool,
+) -> Result<RuntimeSnapshot, String> {
+    let manager = app.autolaunch();
+
+    if autostart_enabled {
+        manager.enable().map_err(|error| error.to_string())?;
+    } else {
+        manager.disable().map_err(|error| error.to_string())?;
+    }
+
+    let actual = manager.is_enabled().map_err(|error| error.to_string())?;
+
+    let state = app.state::<RuntimeState>();
+    {
+        let mut current = state
+            .autostart_enabled
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *current = actual;
+    }
+
+    let snapshot = emit_runtime_state(app);
+
+    emit_lifecycle_event(
+        app,
+        if actual { "autostart.enabled" } else { "autostart.disabled" },
+        if actual {
+            "AURA will start silently with Windows."
+        } else {
+            "AURA will no longer start automatically with Windows."
+        },
+    );
 
     Ok(snapshot)
 }
@@ -324,7 +370,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M002.10 Background Mode",
+        stage: "M002.11 Windows Autostart",
         local_first: true,
     }
 }
@@ -358,6 +404,14 @@ fn set_background_enabled(
     background_enabled: bool,
 ) -> Result<RuntimeSnapshot, String> {
     set_background_state(&app, background_enabled)
+}
+
+#[tauri::command]
+fn set_autostart_enabled(
+    app: tauri::AppHandle,
+    autostart_enabled: bool,
+) -> Result<RuntimeSnapshot, String> {
+    set_autostart_state(&app, autostart_enabled)
 }
 
 #[tauri::command]
@@ -470,6 +524,10 @@ fn process_user_command(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--background"]),
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -488,7 +546,16 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *background_enabled = preferences.background_enabled;
+
+                let registered = app.autolaunch().is_enabled().unwrap_or(false);
+                let mut autostart_enabled = runtime
+                    .autostart_enabled
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                *autostart_enabled = registered;
             }
+
+            let launched_in_background = std::env::args().any(|arg| arg == "--background");
 
             let shortcut = Shortcut::new(
                 Some(Modifiers::CONTROL | Modifiers::SHIFT),
@@ -577,6 +644,17 @@ pub fn run() {
                 });
             }
 
+            if launched_in_background {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+                emit_lifecycle_event(
+                    app.handle(),
+                    "startup.background",
+                    "AURA started with Windows and is running in the background.",
+                );
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -584,6 +662,7 @@ pub fn run() {
             get_runtime_state,
             set_runtime_paused,
             set_background_enabled,
+            set_autostart_enabled,
             process_user_command,
             open_main_window,
             hide_overlay
