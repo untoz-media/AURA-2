@@ -1,8 +1,6 @@
 use std::{mem::size_of, ptr};
 
-use windows::{
-    core::Interface,
-    Win32::{
+use windows::Win32::{
         Media::Audio::{
             eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
             Endpoints::IAudioEndpointVolume,
@@ -11,8 +9,7 @@ use windows::{
             CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL,
             COINIT_MULTITHREADED,
         },
-    },
-};
+    };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
     VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
