@@ -207,7 +207,7 @@ pub fn execute_system_action(
             Ok(None)
         }
         SystemAction::Sleep => {
-            if unsafe { SetSuspendState(0, 0, 0) } == 0 {
+            if !unsafe { SetSuspendState(false, false, false) } {
                 return Err(SystemCommandError::WindowsApi("SetSuspendState"));
             }
             Ok(None)
