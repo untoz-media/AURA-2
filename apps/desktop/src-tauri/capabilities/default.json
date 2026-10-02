@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
-  "description": "Base capabilities for the AURA-2 desktop window.",
-  "windows": ["main"],
+  "description": "Base capabilities for the AURA-2 desktop and overlay windows.",
+  "windows": ["main", "overlay"],
   "permissions": [
     "core:default"
   ]
