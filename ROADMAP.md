@@ -40,7 +40,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M003.6** — Volume & media controls
 - [x] **M003.7** — System commands
 - [x] **M003.8** — Permission engine
-- [ ] **M003.9** — Confirmation flow
+- [x] **M003.9** — Confirmation flow
 - [ ] **M003.10** — Computer Control validation
 
 ## M004 — OBS Control / Director Mode
