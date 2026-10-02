@@ -30,3 +30,9 @@ Thumbs.db
 .local/
 data/runtime/
 models/
+
+# Generated Tauri icon set
+apps/desktop/src-tauri/icons/
+
+# Rust / Tauri build output
+apps/desktop/src-tauri/target/

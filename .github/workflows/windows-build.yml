@@ -1,0 +1,49 @@
+name: Windows Build
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "package.json"
+      - ".github/workflows/windows-build.yml"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "aura-v*"
+
+jobs:
+  build-windows:
+    name: Build Windows NSIS installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./apps/desktop/src-tauri -> target"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build AURA-2
+        run: npm run build
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-2-Windows-x64
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

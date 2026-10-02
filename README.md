@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** Early development / pre-Beta
+> **Current stage:** M002 Desktop Foundation complete · AURA-2 0.2.0-alpha.1 · pre-Beta
 
 ---
 
@@ -118,8 +118,8 @@ AURA-2/
 ### M001 — Project Initialization
 Repository, architecture, documentation and development foundations.
 
-### M002 — Desktop Foundation
-Native desktop shell, command interface and local service architecture.
+### M002 — Desktop Foundation ✅
+Native Windows app, Core bridge, tray, Overlay, Settings, background mode, autostart and packaged NSIS build.
 
 ### M003 — Computer Control
 Windows actions, app launching and controlled desktop interaction.
@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 is currently in early development.
+AURA-2 has completed **M002 — Desktop Foundation**. Development now moves to **M003 — Computer Control**.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 

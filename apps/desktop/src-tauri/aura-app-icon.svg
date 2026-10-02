@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101529"/>
+      <stop offset="1" stop-color="#05060C"/>
+    </linearGradient>
+    <linearGradient id="aura" x1="254" y1="330" x2="790" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20C7FF"/>
+      <stop offset="0.5" stop-color="#5F7CFF"/>
+      <stop offset="1" stop-color="#9B5CFF"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="24" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="52" y="52" width="920" height="920" rx="220" fill="url(#bg)"/>
+  <rect x="53" y="53" width="918" height="918" rx="219" stroke="white" stroke-opacity="0.06" stroke-width="2"/>
+  <path d="M226 512C302 512 335 465 371 403C406 343 451 314 512 314C573 314 618 343 653 403C689 465 722 512 798 512C722 512 689 559 653 621C618 681 573 710 512 710C451 710 406 681 371 621C335 559 302 512 226 512Z" stroke="url(#aura)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <circle cx="512" cy="512" r="128" stroke="url(#aura)" stroke-width="34" filter="url(#glow)"/>
+  <circle cx="512" cy="512" r="42" fill="#F7F9FF" filter="url(#glow)"/>
+  <circle cx="172" cy="512" r="22" fill="#20C7FF" filter="url(#glow)"/>
+  <circle cx="852" cy="512" r="22" fill="#9B5CFF" filter="url(#glow)"/>
+</svg>

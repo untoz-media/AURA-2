@@ -370,7 +370,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M002.11 Windows Autostart",
+        stage: "M002 Complete · Desktop Foundation",
         local_first: true,
     }
 }
