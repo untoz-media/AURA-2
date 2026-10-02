@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    fs,
+    path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
         Mutex,
@@ -19,9 +21,18 @@ use tauri_plugin_global_shortcut::{
 
 static COMMAND_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Default)]
 struct RuntimeState {
     paused: Mutex<bool>,
+    background_enabled: Mutex<bool>,
+}
+
+impl Default for RuntimeState {
+    fn default() -> Self {
+        Self {
+            paused: Mutex::new(false),
+            background_enabled: Mutex::new(true),
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -46,6 +57,29 @@ struct AppStatus {
 #[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
     paused: bool,
+    background_enabled: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopPreferences {
+    background_enabled: bool,
+}
+
+impl Default for DesktopPreferences {
+    fn default() -> Self {
+        Self {
+            background_enabled: true,
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LifecycleEvent {
+    kind: &'static str,
+    message: String,
+    timestamp_ms: u64,
 }
 
 #[derive(Deserialize)]
@@ -94,10 +128,68 @@ fn next_command_id() -> String {
     format!("cmd-{}-{}", unix_timestamp_ms(), counter)
 }
 
+fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    Ok(directory.join("desktop-preferences.json"))
+}
+
+fn load_preferences(app: &tauri::AppHandle) -> DesktopPreferences {
+    let Ok(path) = preferences_path(app) else {
+        return DesktopPreferences::default();
+    };
+
+    let Ok(content) = fs::read_to_string(path) else {
+        return DesktopPreferences::default();
+    };
+
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+fn save_preferences(
+    app: &tauri::AppHandle,
+    preferences: &DesktopPreferences,
+) -> Result<(), String> {
+    let path = preferences_path(app)?;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let content =
+        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
+
+    fs::write(path, content).map_err(|error| error.to_string())
+}
+
 fn runtime_snapshot(state: &RuntimeState) -> RuntimeSnapshot {
     RuntimeSnapshot {
-        paused: *state.paused.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+        paused: *state
+            .paused
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        background_enabled: *state
+            .background_enabled
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
     }
+}
+
+fn emit_runtime_state(app: &tauri::AppHandle) -> RuntimeSnapshot {
+    let state = app.state::<RuntimeState>();
+    let snapshot = runtime_snapshot(&state);
+    let _ = app.emit("aura:runtime-state", snapshot.clone());
+    snapshot
+}
+
+fn emit_lifecycle_event(app: &tauri::AppHandle, kind: &'static str, message: &str) {
+    let _ = app.emit(
+        "aura:lifecycle-event",
+        LifecycleEvent {
+            kind,
+            message: message.to_string(),
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
 }
 
 fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
@@ -110,9 +202,47 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
         *current = paused;
     }
 
-    let snapshot = RuntimeSnapshot { paused };
-    let _ = app.emit("aura:runtime-state", snapshot.clone());
-    snapshot
+    emit_runtime_state(app)
+}
+
+fn set_background_state(
+    app: &tauri::AppHandle,
+    background_enabled: bool,
+) -> Result<RuntimeSnapshot, String> {
+    let state = app.state::<RuntimeState>();
+
+    {
+        let mut current = state
+            .background_enabled
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *current = background_enabled;
+    }
+
+    save_preferences(
+        app,
+        &DesktopPreferences {
+            background_enabled,
+        },
+    )?;
+
+    let snapshot = emit_runtime_state(app);
+
+    if background_enabled {
+        emit_lifecycle_event(
+            app,
+            "background.enabled",
+            "Background mode enabled. AURA will remain available after the main window closes.",
+        );
+    } else {
+        emit_lifecycle_event(
+            app,
+            "background.disabled",
+            "Background mode disabled. Closing the main window will quit AURA.",
+        );
+    }
+
+    Ok(snapshot)
 }
 
 fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
@@ -132,6 +262,7 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        emit_lifecycle_event(app, "foreground.entered", "AURA returned to the foreground.");
     }
 }
 
@@ -194,7 +325,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M002.9 Settings Foundation",
+        stage: "M002.10 Background Mode",
         local_first: true,
     }
 }
@@ -220,6 +351,14 @@ fn set_runtime_paused(
     paused: bool,
 ) -> RuntimeSnapshot {
     set_paused_state(&app, paused)
+}
+
+#[tauri::command]
+fn set_background_enabled(
+    app: tauri::AppHandle,
+    background_enabled: bool,
+) -> Result<RuntimeSnapshot, String> {
+    set_background_state(&app, background_enabled)
 }
 
 #[tauri::command]
@@ -342,6 +481,16 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let preferences = load_preferences(app.handle());
+            {
+                let runtime = app.state::<RuntimeState>();
+                let mut background_enabled = runtime
+                    .background_enabled
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                *background_enabled = preferences.background_enabled;
+            }
+
             let shortcut = Shortcut::new(
                 Some(Modifiers::CONTROL | Modifiers::SHIFT),
                 Code::Space,
@@ -398,10 +547,24 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let window_for_close = window.clone();
+                let app_for_close = app.handle().clone();
+
                 window.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = window_for_close.hide();
+                        let runtime = app_for_close.state::<RuntimeState>();
+                        let background_enabled = runtime_snapshot(&runtime).background_enabled;
+
+                        if background_enabled {
+                            api.prevent_close();
+                            let _ = window_for_close.hide();
+                            emit_lifecycle_event(
+                                &app_for_close,
+                                "background.entered",
+                                "AURA is running in the background. Use the tray or shortcut to return.",
+                            );
+                        } else {
+                            app_for_close.exit(0);
+                        }
                     }
                 });
             }
@@ -421,6 +584,7 @@ pub fn run() {
             get_app_status,
             get_runtime_state,
             set_runtime_paused,
+            set_background_enabled,
             process_user_command,
             open_main_window,
             hide_overlay
