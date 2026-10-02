@@ -1,4 +1,9 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, PropsWithChildren } from "react";
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  PropsWithChildren,
+  ReactNode,
+} from "react";
 
 export type AuraStatus = "Idle" | "Listening" | "Thinking" | "Working" | "Waiting";
 
@@ -15,13 +20,23 @@ export function AuraMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function NavItem({ active = false, icon, children, className = "", ...props }: NavItemProps) {
+export function NavItem({
+  active = false,
+  icon,
+  children,
+  className = "",
+  ...props
+}: NavItemProps) {
   return (
     <button
       className={`ds-nav-item ${active ? "active" : ""} ${className}`.trim()}
       {...props}
     >
-      {icon ? <span className="ds-nav-icon" aria-hidden="true">{icon}</span> : null}
+      {icon ? (
+        <span className="ds-nav-icon" aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
       <span>{children}</span>
     </button>
   );
@@ -51,7 +66,7 @@ export function Surface({
 export function SectionLabel({
   children,
   trailing,
-}: PropsWithChildren<{ trailing?: React.ReactNode }>) {
+}: PropsWithChildren<{ trailing?: ReactNode }>) {
   return (
     <div className="ds-section-label">
       <span>{children}</span>
