@@ -7,6 +7,9 @@ import type {
   CoreError,
   CoreEvent,
   LifecycleEvent,
+  PermissionClass,
+  PermissionDecision,
+  PermissionPolicy,
   RuntimeState,
 } from "./types";
 
@@ -39,6 +42,24 @@ export async function setAutostartEnabled(
   autostartEnabled: boolean,
 ): Promise<RuntimeState> {
   return invoke<RuntimeState>("set_autostart_enabled", { autostartEnabled });
+}
+
+export async function getPermissionPolicy(): Promise<PermissionPolicy> {
+  return invoke<PermissionPolicy>("get_permission_policy");
+}
+
+export async function setPermissionDecision(
+  permissionClass: PermissionClass,
+  decision: PermissionDecision,
+): Promise<PermissionPolicy> {
+  return invoke<PermissionPolicy>("set_permission_decision", {
+    class: permissionClass,
+    decision,
+  });
+}
+
+export async function resetPermissionPolicy(): Promise<PermissionPolicy> {
+  return invoke<PermissionPolicy>("reset_permission_policy");
 }
 
 export async function submitAuraCommand(
