@@ -9,6 +9,7 @@ import {
   StatusPill,
   Surface,
 } from "./design-system/components";
+import ConfirmationCard from "./ConfirmationCard";
 import Settings, { type SettingsSection } from "./Settings";
 
 type AppView = "home" | "settings";
@@ -32,6 +33,7 @@ function App() {
     appStatus,
     runtimeState,
     permissionPolicy,
+    pendingConfirmation,
     bridgeError,
     submitCommand,
     setPaused,
@@ -39,6 +41,8 @@ function App() {
     setAutostart,
     setPermission,
     resetPermissions,
+    approveConfirmation,
+    cancelConfirmation,
   } = useAuraBridge();
 
   useEffect(() => {
@@ -149,10 +153,22 @@ function App() {
                       : "Ask AURA to do something on this computer…"
                   }
                   aria-label="AURA command"
-                  disabled={status === "Working" || runtimeState.paused}
+                  disabled={
+                    status === "Working"
+                    || runtimeState.paused
+                    || Boolean(pendingConfirmation)
+                  }
                 />
                 <ShortcutKey>Enter</ShortcutKey>
               </form>
+
+              {pendingConfirmation && (
+                <ConfirmationCard
+                  confirmation={pendingConfirmation}
+                  onAllow={(id) => void approveConfirmation(id)}
+                  onCancel={(id) => void cancelConfirmation(id)}
+                />
+              )}
 
               <div className="shortcut-hint">
                 Press <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
