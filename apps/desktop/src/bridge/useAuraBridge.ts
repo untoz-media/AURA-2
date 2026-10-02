@@ -95,15 +95,16 @@ export function useAuraBridge() {
             message: event.message,
           });
         } else if (
-          pendingConfirmation?.id === event.id
-          && [
+          [
             "command.confirmed",
             "command.cancelled",
             "command.completed",
             "command.failed",
           ].includes(event.kind)
         ) {
-          setPendingConfirmation(null);
+          setPendingConfirmation((current) =>
+            current?.id === event.id ? null : current,
+          );
         }
       },
       (error: CoreError) => {
