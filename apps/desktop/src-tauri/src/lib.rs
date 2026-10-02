@@ -4,6 +4,7 @@ mod permissions;
 
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
+use computer::audio::{execute_media_action, MediaAction};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
@@ -381,7 +382,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.5 Mouse Actions",
+        stage: "M003.6 Volume & Media Controls",
         local_first: true,
     }
 }
@@ -949,6 +950,90 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::Media(action) => {
+                            let message = match action {
+                                MediaAction::GetVolume => "Reading Windows audio state…".to_string(),
+                                MediaAction::SetVolume(percent) => {
+                                    format!("Setting volume to {}%…", percent)
+                                }
+                                MediaAction::VolumeUp => "Increasing volume…".to_string(),
+                                MediaAction::VolumeDown => "Decreasing volume…".to_string(),
+                                MediaAction::Mute => "Muting audio…".to_string(),
+                                MediaAction::Unmute => "Unmuting audio…".to_string(),
+                                MediaAction::PlayPause => "Toggling media playback…".to_string(),
+                                MediaAction::NextTrack => "Skipping to next track…".to_string(),
+                                MediaAction::PreviousTrack => "Going to previous track…".to_string(),
+                                MediaAction::Stop => "Stopping media playback…".to_string(),
+                            };
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message,
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_media_action(action) {
+                                Ok(Some(state)) => {
+                                    let mute_text = if state.muted { " · muted" } else { "" };
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!(
+                                                "Windows volume: {}%{}.",
+                                                state.volume_percent,
+                                                mute_text
+                                            ),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Ok(None) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: "Media control sent.".to_string(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not control Windows audio: {}", error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.audio_control_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::CloseApp(target) => {
                             let display_name = target.display_name();
 
@@ -1053,6 +1138,14 @@ fn process_user_command(
                         "This mouse action requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::Media(MediaAction::GetVolume) => {
+                        "Reading audio state requires confirmation under the current permission policy."
+                            .to_string()
+                    }
+                    ActionIntent::Media(_) => {
+                        "This audio/media action requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                 };
 
                 emit_core_event(
@@ -1107,6 +1200,19 @@ fn process_user_command(
                 },
             );
         }
+        RouteResult::InvalidMedia(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!("Media command rejected: {}", message),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+        }
         RouteResult::UnsupportedApp(target) => {
             emit_core_event(
                 &app,
@@ -1131,7 +1237,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports app control, window switching, keyboard actions and controlled mouse actions."
+                        "No deterministic computer action matched yet. M003 currently supports app/window control, keyboard, mouse, volume and media actions."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
