@@ -552,18 +552,51 @@ fn resolve_confirmation(
     approved: bool,
 ) -> Result<Option<CommandAck>, String> {
     let pending = {
-        let mut confirmations = state
+        let confirmations = state
             .pending_confirmations
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        confirmations.retain(|_, value| value.expires_at_ms > unix_timestamp_ms());
         confirmations.get(&id).cloned()
     };
 
     let Some(pending) = pending else {
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Confirmation is no longer available or has expired.".to_string(),
+                command: None,
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
         return Err("Confirmation is no longer available or has expired.".to_string());
     };
+
+    if pending.expires_at_ms <= unix_timestamp_ms() {
+        {
+            let mut confirmations = state
+                .pending_confirmations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            confirmations.remove(&id);
+        }
+
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Confirmation expired. Submit the command again.".to_string(),
+                command: Some(pending.command.clone()),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        return Err("Confirmation expired. Submit the command again.".to_string());
+    }
 
     if !approved {
         {
@@ -1432,7 +1465,7 @@ fn process_user_command(
             PermissionDecision::Ask => {
                 let message = match &action.intent {
                     ActionIntent::CloseApp(target) => format!(
-                        "Closing {} requires confirmation because unsaved work could be lost. Confirmation controls arrive in M003.9.",
+                        "Closing {} requires confirmation because unsaved work could be lost.",
                         target.display_name()
                     ),
                     ActionIntent::LaunchApp(target) => format!(
