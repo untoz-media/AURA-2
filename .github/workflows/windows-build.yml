@@ -8,6 +8,8 @@ on:
       - ".github/workflows/windows-build.yml"
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "aura-v*"
 
