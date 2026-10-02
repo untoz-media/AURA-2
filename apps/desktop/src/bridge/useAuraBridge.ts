@@ -229,15 +229,42 @@ export function useAuraBridge() {
   }, []);
 
   const approveConfirmation = useCallback(async (id: string) => {
-    const ack = await resolveConfirmation(id, true);
-    if (ack) {
-      setStatus(ack.status);
+    try {
+      setBridgeError(null);
+      const ack = await resolveConfirmation(id, true);
+      if (ack) {
+        setStatus(ack.status);
+      }
+      return ack;
+    } catch (error) {
+      const coreError: CoreError = {
+        id,
+        code: "bridge.confirmation_failed",
+        message: String(error),
+      };
+      setPendingConfirmation(null);
+      setBridgeError(coreError);
+      setStatus("Idle");
+      setActivity(coreError.message);
+      return null;
     }
-    return ack;
   }, []);
 
   const cancelConfirmation = useCallback(async (id: string) => {
-    await resolveConfirmation(id, false);
+    try {
+      setBridgeError(null);
+      await resolveConfirmation(id, false);
+    } catch (error) {
+      const coreError: CoreError = {
+        id,
+        code: "bridge.confirmation_failed",
+        message: String(error),
+      };
+      setPendingConfirmation(null);
+      setBridgeError(coreError);
+      setStatus("Idle");
+      setActivity(coreError.message);
+    }
   }, []);
 
   return {
