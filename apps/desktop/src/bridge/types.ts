@@ -38,3 +38,7 @@ export type CoreError = {
   code: string;
   message: string;
 };
+
+export type RuntimeState = {
+  paused: boolean;
+};
