@@ -1,6 +1,6 @@
 {
   "name": "@untoz/aura-desktop",
-  "version": "0.2.0-alpha.0",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,8 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "icons": "tauri icon src-tauri/aura-app-icon.svg",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "npm run icons && tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
