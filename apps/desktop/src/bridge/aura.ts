@@ -33,6 +33,14 @@ export async function submitAuraCommand(
   return invoke<CommandAck>("process_user_command", { request });
 }
 
+export async function openMainWindow(): Promise<void> {
+  return invoke<void>("open_main_window");
+}
+
+export async function hideOverlay(): Promise<void> {
+  return invoke<void>("hide_overlay");
+}
+
 export async function listenToAuraCore(
   onEvent: (event: CoreEvent) => void,
   onError: (error: CoreError) => void,

@@ -93,7 +93,10 @@ export function useAuraBridge() {
     };
   }, []);
 
-  const submitCommand = useCallback(async (text: string) => {
+  const submitCommand = useCallback(async (
+    text: string,
+    source: "desktop" | "overlay" | "voice" = "desktop",
+  ) => {
     const trimmed = text.trim();
     if (!trimmed) return null;
 
@@ -101,7 +104,7 @@ export function useAuraBridge() {
       setBridgeError(null);
       const ack = await submitAuraCommand({
         text: trimmed,
-        source: "desktop",
+        source,
       });
       setStatus(ack.status);
       return ack;

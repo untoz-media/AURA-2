@@ -19,7 +19,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M002.4** — Core ↔ Desktop communication
 - [x] **M002.5** — System tray integration
 - [x] **M002.6** — Global keyboard shortcut foundation
-- [ ] **M002.7** — AURA Overlay
+- [x] **M002.7** — AURA Overlay
 - [x] **M002.8** — Runtime status UI foundation
 - [ ] **M002.9** — Settings foundation
 - [ ] **M002.10** — Background mode

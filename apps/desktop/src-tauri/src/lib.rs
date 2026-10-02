@@ -124,6 +124,10 @@ fn emit_core_error(app: &tauri::AppHandle, error: CoreError) {
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.hide();
+    }
+
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
@@ -131,8 +135,14 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-fn toggle_main_window(app: &tauri::AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
+fn hide_overlay_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("overlay") {
+        let _ = window.hide();
+    }
+}
+
+fn toggle_overlay(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("overlay") else {
         return;
     };
 
@@ -140,7 +150,10 @@ fn toggle_main_window(app: &tauri::AppHandle) {
         Ok(true) => {
             let _ = window.hide();
         }
-        Ok(false) => show_main_window(app),
+        Ok(false) => {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
         Err(_) => {}
     }
 }
@@ -181,9 +194,19 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M002.5 System Tray",
+        stage: "M002.7 AURA Overlay",
         local_first: true,
     }
+}
+
+#[tauri::command]
+fn open_main_window(app: tauri::AppHandle) {
+    show_main_window(&app);
+}
+
+#[tauri::command]
+fn hide_overlay(app: tauri::AppHandle) {
+    hide_overlay_window(&app);
 }
 
 #[tauri::command]
@@ -313,7 +336,7 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        toggle_main_window(app);
+                        toggle_overlay(app);
                     }
                 })
                 .build(),
@@ -383,13 +406,24 @@ pub fn run() {
                 });
             }
 
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                let overlay_for_events = overlay.clone();
+                overlay.on_window_event(move |event| {
+                    if let WindowEvent::Focused(false) = event {
+                        let _ = overlay_for_events.hide();
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
             get_runtime_state,
             set_runtime_paused,
-            process_user_command
+            process_user_command,
+            open_main_window,
+            hide_overlay
         ])
         .run(tauri::generate_context!())
         .expect("error while running AURA-2");
