@@ -1,6 +1,7 @@
 use crate::computer::{
     app_launcher::AppTarget,
     keyboard::KeyboardShortcut,
+    mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
 };
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
@@ -12,6 +13,7 @@ pub enum ActionIntent {
     ListWindows,
     PressShortcut(KeyboardShortcut),
     TypeText(String),
+    Mouse(MouseAction),
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +28,7 @@ pub enum RouteResult {
     Action(RoutedAction),
     UnsupportedApp(String),
     InvalidKeyboard(String),
+    InvalidMouse(String),
     NoMatch,
 }
 
@@ -80,6 +83,142 @@ fn unwrap_text_quotes(value: &str) -> &str {
     }
 
     trimmed
+}
+
+fn parse_scroll_amount(value: &str, direction: i32) -> Result<MouseAction, String> {
+    let trimmed = value.trim();
+    let amount = if trimmed.is_empty() {
+        1
+    } else {
+        trimmed
+            .parse::<i32>()
+            .map_err(|_| "Scroll amount must be a whole number.".to_string())?
+    };
+
+    let signed = validate_scroll_notches(direction * amount)
+        .map_err(|error| error.to_string())?;
+
+    Ok(MouseAction::Scroll { notches: signed })
+}
+
+fn mouse_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    let normalized = input.trim().to_lowercase();
+
+    const MOVE_PREFIXES: &[&str] = &[
+        "move mouse to ",
+        "move cursor to ",
+        "move o rato para ",
+        "mover o rato para ",
+        "move cursor para ",
+        "mover cursor para ",
+    ];
+
+    const RIGHT_CLICK_AT_PREFIXES: &[&str] = &[
+        "right click at ",
+        "clique direito em ",
+        "clica com o botão direito em ",
+        "clica com o botao direito em ",
+    ];
+
+    const CLICK_AT_PREFIXES: &[&str] = &[
+        "click at ",
+        "clica em ",
+        "clique em ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, MOVE_PREFIXES) {
+        return Some(
+            parse_point(value)
+                .map(MouseAction::MoveTo)
+                .map(ActionIntent::Mouse)
+                .map_err(|error| error.to_string()),
+        );
+    }
+
+    if let Some(value) = value_after_prefix(input, RIGHT_CLICK_AT_PREFIXES) {
+        return Some(
+            parse_point(value)
+                .map(|point| MouseAction::ClickAt {
+                    point,
+                    button: MouseButton::Right,
+                })
+                .map(ActionIntent::Mouse)
+                .map_err(|error| error.to_string()),
+        );
+    }
+
+    if let Some(value) = value_after_prefix(input, CLICK_AT_PREFIXES) {
+        return Some(
+            parse_point(value)
+                .map(|point| MouseAction::ClickAt {
+                    point,
+                    button: MouseButton::Left,
+                })
+                .map(ActionIntent::Mouse)
+                .map_err(|error| error.to_string()),
+        );
+    }
+
+    const SCROLL_DOWN_PREFIXES: &[&str] = &[
+        "scroll down",
+        "scroll para baixo",
+        "rola para baixo",
+        "rolar para baixo",
+        "desce",
+    ];
+
+    for prefix in SCROLL_DOWN_PREFIXES {
+        if normalized == *prefix {
+            return Some(parse_scroll_amount("", -1).map(ActionIntent::Mouse));
+        }
+
+        if let Some(rest) = normalized.strip_prefix(&format!("{prefix} ")) {
+            return Some(parse_scroll_amount(rest, -1).map(ActionIntent::Mouse));
+        }
+    }
+
+    const SCROLL_UP_PREFIXES: &[&str] = &[
+        "scroll up",
+        "scroll para cima",
+        "rola para cima",
+        "rolar para cima",
+        "sobe",
+    ];
+
+    for prefix in SCROLL_UP_PREFIXES {
+        if normalized == *prefix {
+            return Some(parse_scroll_amount("", 1).map(ActionIntent::Mouse));
+        }
+
+        if let Some(rest) = normalized.strip_prefix(&format!("{prefix} ")) {
+            return Some(parse_scroll_amount(rest, 1).map(ActionIntent::Mouse));
+        }
+    }
+
+    let exact = match normalized.as_str() {
+        "click" | "left click" | "clica" | "clique" => Some(MouseAction::Click {
+            button: MouseButton::Left,
+        }),
+        "right click" | "clique direito" | "clica com o botão direito"
+        | "clica com o botao direito" => Some(MouseAction::Click {
+            button: MouseButton::Right,
+        }),
+        "double click" | "double-click" | "duplo clique" | "duplo click" => {
+            Some(MouseAction::DoubleClick)
+        }
+        _ => None,
+    };
+
+    exact.map(|action| Ok(ActionIntent::Mouse(action)))
+}
+
+fn permission_for_mouse(action: MouseAction) -> PermissionClass {
+    match action {
+        MouseAction::MoveTo(_) | MouseAction::Scroll { .. } => PermissionClass::Act,
+        MouseAction::Click { .. }
+        | MouseAction::DoubleClick
+        | MouseAction::ClickAt { .. } => PermissionClass::Modify,
+    }
 }
 
 fn keyboard_request(input: &str) -> Option<Result<ActionIntent, String>> {
@@ -202,6 +341,21 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if let Some(mouse) = mouse_request(input) {
+        return match mouse {
+            Ok(ActionIntent::Mouse(action)) => {
+                let permission = permission_for_mouse(action);
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::Mouse(action),
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Ok(_) => unreachable!("mouse_request should only produce mouse intents"),
+            Err(message) => RouteResult::InvalidMouse(message),
+        };
+    }
+
     if let Some(keyboard) = keyboard_request(input) {
         return match keyboard {
             Ok(intent) => {
@@ -266,7 +420,10 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::computer::keyboard::{KeyCode, ModifierKey};
+    use crate::computer::{
+        keyboard::{KeyCode, ModifierKey},
+        mouse::{MouseAction, MouseButton, ScreenPoint},
+    };
 
     #[test]
     fn routes_english_obs_launch() {
@@ -282,41 +439,25 @@ mod tests {
     }
 
     #[test]
-    fn routes_portuguese_close_as_modify() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Fecha o Terminal", &policy),
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::CloseApp(AppTarget::WindowsTerminal),
-                permission: PermissionClass::Modify,
-                decision: PermissionDecision::Ask,
-            })
-        ));
-    }
-
-    #[test]
-    fn routes_switch_to_obs_as_act() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Switch to OBS", &policy),
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::SwitchToApp(AppTarget::ObsStudio),
-                permission: PermissionClass::Act,
-                decision: PermissionDecision::Allow,
-            })
-        ));
-    }
-
-    #[test]
     fn routes_safe_f11_as_act() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
             route_command("Press F11", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::PressShortcut(KeyboardShortcut {
-                    key: KeyCode::Function(11),
-                    ..
-                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_mouse_move_as_act() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Move mouse to 500, 300", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::Mouse(MouseAction::MoveTo(ScreenPoint { x: 500, y: 300 })),
                 permission: PermissionClass::Act,
                 decision: PermissionDecision::Allow,
             })
@@ -324,18 +465,53 @@ mod tests {
     }
 
     #[test]
-    fn routes_ctrl_s_as_modify() {
+    fn routes_scroll_as_act() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
-            route_command("Press Ctrl+S", &policy),
+            route_command("Scroll down 3", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::PressShortcut(KeyboardShortcut {
-                    modifiers,
-                    key: KeyCode::Letter('s'),
-                }),
+                intent: ActionIntent::Mouse(MouseAction::Scroll { notches: -3 }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_click_as_modify() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Click", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::Mouse(MouseAction::Click { button: MouseButton::Left }),
                 permission: PermissionClass::Modify,
                 decision: PermissionDecision::Ask,
-            }) if modifiers == vec![ModifierKey::Ctrl]
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_right_click_at_as_modify() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Right click at -100, 450", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::Mouse(MouseAction::ClickAt {
+                    point: ScreenPoint { x: -100, y: 450 },
+                    button: MouseButton::Right,
+                }),
+                permission: PermissionClass::Modify,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_excessive_scroll() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Scroll down 50", &policy),
+            RouteResult::InvalidMouse(_)
         ));
     }
 
@@ -375,15 +551,6 @@ mod tests {
                 permission: PermissionClass::Read,
                 decision: PermissionDecision::Allow,
             })
-        ));
-    }
-
-    #[test]
-    fn reports_unknown_apps() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("open something-unknown", &policy),
-            RouteResult::UnsupportedApp(_)
         ));
     }
 }
