@@ -5,6 +5,8 @@ use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 pub enum ActionIntent {
     LaunchApp(AppTarget),
     CloseApp(AppTarget),
+    SwitchToApp(AppTarget),
+    ListWindows,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +27,7 @@ pub enum RouteResult {
 enum AppOperation {
     Launch,
     Close,
+    Switch,
 }
 
 fn normalize_command(input: &str) -> String {
@@ -41,6 +44,22 @@ fn strip_article(value: &str) -> &str {
         .or_else(|| value.strip_prefix("a "))
         .unwrap_or(value)
         .trim()
+}
+
+fn is_list_windows_command(input: &str) -> bool {
+    matches!(
+        input,
+        "list windows"
+            | "show windows"
+            | "what windows are open"
+            | "what windows are open?"
+            | "lista as janelas"
+            | "listar janelas"
+            | "que janelas estão abertas"
+            | "que janelas estao abertas"
+            | "que janelas estão abertas?"
+            | "que janelas estao abertas?"
+    )
 }
 
 fn app_request(input: &str) -> Option<(AppOperation, &str)> {
@@ -64,6 +83,24 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
         "encerrar ",
     ];
 
+    const SWITCH_PREFIXES: &[&str] = &[
+        "switch to ",
+        "focus ",
+        "go to ",
+        "vai para ",
+        "muda para ",
+        "troca para ",
+        "foca ",
+        "focar ",
+    ];
+
+    if let Some(value) = SWITCH_PREFIXES
+        .iter()
+        .find_map(|prefix| input.strip_prefix(prefix))
+    {
+        return Some((AppOperation::Switch, strip_article(value)));
+    }
+
     if let Some(value) = LAUNCH_PREFIXES
         .iter()
         .find_map(|prefix| input.strip_prefix(prefix))
@@ -79,6 +116,16 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     let normalized = normalize_command(input);
+
+    if is_list_windows_command(&normalized) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ListWindows,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     let Some((operation, target_text)) = app_request(&normalized) else {
         return RouteResult::NoMatch;
     };
@@ -100,6 +147,10 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             ActionIntent::CloseApp(target),
             PermissionClass::Modify,
         ),
+        AppOperation::Switch => (
+            ActionIntent::SwitchToApp(target),
+            PermissionClass::Act,
+        ),
     };
 
     RouteResult::Action(RoutedAction {
@@ -116,10 +167,8 @@ mod tests {
     #[test]
     fn routes_english_obs_launch() {
         let policy = PermissionPolicy::default();
-        let result = route_command("Open OBS", &policy);
-
         assert!(matches!(
-            result,
+            route_command("Open OBS", &policy),
             RouteResult::Action(RoutedAction {
                 intent: ActionIntent::LaunchApp(AppTarget::ObsStudio),
                 decision: PermissionDecision::Allow,
@@ -129,28 +178,12 @@ mod tests {
     }
 
     #[test]
-    fn routes_portuguese_brave_launch() {
+    fn routes_portuguese_close_as_modify() {
         let policy = PermissionPolicy::default();
-        let result = route_command("Abre o Brave", &policy);
-
         assert!(matches!(
-            result,
+            route_command("Fecha o Terminal", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::LaunchApp(AppTarget::Brave),
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn routes_english_obs_close_as_modify() {
-        let policy = PermissionPolicy::default();
-        let result = route_command("Close OBS", &policy);
-
-        assert!(matches!(
-            result,
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::CloseApp(AppTarget::ObsStudio),
+                intent: ActionIntent::CloseApp(AppTarget::WindowsTerminal),
                 permission: PermissionClass::Modify,
                 decision: PermissionDecision::Ask,
             })
@@ -158,15 +191,39 @@ mod tests {
     }
 
     #[test]
-    fn routes_portuguese_terminal_close() {
+    fn routes_switch_to_obs_as_act() {
         let policy = PermissionPolicy::default();
-        let result = route_command("Fecha o Terminal", &policy);
-
         assert!(matches!(
-            result,
+            route_command("Switch to OBS", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::CloseApp(AppTarget::WindowsTerminal),
+                intent: ActionIntent::SwitchToApp(AppTarget::ObsStudio),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_portuguese_switch() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Vai para o Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SwitchToApp(AppTarget::Brave),
                 ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_window_listing_as_read() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Que janelas estão abertas?", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ListWindows,
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
             })
         ));
     }
