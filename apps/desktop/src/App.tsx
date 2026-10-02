@@ -1,4 +1,5 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { listenToOpenSettings } from "./bridge/aura";
 import { useAuraBridge } from "./bridge/useAuraBridge";
 import {
   AuraMark,
@@ -8,6 +9,9 @@ import {
   StatusPill,
   Surface,
 } from "./design-system/components";
+import Settings, { type SettingsSection } from "./Settings";
+
+type AppView = "home" | "settings";
 
 const modules = [
   { name: "Computer", description: "Windows control", milestone: "M003", glyph: "⌁" },
@@ -20,6 +24,8 @@ const modules = [
 
 function App() {
   const [command, setCommand] = useState("");
+  const [view, setView] = useState<AppView>("home");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const {
     status,
     activity,
@@ -27,7 +33,29 @@ function App() {
     runtimeState,
     bridgeError,
     submitCommand,
+    setPaused,
   } = useAuraBridge();
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    listenToOpenSettings(() => {
+      setSettingsSection("general");
+      setView("settings");
+    }).then((cleanup) => {
+      if (cancelled) {
+        cleanup();
+      } else {
+        unlisten = cleanup;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -50,17 +78,35 @@ function App() {
         </div>
 
         <nav className="primary-nav" aria-label="Primary navigation">
-          <NavItem active icon="⌂">Home</NavItem>
+          <NavItem
+            active={view === "home"}
+            icon="⌂"
+            onClick={() => setView("home")}
+          >
+            Home
+          </NavItem>
           <NavItem icon="✦">Actions</NavItem>
           <NavItem icon="↻">Automations</NavItem>
           <NavItem icon="◇">Memory</NavItem>
         </nav>
 
         <div className="sidebar-bottom">
-          <NavItem icon="⚙">Settings</NavItem>
+          <NavItem
+            active={view === "settings"}
+            icon="⚙"
+            onClick={() => setView("settings")}
+          >
+            Settings
+          </NavItem>
           <div className="local-badge">
             <span className="local-dot" />
-            <span className={runtimeState.paused ? "runtime-paused" : ""}>{runtimeState.paused ? "Paused" : appStatus?.localFirst === false ? "Hybrid" : "Local-first"}</span>
+            <span className={runtimeState.paused ? "runtime-paused" : ""}>
+              {runtimeState.paused
+                ? "Paused"
+                : appStatus?.localFirst === false
+                  ? "Hybrid"
+                  : "Local-first"}
+            </span>
           </div>
         </div>
       </aside>
@@ -71,71 +117,87 @@ function App() {
             <span className="eyebrow">
               {appStatus ? `${appStatus.name} · ${appStatus.stage}` : "AURA-2 DESKTOP"}
             </span>
-            <h1>Good evening.</h1>
+            <h1>{view === "settings" ? "Control AURA." : "Good evening."}</h1>
           </div>
           <StatusPill status={status} />
         </header>
 
-        <section className="hero">
-          <div className={`aura-presence ${status.toLowerCase()}`}>
-            <AuraMark />
-          </div>
+        {view === "home" ? (
+          <>
+            <section className="hero">
+              <div className={`aura-presence ${status.toLowerCase()}`}>
+                <AuraMark />
+              </div>
 
-          <p className="hero-kicker">YOUR PC. NOW IT UNDERSTANDS YOU.</p>
-          <h2>What do you want to do?</h2>
+              <p className="hero-kicker">YOUR PC. NOW IT UNDERSTANDS YOU.</p>
+              <h2>What do you want to do?</h2>
 
-          <form className="command-bar" onSubmit={handleSubmit}>
-            <span className="command-spark" aria-hidden="true">✦</span>
-            <input
-              autoFocus
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              placeholder={runtimeState.paused ? "AURA is paused…" : "Ask AURA to do something on this computer…"}
-              aria-label="AURA command"
-              disabled={status === "Working" || runtimeState.paused}
-            />
-            <ShortcutKey>Enter</ShortcutKey>
-          </form>
-
-          <div className="shortcut-hint">
-            Press <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
-            <ShortcutKey>Space</ShortcutKey> from anywhere
-          </div>
-        </section>
-
-        <section className="lower-grid">
-          <Surface className="activity-card">
-            <SectionLabel
-              trailing={
-                <span
-                  className={bridgeError ? "activity-error-dot" : "activity-live-dot"}
-                  aria-label={bridgeError ? "Bridge error" : "Bridge connected"}
+              <form className="command-bar" onSubmit={handleSubmit}>
+                <span className="command-spark" aria-hidden="true">✦</span>
+                <input
+                  autoFocus
+                  value={command}
+                  onChange={(event) => setCommand(event.target.value)}
+                  placeholder={
+                    runtimeState.paused
+                      ? "AURA is paused…"
+                      : "Ask AURA to do something on this computer…"
+                  }
+                  aria-label="AURA command"
+                  disabled={status === "Working" || runtimeState.paused}
                 />
-              }
-            >
-              Current activity
-            </SectionLabel>
-            <p>{activity}</p>
-          </Surface>
+                <ShortcutKey>Enter</ShortcutKey>
+              </form>
 
-          <Surface className="modules-card">
-            <SectionLabel trailing={<span>{modules.length} modules</span>}>
-              AURA modules
-            </SectionLabel>
-            <div className="module-grid">
-              {modules.map((module) => (
-                <div className="module-tile" key={module.name}>
-                  <span className="module-glyph" aria-hidden="true">{module.glyph}</span>
-                  <div className="module-copy">
-                    <strong>{module.name}</strong>
-                    <span>{module.description}</span>
-                  </div>
-                  <small>{module.milestone}</small>
+              <div className="shortcut-hint">
+                Press <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
+                <ShortcutKey>Space</ShortcutKey> from anywhere
+              </div>
+            </section>
+
+            <section className="lower-grid">
+              <Surface className="activity-card">
+                <SectionLabel
+                  trailing={
+                    <span
+                      className={bridgeError ? "activity-error-dot" : "activity-live-dot"}
+                      aria-label={bridgeError ? "Bridge error" : "Bridge connected"}
+                    />
+                  }
+                >
+                  Current activity
+                </SectionLabel>
+                <p>{activity}</p>
+              </Surface>
+
+              <Surface className="modules-card">
+                <SectionLabel trailing={<span>{modules.length} modules</span>}>
+                  AURA modules
+                </SectionLabel>
+                <div className="module-grid">
+                  {modules.map((module) => (
+                    <div className="module-tile" key={module.name}>
+                      <span className="module-glyph" aria-hidden="true">{module.glyph}</span>
+                      <div className="module-copy">
+                        <strong>{module.name}</strong>
+                        <span>{module.description}</span>
+                      </div>
+                      <small>{module.milestone}</small>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </Surface>
-        </section>
+              </Surface>
+            </section>
+          </>
+        ) : (
+          <Settings
+            activeSection={settingsSection}
+            onSectionChange={setSettingsSection}
+            appStatus={appStatus}
+            runtimeState={runtimeState}
+            onPausedChange={setPaused}
+          />
+        )}
       </section>
     </main>
   );
