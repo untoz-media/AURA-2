@@ -13,6 +13,7 @@ use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs,
     path::PathBuf,
     sync::{
@@ -40,6 +41,7 @@ struct RuntimeState {
     background_enabled: Mutex<bool>,
     autostart_enabled: Mutex<bool>,
     permission_policy: Mutex<PermissionPolicy>,
+    pending_confirmations: Mutex<HashMap<String, PendingConfirmation>>,
 }
 
 impl Default for RuntimeState {
@@ -49,6 +51,7 @@ impl Default for RuntimeState {
             background_enabled: Mutex::new(true),
             autostart_enabled: Mutex::new(false),
             permission_policy: Mutex::new(PermissionPolicy::default()),
+            pending_confirmations: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -106,6 +109,8 @@ struct LifecycleEvent {
 struct CommandRequest {
     text: String,
     source: String,
+    #[serde(default)]
+    approval_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -134,6 +139,16 @@ struct CoreError {
     code: &'static str,
     message: String,
 }
+
+#[derive(Clone)]
+struct PendingConfirmation {
+    command: String,
+    source: String,
+    permission: PermissionClass,
+    expires_at_ms: u64,
+}
+
+const CONFIRMATION_TTL_MS: u64 = 60_000;
 
 fn unix_timestamp_ms() -> u64 {
     SystemTime::now()
@@ -418,7 +433,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.8 Permission Engine",
+        stage: "M003.9 Confirmation Flow",
         local_first: true,
     }
 }
@@ -530,6 +545,97 @@ fn reset_permission_policy(
 }
 
 #[tauri::command]
+fn resolve_confirmation(
+    app: tauri::AppHandle,
+    state: State<'_, RuntimeState>,
+    id: String,
+    approved: bool,
+) -> Result<Option<CommandAck>, String> {
+    let pending = {
+        let confirmations = state
+            .pending_confirmations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        confirmations.get(&id).cloned()
+    };
+
+    let Some(pending) = pending else {
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Confirmation is no longer available or has expired.".to_string(),
+                command: None,
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+        return Err("Confirmation is no longer available or has expired.".to_string());
+    };
+
+    if pending.expires_at_ms <= unix_timestamp_ms() {
+        {
+            let mut confirmations = state
+                .pending_confirmations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            confirmations.remove(&id);
+        }
+
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Confirmation expired. Submit the command again.".to_string(),
+                command: Some(pending.command.clone()),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        return Err("Confirmation expired. Submit the command again.".to_string());
+    }
+
+    if !approved {
+        {
+            let mut confirmations = state
+                .pending_confirmations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            confirmations.remove(&id);
+        }
+
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id,
+                kind: "command.cancelled",
+                status: AuraRuntimeStatus::Idle,
+                message: "Action cancelled.".to_string(),
+                command: Some(pending.command),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        return Ok(None);
+    }
+
+    let ack = process_user_command(
+        app,
+        state,
+        CommandRequest {
+            text: pending.command,
+            source: pending.source,
+            approval_id: Some(id),
+        },
+    )?;
+
+    Ok(Some(ack))
+}
+
+#[tauri::command]
 fn process_user_command(
     app: tauri::AppHandle,
     state: State<'_, RuntimeState>,
@@ -579,15 +685,50 @@ fn process_user_command(
     }
 
     let source = request.source.clone();
-    let id = next_command_id();
+    let approval_id = request.approval_id.clone();
+    let id = approval_id.clone().unwrap_or_else(next_command_id);
+
+    let approved_permission = if let Some(approval_id) = &approval_id {
+        let pending = {
+            let mut confirmations = state
+                .pending_confirmations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            confirmations.remove(approval_id)
+        };
+
+        let Some(pending) = pending else {
+            return Err("Confirmation is no longer available or has expired.".to_string());
+        };
+
+        if pending.expires_at_ms <= unix_timestamp_ms() {
+            return Err("Confirmation expired. Submit the command again.".to_string());
+        }
+
+        if pending.command != text || pending.source != source {
+            return Err("Confirmation does not match this command.".to_string());
+        }
+
+        Some(pending.permission)
+    } else {
+        None
+    };
 
     emit_core_event(
         &app,
         CoreEvent {
             id: id.clone(),
-            kind: "command.accepted",
+            kind: if approval_id.is_some() {
+                "command.confirmed"
+            } else {
+                "command.accepted"
+            },
             status: AuraRuntimeStatus::Thinking,
-            message: format!("Understanding: “{}”", text),
+            message: if approval_id.is_some() {
+                "Confirmation accepted. Executing action…".to_string()
+            } else {
+                format!("Understanding: “{}”", text)
+            },
             command: Some(text.clone()),
             timestamp_ms: unix_timestamp_ms(),
         },
@@ -600,7 +741,34 @@ fn process_user_command(
         .clone();
 
     match route_command(&text, &policy) {
-        RouteResult::Action(action) => match action.decision {
+        RouteResult::Action(action) => {
+            let decision = if let Some(permission) = approved_permission {
+                if permission != action.permission {
+                    emit_core_event(
+                        &app,
+                        CoreEvent {
+                            id: id.clone(),
+                            kind: "command.failed",
+                            status: AuraRuntimeStatus::Idle,
+                            message: "Confirmation no longer matches the routed action.".to_string(),
+                            command: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                    return Err("Confirmation no longer matches the routed action.".to_string());
+                }
+
+                match action.decision {
+                    PermissionDecision::Never => PermissionDecision::Never,
+                    PermissionDecision::Allow | PermissionDecision::Ask => {
+                        PermissionDecision::Allow
+                    }
+                }
+            } else {
+                action.decision
+            };
+
+            match decision {
             PermissionDecision::Allow => {
                 let worker_app = app.clone();
                 let worker_id = id.clone();
@@ -1297,7 +1465,7 @@ fn process_user_command(
             PermissionDecision::Ask => {
                 let message = match &action.intent {
                     ActionIntent::CloseApp(target) => format!(
-                        "Closing {} requires confirmation because unsaved work could be lost. Confirmation controls arrive in M003.9.",
+                        "Closing {} requires confirmation because unsaved work could be lost.",
                         target.display_name()
                     ),
                     ActionIntent::LaunchApp(target) => format!(
@@ -1367,6 +1535,30 @@ fn process_user_command(
                     }
                 };
 
+                let expires_at_ms = unix_timestamp_ms() + CONFIRMATION_TTL_MS;
+
+                {
+                    let mut confirmations = state
+                        .pending_confirmations
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+                    confirmations.retain(|_, value| {
+                        value.expires_at_ms > unix_timestamp_ms()
+                            && value.source != source
+                    });
+
+                    confirmations.insert(
+                        id.clone(),
+                        PendingConfirmation {
+                            command: text.clone(),
+                            source: source.clone(),
+                            permission: action.permission,
+                            expires_at_ms,
+                        },
+                    );
+                }
+
                 emit_core_event(
                     &app,
                     CoreEvent {
@@ -1392,7 +1584,8 @@ fn process_user_command(
                     },
                 );
             }
-        },
+            }
+        }
         RouteResult::InvalidKeyboard(message) => {
             emit_core_event(
                 &app,
@@ -1625,6 +1818,7 @@ pub fn run() {
             get_permission_policy,
             set_permission_decision,
             reset_permission_policy,
+            resolve_confirmation,
             process_user_command,
             open_main_window,
             hide_overlay

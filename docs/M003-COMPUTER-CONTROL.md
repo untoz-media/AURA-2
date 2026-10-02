@@ -191,3 +191,26 @@ Settings → Permissions can now configure Read, Act and Modify as `Allow`, `Ask
 The policy is stored locally as `permission-policy.json` and loaded at startup. Every command is routed against a snapshot of the current runtime policy rather than `PermissionPolicy::default()`.
 
 The bridge exposes policy read/update/reset commands. M003.9 will consume `Ask` decisions through a real pending-action confirmation workflow.
+
+
+## M003.9
+
+M003.9 adds explicit one-shot confirmation for actions whose permission decision is `Ask`.
+
+When the Action Router resolves to `Ask`, AURA now:
+
+1. creates a pending confirmation associated with the command ID, command text, source and permission class
+2. stores it only in runtime memory
+3. enters `Waiting`
+4. renders an Allow / Cancel confirmation card in the main app and Overlay
+5. executes the original deterministic action only after explicit approval
+
+Confirmations expire after 60 seconds and are single-use. Approval IDs cannot be replayed.
+
+Before executing an approved action, AURA routes the command again against the current permission policy. If the policy has changed to `Never`, the action remains blocked.
+
+Only one pending confirmation is retained per command source. A newer request replaces the older pending request from that same source.
+
+Cancellation removes the pending action and returns AURA to `Idle`.
+
+The confirmation flow does not permanently change permission settings; it approves one specific action only.

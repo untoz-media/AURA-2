@@ -6,6 +6,8 @@ export type CoreEventKind =
   | "command.completed"
   | "command.failed"
   | "command.awaiting_confirmation"
+  | "command.confirmed"
+  | "command.cancelled"
   | "command.unhandled";
 
 export type CoreEvent = {
@@ -20,6 +22,13 @@ export type CoreEvent = {
 export type CommandRequest = {
   text: string;
   source: "desktop" | "overlay" | "voice";
+  approvalId?: string;
+};
+
+export type PendingConfirmation = {
+  id: string;
+  command: string;
+  message: string;
 };
 
 export type CommandAck = {
