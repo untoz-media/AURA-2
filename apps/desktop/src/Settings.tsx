@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AppStatus, RuntimeState } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -43,7 +44,7 @@ function SettingRow({
 }: {
   title: string;
   description: string;
-  trailing: React.ReactNode;
+  trailing: ReactNode;
 }) {
   return (
     <div className="setting-row">
@@ -86,7 +87,7 @@ function Badge({
   children,
   tone = "neutral",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   tone?: "neutral" | "ready" | "planned" | "warning";
 }) {
   return <span className={`settings-badge ${tone}`}>{children}</span>;
