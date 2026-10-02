@@ -98,3 +98,21 @@ The Windows lifecycle implementation is intentionally conservative:
 - File Explorer is protected from generic termination
 
 The close engine is implemented in `computer/app_lifecycle.rs`.
+
+
+## M003.3
+
+M003.3 adds native top-level window discovery and foreground switching.
+
+AURA can now enumerate visible titled windows, associate them with known application targets and request focus changes without simulating Alt+Tab.
+
+Examples:
+
+- `Switch to OBS`
+- `Vai para o Brave`
+- `List windows`
+- `Que janelas estão abertas?`
+
+Window listing is classified as `Read`. Switching to a known application window is classified as `Act`.
+
+AURA respects Windows foreground restrictions: if `SetForegroundWindow` is denied, the action fails cleanly rather than attempting to bypass OS focus protections.

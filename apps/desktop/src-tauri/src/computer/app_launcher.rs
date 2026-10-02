@@ -41,6 +41,34 @@ impl AppTarget {
             Self::Calculator => "Calculator",
         }
     }
+
+    pub fn process_images(self) -> &'static [&'static str] {
+        match self {
+            Self::ObsStudio => &["obs64.exe"],
+            Self::Brave => &["brave.exe"],
+            Self::Chrome => &["chrome.exe"],
+            Self::FileExplorer => &["explorer.exe"],
+            Self::WindowsTerminal => &["WindowsTerminal.exe"],
+            Self::Notepad => &["notepad.exe"],
+            Self::Calculator => &["CalculatorApp.exe", "Calculator.exe"],
+        }
+    }
+
+    pub fn window_title_hints(self) -> &'static [&'static str] {
+        match self {
+            Self::ObsStudio => &["obs"],
+            Self::Brave => &["brave"],
+            Self::Chrome => &["chrome"],
+            Self::FileExplorer => &["file explorer", "explorer"],
+            Self::WindowsTerminal => &["terminal"],
+            Self::Notepad => &["notepad", "bloco de notas"],
+            Self::Calculator => &["calculator", "calculadora"],
+        }
+    }
+
+    pub fn is_close_protected(self) -> bool {
+        matches!(self, Self::FileExplorer)
+    }
 }
 
 #[derive(Debug)]
