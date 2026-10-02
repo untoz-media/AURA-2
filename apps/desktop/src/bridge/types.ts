@@ -42,13 +42,17 @@ export type CoreError = {
 export type RuntimeState = {
   paused: boolean;
   backgroundEnabled: boolean;
+  autostartEnabled: boolean;
 };
 
 export type LifecycleEventKind =
   | "foreground.entered"
   | "background.entered"
   | "background.enabled"
-  | "background.disabled";
+  | "background.disabled"
+  | "autostart.enabled"
+  | "autostart.disabled"
+  | "startup.background";
 
 export type LifecycleEvent = {
   kind: LifecycleEventKind;
