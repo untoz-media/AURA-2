@@ -116,3 +116,20 @@ Examples:
 Window listing is classified as `Read`. Switching to a known application window is classified as `Act`.
 
 AURA respects Windows foreground restrictions: if `SetForegroundWindow` is denied, the action fails cleanly rather than attempting to bypass OS focus protections.
+
+
+## M003.4
+
+M003.4 adds controlled native Windows keyboard synthesis using `SendInput`.
+
+AURA understands key/shortcut commands such as `Press F11`, `Press Escape` and `Press Ctrl+S`, plus text intents such as `Type "Hello"`.
+
+Permission classification is intentionally conservative:
+
+- navigation-only keys → `Act`
+- shortcuts, letters, Enter, Backspace and typed text → `Modify`
+- Delete → `Destructive`
+
+With the default policy, only navigation-only keys execute immediately. Immediate injection is restricted to commands submitted through the Overlay, which is hidden before `SendInput` runs so focus can return to the user's previous application.
+
+Text is sent through Unicode keyboard events, capped at 500 characters and control characters are rejected.

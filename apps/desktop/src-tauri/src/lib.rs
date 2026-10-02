@@ -4,6 +4,7 @@ mod permissions;
 
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
+use computer::keyboard::{press_shortcut, type_text};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionDecision, PermissionPolicy};
@@ -16,7 +17,7 @@ use std::{
         Mutex,
     },
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     image::Image,
@@ -379,7 +380,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.3 Window Discovery & Switching",
+        stage: "M003.4 Keyboard Actions",
         local_first: true,
     }
 }
@@ -472,6 +473,7 @@ fn process_user_command(
         return Err("Unknown command source.".to_string());
     }
 
+    let source = request.source.clone();
     let id = next_command_id();
 
     emit_core_event(
@@ -494,6 +496,7 @@ fn process_user_command(
                 let worker_app = app.clone();
                 let worker_id = id.clone();
                 let worker_text = text.clone();
+                let worker_source = source.clone();
 
                 thread::spawn(move || {
                     match action.intent {
@@ -663,6 +666,179 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::PressShortcut(shortcut) => {
+                            let display_name = shortcut.display_name();
+
+                            if worker_source != "overlay" {
+                                let message = format!(
+                                    "Keyboard action {} was not sent. Use the AURA Overlay so input returns to the app you were using.",
+                                    display_name
+                                );
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "computer.keyboard_requires_overlay",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
+                            hide_overlay_window(&worker_app);
+                            thread::sleep(Duration::from_millis(90));
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Pressing {}…", display_name),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match press_shortcut(&shortcut) {
+                                Ok(()) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!("Pressed {}.", display_name),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not press {}: {}",
+                                        display_name, error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.keyboard_input_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::TypeText(value) => {
+                            if worker_source != "overlay" {
+                                let message =
+                                    "Text input was not sent. Use the AURA Overlay so typing returns to the app you were using."
+                                        .to_string();
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "computer.keyboard_requires_overlay",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
+                            hide_overlay_window(&worker_app);
+                            thread::sleep(Duration::from_millis(90));
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Typing approved text…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match type_text(&value) {
+                                Ok(()) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "Typed {} characters.",
+                                            value.chars().count()
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not type text: {}", error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.keyboard_input_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::CloseApp(target) => {
                             let display_name = target.display_name();
 
@@ -742,6 +918,14 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::PressShortcut(shortcut) => format!(
+                        "Pressing {} requires confirmation because keyboard input can change application state.",
+                        shortcut.display_name()
+                    ),
+                    ActionIntent::TypeText(value) => format!(
+                        "Typing {} characters requires confirmation before AURA sends text to another application.",
+                        value.chars().count()
+                    ),
                 };
 
                 emit_core_event(
@@ -770,6 +954,19 @@ fn process_user_command(
                 );
             }
         },
+        RouteResult::InvalidKeyboard(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!("Keyboard command rejected: {}", message),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+        }
         RouteResult::UnsupportedApp(target) => {
             emit_core_event(
                 &app,
@@ -794,7 +991,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports known app launches, close requests, visible-window discovery and switching."
+                        "No deterministic computer action matched yet. M003 currently supports known app launches, close requests, window discovery/switching and controlled keyboard actions."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
