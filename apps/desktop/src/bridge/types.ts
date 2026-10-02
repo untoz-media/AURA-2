@@ -41,4 +41,17 @@ export type CoreError = {
 
 export type RuntimeState = {
   paused: boolean;
+  backgroundEnabled: boolean;
+};
+
+export type LifecycleEventKind =
+  | "foreground.entered"
+  | "background.entered"
+  | "background.enabled"
+  | "background.disabled";
+
+export type LifecycleEvent = {
+  kind: LifecycleEventKind;
+  message: string;
+  timestampMs: number;
 };
