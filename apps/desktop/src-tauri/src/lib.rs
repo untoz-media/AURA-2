@@ -55,7 +55,7 @@ struct CoreEvent {
     timestamp_ms: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CoreError {
     id: Option<String>,
