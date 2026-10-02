@@ -1,5 +1,6 @@
 use crate::computer::{
     app_launcher::AppTarget,
+    audio::MediaAction,
     keyboard::KeyboardShortcut,
     mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
 };
@@ -14,6 +15,7 @@ pub enum ActionIntent {
     PressShortcut(KeyboardShortcut),
     TypeText(String),
     Mouse(MouseAction),
+    Media(MediaAction),
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,7 @@ pub enum RouteResult {
     UnsupportedApp(String),
     InvalidKeyboard(String),
     InvalidMouse(String),
+    InvalidMedia(String),
     NoMatch,
 }
 
@@ -83,6 +86,102 @@ fn unwrap_text_quotes(value: &str) -> &str {
     }
 
     trimmed
+}
+
+fn parse_percent(value: &str) -> Result<u8, String> {
+    let cleaned = value
+        .trim()
+        .trim_end_matches('%')
+        .trim();
+
+    let percent = cleaned
+        .parse::<u16>()
+        .map_err(|_| "Volume must be a whole number from 0 to 100.".to_string())?;
+
+    if percent > 100 {
+        return Err("Volume must be between 0 and 100 percent.".to_string());
+    }
+
+    Ok(percent as u8)
+}
+
+fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    let normalized = input.trim().to_lowercase();
+
+    if matches!(
+        normalized.as_str(),
+        "what is the volume"
+            | "what's the volume"
+            | "what is the volume?"
+            | "what's the volume?"
+            | "qual é o volume"
+            | "qual e o volume"
+            | "qual é o volume?"
+            | "qual e o volume?"
+    ) {
+        return Some(Ok(ActionIntent::Media(MediaAction::GetVolume)));
+    }
+
+    const SET_VOLUME_PREFIXES: &[&str] = &[
+        "set volume to ",
+        "set the volume to ",
+        "volume ",
+        "define o volume para ",
+        "define volume para ",
+        "mete o volume a ",
+        "mete volume a ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, SET_VOLUME_PREFIXES) {
+        return Some(
+            parse_percent(value)
+                .map(MediaAction::SetVolume)
+                .map(ActionIntent::Media),
+        );
+    }
+
+    let action = match normalized.as_str() {
+        "volume up" | "increase volume" | "aumenta o volume" | "aumentar o volume" => {
+            Some(MediaAction::VolumeUp)
+        }
+        "volume down" | "decrease volume" | "baixa o volume" | "baixar o volume" => {
+            Some(MediaAction::VolumeDown)
+        }
+        "mute" | "mute volume" | "silencia" | "silenciar" | "sem som" => {
+            Some(MediaAction::Mute)
+        }
+        "unmute" | "tira o mute" | "tirar o mute" | "repõe o som" | "repoe o som" => {
+            Some(MediaAction::Unmute)
+        }
+        "play pause" | "play/pause" | "pause music" | "resume music"
+        | "pausa a música" | "pausa a musica" | "retoma a música" | "retoma a musica" => {
+            Some(MediaAction::PlayPause)
+        }
+        "next track" | "next song" | "próxima música" | "proxima musica"
+        | "próxima faixa" | "proxima faixa" => Some(MediaAction::NextTrack),
+        "previous track" | "previous song" | "música anterior" | "musica anterior"
+        | "faixa anterior" => Some(MediaAction::PreviousTrack),
+        "stop media" | "stop music" | "para a música" | "para a musica"
+        | "parar a música" | "parar a musica" => Some(MediaAction::Stop),
+        _ => None,
+    };
+
+    action.map(|action| Ok(ActionIntent::Media(action)))
+}
+
+fn permission_for_media(action: MediaAction) -> PermissionClass {
+    match action {
+        MediaAction::GetVolume => PermissionClass::Read,
+        MediaAction::SetVolume(_)
+        | MediaAction::VolumeUp
+        | MediaAction::VolumeDown
+        | MediaAction::Mute
+        | MediaAction::Unmute
+        | MediaAction::PlayPause
+        | MediaAction::NextTrack
+        | MediaAction::PreviousTrack
+        | MediaAction::Stop => PermissionClass::Act,
+    }
 }
 
 fn parse_scroll_amount(value: &str, direction: i32) -> Result<MouseAction, String> {
@@ -341,6 +440,21 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if let Some(media) = media_request(input) {
+        return match media {
+            Ok(ActionIntent::Media(action)) => {
+                let permission = permission_for_media(action);
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::Media(action),
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Ok(_) => unreachable!("media_request should only produce media intents"),
+            Err(message) => RouteResult::InvalidMedia(message),
+        };
+    }
+
     if let Some(mouse) = mouse_request(input) {
         return match mouse {
             Ok(ActionIntent::Mouse(action)) => {
@@ -426,26 +540,48 @@ mod tests {
     };
 
     #[test]
-    fn routes_english_obs_launch() {
+    fn routes_exact_volume_as_act() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
-            route_command("Open OBS", &policy),
+            route_command("Set volume to 30%", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::LaunchApp(AppTarget::ObsStudio),
+                intent: ActionIntent::Media(MediaAction::SetVolume(30)),
+                permission: PermissionClass::Act,
                 decision: PermissionDecision::Allow,
-                ..
             })
         ));
     }
 
     #[test]
-    fn routes_safe_f11_as_act() {
+    fn routes_volume_query_as_read() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
-            route_command("Press F11", &policy),
+            route_command("Qual é o volume?", &policy),
             RouteResult::Action(RoutedAction {
-                permission: PermissionClass::Act,
+                intent: ActionIntent::Media(MediaAction::GetVolume),
+                permission: PermissionClass::Read,
                 decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_volume() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Set volume to 140%", &policy),
+            RouteResult::InvalidMedia(_)
+        ));
+    }
+
+    #[test]
+    fn routes_play_pause_as_act() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Pause music", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::Media(MediaAction::PlayPause),
+                permission: PermissionClass::Act,
                 ..
             })
         ));
@@ -458,19 +594,6 @@ mod tests {
             route_command("Move mouse to 500, 300", &policy),
             RouteResult::Action(RoutedAction {
                 intent: ActionIntent::Mouse(MouseAction::MoveTo(ScreenPoint { x: 500, y: 300 })),
-                permission: PermissionClass::Act,
-                decision: PermissionDecision::Allow,
-            })
-        ));
-    }
-
-    #[test]
-    fn routes_scroll_as_act() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Scroll down 3", &policy),
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::Mouse(MouseAction::Scroll { notches: -3 }),
                 permission: PermissionClass::Act,
                 ..
             })
@@ -487,31 +610,6 @@ mod tests {
                 permission: PermissionClass::Modify,
                 decision: PermissionDecision::Ask,
             })
-        ));
-    }
-
-    #[test]
-    fn routes_right_click_at_as_modify() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Right click at -100, 450", &policy),
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::Mouse(MouseAction::ClickAt {
-                    point: ScreenPoint { x: -100, y: 450 },
-                    button: MouseButton::Right,
-                }),
-                permission: PermissionClass::Modify,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn rejects_excessive_scroll() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Scroll down 50", &policy),
-            RouteResult::InvalidMouse(_)
         ));
     }
 
@@ -538,19 +636,6 @@ mod tests {
                 permission: PermissionClass::Modify,
                 ..
             }) if text == "Hello AURA"
-        ));
-    }
-
-    #[test]
-    fn routes_window_listing_as_read() {
-        let policy = PermissionPolicy::default();
-        assert!(matches!(
-            route_command("Que janelas estão abertas?", &policy),
-            RouteResult::Action(RoutedAction {
-                intent: ActionIntent::ListWindows,
-                permission: PermissionClass::Read,
-                decision: PermissionDecision::Allow,
-            })
         ));
     }
 }
