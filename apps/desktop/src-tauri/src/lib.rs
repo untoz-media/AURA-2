@@ -194,7 +194,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M002.7 AURA Overlay",
+        stage: "M002.9 Settings Foundation",
         local_first: true,
     }
 }

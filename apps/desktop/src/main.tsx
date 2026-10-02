@@ -6,6 +6,7 @@ import "./design-system/tokens.css";
 import "./design-system/components.css";
 import "./styles.css";
 import "./overlay.css";
+import "./settings.css";
 
 const view = new URLSearchParams(window.location.search).get("view");
 const RootView = view === "overlay" ? Overlay : App;

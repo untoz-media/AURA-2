@@ -21,7 +21,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M002.6** — Global keyboard shortcut foundation
 - [x] **M002.7** — AURA Overlay
 - [x] **M002.8** — Runtime status UI foundation
-- [ ] **M002.9** — Settings foundation
+- [x] **M002.9** — Settings foundation
 - [ ] **M002.10** — Background mode
 - [ ] **M002.11** — Optional Windows autostart
 - [ ] **M002.12** — First packaged Windows build

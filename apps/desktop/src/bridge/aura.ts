@@ -41,6 +41,12 @@ export async function hideOverlay(): Promise<void> {
   return invoke<void>("hide_overlay");
 }
 
+export async function listenToOpenSettings(
+  handler: () => void,
+): Promise<UnlistenFn> {
+  return listen("aura:open-settings", () => handler());
+}
+
 export async function listenToAuraCore(
   onEvent: (event: CoreEvent) => void,
   onError: (error: CoreError) => void,
