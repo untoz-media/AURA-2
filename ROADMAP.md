@@ -38,7 +38,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M003.4** — Keyboard actions
 - [x] **M003.5** — Mouse actions
 - [x] **M003.6** — Volume & media controls
-- [ ] **M003.7** — System commands
+- [x] **M003.7** — System commands
 - [ ] **M003.8** — Permission engine
 - [ ] **M003.9** — Confirmation flow
 - [ ] **M003.10** — Computer Control validation

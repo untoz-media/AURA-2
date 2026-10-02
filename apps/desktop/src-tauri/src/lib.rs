@@ -7,6 +7,7 @@ use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
+use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionDecision, PermissionPolicy};
@@ -382,7 +383,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.6 Volume & Media Controls",
+        stage: "M003.7 System Commands",
         local_first: true,
     }
 }
@@ -1034,6 +1035,98 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::System(action) => {
+                            let activity = match action {
+                                SystemAction::GetStatus => "Reading Windows system status…",
+                                SystemAction::GetBattery => "Reading battery status…",
+                                SystemAction::ShowDesktop => "Showing desktop…",
+                                SystemAction::OpenTaskManager => "Opening Task Manager…",
+                                SystemAction::OpenSettings(_) => "Opening Windows Settings…",
+                                SystemAction::Lock => "Locking Windows…",
+                                SystemAction::Sleep => "Putting Windows to sleep…",
+                                SystemAction::Restart => "Restarting Windows…",
+                                SystemAction::Shutdown => "Shutting down Windows…",
+                            };
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: activity.to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_system_action(action) {
+                                Ok(Some(snapshot)) => {
+                                    let battery_only = matches!(action, SystemAction::GetBattery);
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: summarize_system(&snapshot, battery_only),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Ok(None) => {
+                                    let completed = match action {
+                                        SystemAction::ShowDesktop => "Desktop shown.",
+                                        SystemAction::OpenTaskManager => "Task Manager opened.",
+                                        SystemAction::OpenSettings(_) => "Windows Settings opened.",
+                                        SystemAction::Lock => "Windows lock requested.",
+                                        SystemAction::Sleep => "Windows sleep requested.",
+                                        SystemAction::Restart => "Windows restart requested.",
+                                        SystemAction::Shutdown => "Windows shutdown requested.",
+                                        SystemAction::GetStatus | SystemAction::GetBattery => {
+                                            "System command completed."
+                                        }
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: completed.to_string(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!("Could not run Windows system command: {}", error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.system_command_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::CloseApp(target) => {
                             let display_name = target.display_name();
 
@@ -1146,6 +1239,26 @@ fn process_user_command(
                         "This audio/media action requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::System(SystemAction::Lock) => {
+                        "Locking Windows requires confirmation because it immediately ends access to the current interactive session."
+                            .to_string()
+                    }
+                    ActionIntent::System(SystemAction::Sleep) => {
+                        "Putting the PC to sleep requires confirmation."
+                            .to_string()
+                    }
+                    ActionIntent::System(SystemAction::Restart) => {
+                        "Restarting the PC requires confirmation because open work may be lost."
+                            .to_string()
+                    }
+                    ActionIntent::System(SystemAction::Shutdown) => {
+                        "Shutting down the PC requires confirmation because open work may be lost."
+                            .to_string()
+                    }
+                    ActionIntent::System(_) => {
+                        "This Windows system action requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                 };
 
                 emit_core_event(
@@ -1237,7 +1350,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports app/window control, keyboard, mouse, volume and media actions."
+                        "No deterministic computer action matched yet. M003 currently supports app/window control, keyboard, mouse, audio/media and Windows system commands."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
