@@ -30,14 +30,18 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M003 — Computer Control
 
-- [ ] Launch and close applications
-- [ ] Window switching
-- [ ] Keyboard actions
-- [ ] Mouse actions
-- [ ] Volume and media controls
-- [ ] System commands
-- [ ] Permission checks
-- [ ] Confirmation flow for sensitive actions
+**Status: In progress**
+
+- [x] **M003.1** — Action Router & safe application launching
+- [ ] **M003.2** — Application lifecycle (close apps)
+- [ ] **M003.3** — Window discovery & switching
+- [ ] **M003.4** — Keyboard actions
+- [ ] **M003.5** — Mouse actions
+- [ ] **M003.6** — Volume & media controls
+- [ ] **M003.7** — System commands
+- [ ] **M003.8** — Permission engine
+- [ ] **M003.9** — Confirmation flow
+- [ ] **M003.10** — Computer Control validation
 
 ## M004 — OBS Control / Director Mode
 
