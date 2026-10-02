@@ -54,10 +54,29 @@ export type LifecycleEventKind =
   | "background.disabled"
   | "autostart.enabled"
   | "autostart.disabled"
-  | "startup.background";
+  | "startup.background"
+  | "permissions.updated"
+  | "permissions.reset";
 
 export type LifecycleEvent = {
   kind: LifecycleEventKind;
   message: string;
   timestampMs: number;
+};
+
+export type PermissionClass =
+  | "read"
+  | "act"
+  | "modify"
+  | "destructive"
+  | "sensitive";
+
+export type PermissionDecision = "allow" | "ask" | "never";
+
+export type PermissionPolicy = {
+  read: PermissionDecision;
+  act: PermissionDecision;
+  modify: PermissionDecision;
+  destructive: PermissionDecision;
+  sensitive: PermissionDecision;
 };
