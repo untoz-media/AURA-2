@@ -4,6 +4,7 @@ mod permissions;
 
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
+use computer::window_manager::{summarize_windows, switch_to_app};
 use core::action_router::{route_command, ActionIntent, RouteResult};
 use permissions::{PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
@@ -378,7 +379,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.2 Application Lifecycle",
+        stage: "M003.3 Window Discovery & Switching",
         local_first: true,
     }
 }
@@ -554,6 +555,114 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::SwitchToApp(target) => {
+                            let display_name = target.display_name();
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Switching to {}…", display_name),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match switch_to_app(target) {
+                                Ok(window) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!("Switched to {} — {}.", display_name, window.title),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!("Could not switch to {}: {}", display_name, error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.window_switch_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ListWindows => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Reading visible desktop windows…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match summarize_windows(8) {
+                                Ok(summary) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: summary,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!("Could not read visible windows: {}", error);
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.window_discovery_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::CloseApp(target) => {
                             let display_name = target.display_name();
 
@@ -625,6 +734,14 @@ fn process_user_command(
                         "Opening {} requires confirmation under the current permission policy.",
                         target.display_name()
                     ),
+                    ActionIntent::SwitchToApp(target) => format!(
+                        "Switching to {} requires confirmation under the current permission policy.",
+                        target.display_name()
+                    ),
+                    ActionIntent::ListWindows => {
+                        "Reading visible windows requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                 };
 
                 emit_core_event(
@@ -677,7 +794,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports opening known applications and routing safe close requests."
+                        "No deterministic computer action matched yet. M003 currently supports known app launches, close requests, visible-window discovery and switching."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
