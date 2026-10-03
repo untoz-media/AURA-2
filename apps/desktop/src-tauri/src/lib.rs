@@ -12,6 +12,9 @@ use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
+use computer::recent_files::{
+    default_recent_files_snapshot, recent_files_snapshot, summarize_recent_files, RecentFilesSnapshot,
+};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo};
 use core::{
@@ -1865,6 +1868,48 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::RecentFiles => {
+                            match summarize_recent_files(8) {
+                                Ok(summary) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: summary,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message =
+                                        format!("Could not read recent files: {error}");
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "context.recent_files_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::MemoryRemember(content) => {
                             emit_core_event(
                                 &worker_app,
@@ -2688,6 +2733,10 @@ fn process_user_command(
                         "Reading the active window title requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::RecentFiles => {
+                        "Reading Windows Recent Items requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::MemoryRemember(content) => format!(
                         "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
                         content
@@ -2936,26 +2985,50 @@ fn process_user_command(
                 let runtime = worker_app.state::<ModelRuntime>();
                 let desktop_context = {
                     let awareness = worker_app.state::<CurrentAppAwareness>();
-                    awareness.snapshot().ok().map(|context| {
-                        let mut summary = format!(
-                            "Current app: {}\nProcess: {}",
-                            context.app_name, context.process_name
-                        );
+                    let foreground = awareness.snapshot().ok();
+                    let recent = recent_files_snapshot(5).ok();
 
-                        if let Some(title) = context.window_title.as_deref() {
-                            summary.push_str(&format!("\nActive window title: {title}"));
+                    if foreground.is_none() && recent.is_none() {
+                        None
+                    } else {
+                        let mut summary = String::new();
+
+                        if let Some(context) = foreground {
+                            summary.push_str(&format!(
+                                "Current app: {}\nProcess: {}",
+                                context.app_name, context.process_name
+                            ));
+
+                            if let Some(title) = context.window_title.as_deref() {
+                                summary.push_str(&format!("\nActive window title: {title}"));
+                            }
+
+                            if context.context_source == "lastExternal" {
+                                summary.push_str(
+                                    "\nContext source: last external window before AURA took focus",
+                                );
+                            } else {
+                                summary.push_str("\nContext source: foreground");
+                            }
                         }
 
-                        if context.context_source == "lastExternal" {
-                            summary.push_str(
-                                "\nContext source: last external window before AURA took focus",
-                            );
-                        } else {
-                            summary.push_str("\nContext source: foreground");
+                        if let Some(snapshot) = recent {
+                            if !snapshot.items.is_empty() {
+                                if !summary.is_empty() {
+                                    summary.push_str("\n");
+                                }
+                                let names = snapshot
+                                    .items
+                                    .iter()
+                                    .map(|item| item.name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" · ");
+                                summary.push_str(&format!("Recent files: {names}"));
+                            }
                         }
 
-                        summary
-                    })
+                        (!summary.is_empty()).then_some(summary)
+                    }
                 };
 
                 match runtime.generate(
@@ -3139,6 +3212,11 @@ fn get_current_app_context(
     awareness: State<'_, CurrentAppAwareness>,
 ) -> Result<CurrentAppInfo, String> {
     awareness.snapshot().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_recent_files_context() -> Result<RecentFilesSnapshot, String> {
+    default_recent_files_snapshot().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -3511,6 +3589,7 @@ pub fn run() {
             set_active_model,
             remove_model,
             get_current_app_context,
+            get_recent_files_context,
             get_memories,
             create_memory_command,
             delete_memory_command,
