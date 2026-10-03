@@ -2921,7 +2921,7 @@ fn process_user_command(
                     ActionIntent::UserRoutine(routine_id) => format!(
                         "Running routine {} requires confirmation under the current permission policy.",
                         routine_id
-                    )
+                    ),
                     ActionIntent::MemoryRemember(content) => format!(
                         "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
                         content
