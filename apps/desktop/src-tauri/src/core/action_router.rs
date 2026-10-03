@@ -797,15 +797,6 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         };
     }
 
-    if let Some(intent) = obs_source_visibility_request(input) {
-        let permission = PermissionClass::Act;
-        return RouteResult::Action(RoutedAction {
-            intent,
-            permission,
-            decision: policy.decision_for(permission),
-        });
-    }
-
     if is_obs_stream_duration_request(input) {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
@@ -848,6 +839,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
             intent: ActionIntent::ListWindows,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = obs_source_visibility_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
             permission,
             decision: policy.decision_for(permission),
         });
@@ -1056,6 +1056,20 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn source_visibility_does_not_override_window_discovery() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Show windows", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ListWindows,
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn routes_obs_source_visibility_as_act() {
