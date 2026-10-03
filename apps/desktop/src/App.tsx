@@ -54,6 +54,7 @@ function App() {
     directorLastRun,
     memory,
     currentApp,
+    modelCatalog,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -71,6 +72,8 @@ function App() {
     refreshObsHealth,
     refreshDirectorPresets,
     refreshMemories,
+    refreshModels,
+    runModelOperation,
     createMemoryControl,
     deleteMemoryControl,
     saveDirectorPresetControl,
@@ -388,7 +391,13 @@ function App() {
             />
           )}
 
-          {view === "models" && <Models />}
+          {view === "models" && (
+            <Models
+              catalog={modelCatalog}
+              onRefresh={refreshModels}
+              onOperation={runModelOperation}
+            />
+          )}
 
           {view === "create" && <Create />}
 
