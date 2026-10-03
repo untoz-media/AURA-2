@@ -1,4 +1,4 @@
-use obws::Client;
+use obws::{requests::scene_items::SetEnabled, Client};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
@@ -59,6 +59,46 @@ pub struct ObsStreamDuration {
     pub duration_ms: u64,
     pub timecode: String,
     pub refreshed_at_ms: u64,
+}
+
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSourceItemSummary {
+    pub scene_name: String,
+    pub item_id: i64,
+    pub index: u32,
+    pub source_name: String,
+    pub enabled: bool,
+    pub input_kind: Option<String>,
+    pub is_group: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSourceItemList {
+    pub scene_name: String,
+    pub items: Vec<ObsSourceItemSummary>,
+    pub refreshed_at_ms: u64,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSourceVisibilityRequest {
+    pub scene_name: String,
+    pub item_id: i64,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSourceVisibilityResult {
+    pub scene_name: String,
+    pub item_id: i64,
+    pub source_name: String,
+    pub enabled: bool,
+    pub changed_at_ms: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -701,6 +741,142 @@ impl ObsController {
         })
     }
 
+    pub async fn current_program_source_items(&self) -> Result<ObsSourceItemList, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let current = client
+            .scenes()
+            .current_program_scene()
+            .await
+            .map_err(|error| format!("Could not read the current OBS Program scene: {error}"))?;
+
+        source_items_for_scene(client, current.id.name.as_str()).await
+    }
+
+    pub async fn set_source_visibility(
+        &self,
+        request: ObsSourceVisibilityRequest,
+    ) -> Result<ObsSourceVisibilityResult, String> {
+        let scene_name = validate_scene_name(&request.scene_name)?;
+        if request.item_id < 0 {
+            return Err("OBS scene item ID cannot be negative.".to_string());
+        }
+
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let items = client
+            .scene_items()
+            .list(scene_name.as_str().into())
+            .await
+            .map_err(|error| format!("Could not validate OBS sources in {scene_name}: {error}"))?;
+
+        let item = items
+            .into_iter()
+            .find(|item| item.id == request.item_id)
+            .ok_or_else(|| "The requested OBS source item no longer exists in that scene.".to_string())?;
+
+        client
+            .scene_items()
+            .set_enabled(SetEnabled {
+                scene: scene_name.as_str().into(),
+                item_id: item.id,
+                enabled: request.enabled,
+            })
+            .await
+            .map_err(|error| format!("Could not change OBS source visibility: {error}"))?;
+
+        let enabled = client
+            .scene_items()
+            .enabled(scene_name.as_str().into(), item.id)
+            .await
+            .map_err(|error| format!("OBS changed source visibility, but verification failed: {error}"))?;
+
+        if enabled != request.enabled {
+            return Err("OBS did not confirm the requested source visibility state.".to_string());
+        }
+
+        Ok(ObsSourceVisibilityResult {
+            scene_name,
+            item_id: item.id,
+            source_name: item.source_name,
+            enabled,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn set_source_visibility_by_name(
+        &self,
+        source_name: &str,
+        enabled: bool,
+    ) -> Result<ObsSourceVisibilityResult, String> {
+        let requested = validate_source_name(source_name)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let current = client
+            .scenes()
+            .current_program_scene()
+            .await
+            .map_err(|error| format!("Could not read the current OBS Program scene: {error}"))?;
+        let scene_name = current.id.name;
+
+        let items = client
+            .scene_items()
+            .list(scene_name.as_str().into())
+            .await
+            .map_err(|error| format!("Could not read OBS sources in {scene_name}: {error}"))?;
+
+        let mut matches = items
+            .into_iter()
+            .filter(|item| item.source_name.eq_ignore_ascii_case(&requested));
+
+        let item = matches
+            .next()
+            .ok_or_else(|| format!("No OBS source named “{requested}” exists in Program scene “{scene_name}”."))?;
+
+        if matches.next().is_some() {
+            return Err(format!(
+                "More than one OBS scene item named “{requested}” exists in Program scene “{scene_name}”. Use the source controls in Settings."
+            ));
+        }
+
+        client
+            .scene_items()
+            .set_enabled(SetEnabled {
+                scene: scene_name.as_str().into(),
+                item_id: item.id,
+                enabled,
+            })
+            .await
+            .map_err(|error| format!("Could not change OBS source visibility: {error}"))?;
+
+        let confirmed = client
+            .scene_items()
+            .enabled(scene_name.as_str().into(), item.id)
+            .await
+            .map_err(|error| format!("OBS changed source visibility, but verification failed: {error}"))?;
+
+        if confirmed != enabled {
+            return Err("OBS did not confirm the requested source visibility state.".to_string());
+        }
+
+        Ok(ObsSourceVisibilityResult {
+            scene_name,
+            item_id: item.id,
+            source_name: item.source_name,
+            enabled: confirmed,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn start_streaming(&self) -> Result<ObsStreamingActionResult, String> {
         let client_guard = self.client.lock().await;
         let client = client_guard
@@ -855,6 +1031,51 @@ impl ObsController {
     }
 }
 
+async fn source_items_for_scene(
+    client: &Client,
+    scene_name: &str,
+) -> Result<ObsSourceItemList, String> {
+    let scene_name = validate_scene_name(scene_name)?;
+    let mut items = client
+        .scene_items()
+        .list(scene_name.as_str().into())
+        .await
+        .map_err(|error| format!("Could not list OBS sources in {scene_name}: {error}"))?;
+
+    items.sort_by_key(|item| item.index);
+
+    let mut summaries = Vec::with_capacity(items.len());
+    for item in items {
+        let enabled = client
+            .scene_items()
+            .enabled(scene_name.as_str().into(), item.id)
+            .await
+            .map_err(|error| {
+                format!(
+                    "Could not read visibility for OBS source {}: {error}",
+                    item.source_name
+                )
+            })?;
+
+        summaries.push(ObsSourceItemSummary {
+            scene_name: scene_name.clone(),
+            item_id: item.id,
+            index: item.index,
+            source_name: item.source_name,
+            enabled,
+            input_kind: item.input_kind,
+            is_group: item.is_group.unwrap_or(false),
+        });
+    }
+
+    Ok(ObsSourceItemList {
+        scene_name,
+        items: summaries,
+        refreshed_at_ms: timestamp_ms(),
+        last_error: None,
+    })
+}
+
 async fn read_streaming_active(client: &Client) -> Result<bool, String> {
     let status = client
         .streaming()
@@ -946,6 +1167,20 @@ fn validate_scene_uuid(value: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+
+fn validate_source_name(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() {
+        return Err("OBS source name cannot be empty.".to_string());
+    }
+
+    if trimmed.chars().count() > 256 {
+        return Err("OBS source name is too long.".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
 
 fn validate_scene_name(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
@@ -1078,6 +1313,31 @@ mod tests {
         assert_eq!(validate_scene_name("  Camera 2  ").unwrap(), "Camera 2");
         assert!(validate_scene_name("").is_err());
         assert!(validate_scene_name(&"x".repeat(257)).is_err());
+    }
+
+
+    #[test]
+    fn validates_source_name_input() {
+        assert_eq!(validate_source_name("  Scoreboard  ").unwrap(), "Scoreboard");
+        assert!(validate_source_name("").is_err());
+        assert!(validate_source_name(&"x".repeat(257)).is_err());
+    }
+
+    #[test]
+    fn source_visibility_result_serializes_expected_state() {
+        let result = ObsSourceVisibilityResult {
+            scene_name: "Program".to_string(),
+            item_id: 7,
+            source_name: "Lower Third".to_string(),
+            enabled: true,
+            changed_at_ms: 42,
+        };
+
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(value["sceneName"], "Program");
+        assert_eq!(value["itemId"], 7);
+        assert_eq!(value["sourceName"], "Lower Third");
+        assert_eq!(value["enabled"], true);
     }
 
 
