@@ -234,6 +234,13 @@ impl ModelManager {
             );
         }
 
+        if matches!(inspect_installation(&app, &definition), Ok(Some(_))) {
+            return Err(format!(
+                "{} is already installed. Remove it before downloading it again.",
+                definition.name
+            ));
+        }
+
         {
             let controls = self
                 .controls
