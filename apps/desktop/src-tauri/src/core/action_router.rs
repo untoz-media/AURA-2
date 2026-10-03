@@ -46,6 +46,7 @@ pub enum ActionIntent {
     MemoryList,
     MemoryForget(String),
     CurrentApp,
+    ActiveWindow,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +207,38 @@ fn parse_percent(value: &str) -> Result<u8, String> {
     }
 
     Ok(percent as u8)
+}
+
+fn is_active_window_request(input: &str) -> bool {
+    let normalized = normalize_command(input);
+
+    matches!(
+        normalized.as_str(),
+        "active window"
+            | "current window"
+            | "window context"
+            | "active window context"
+            | "what window am i in"
+            | "which window am i in"
+            | "what window is active"
+            | "which window is active"
+            | "what is the active window"
+            | "what am i working on"
+            | "current tab"
+            | "active tab"
+            | "what tab am i on"
+            | "janela atual"
+            | "janela ativa"
+            | "contexto da janela"
+            | "qual é a janela atual"
+            | "qual e a janela atual"
+            | "qual é a janela ativa"
+            | "qual e a janela ativa"
+            | "em que janela estou"
+            | "em que separador estou"
+            | "qual é o separador ativo"
+            | "qual e o separador ativo"
+    )
 }
 
 fn is_current_app_request(input: &str) -> bool {
@@ -981,6 +1014,15 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if is_active_window_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ActiveWindow,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if is_current_app_request(input) {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
@@ -1409,6 +1451,27 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn routes_active_window_context_as_read() {
+        let policy = PermissionPolicy::default();
+
+        for command in [
+            "What window am I in?",
+            "Active window",
+            "Em que janela estou?",
+            "Qual é o separador ativo?",
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::ActiveWindow,
+                    permission: PermissionClass::Read,
+                    decision: PermissionDecision::Allow,
+                })
+            ));
+        }
     }
 
     #[test]
