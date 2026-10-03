@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { listenToOpenSettings } from "./bridge/aura";
 import { useAuraBridge } from "./bridge/useAuraBridge";
 import {
@@ -37,6 +37,7 @@ function App() {
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("general");
   const [theme, setTheme] = useState<AuraTheme>(() => readAuraTheme());
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const {
     status,
@@ -55,6 +56,8 @@ function App() {
     memory,
     currentApp,
     modelCatalog,
+    modelRuntimeStatus,
+    chatMessages,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -73,6 +76,8 @@ function App() {
     refreshDirectorPresets,
     refreshMemories,
     refreshModels,
+    refreshModelRuntime,
+    clearConversationControl,
     runModelOperation,
     createMemoryControl,
     deleteMemoryControl,
@@ -111,6 +116,10 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatMessages.length, status]);
+
   function changeTheme(nextTheme: AuraTheme) {
     setTheme(nextTheme);
     applyAuraTheme(nextTheme);
@@ -141,6 +150,7 @@ function App() {
   function startNewConversation() {
     setCommand("");
     setView("chat");
+    void clearConversationControl();
   }
 
   const runtimeLabel = runtimeState.paused
@@ -291,44 +301,102 @@ function App() {
         <div className={`workspace-content ${view === "chat" ? "chat-workspace" : ""}`}>
           {view === "chat" && (
             <section className="chat-view">
-              <div className="chat-welcome">
-                <div className={`aura-presence ${status.toLowerCase()}`}>
-                  <AuraMark />
-                </div>
-
-                <span className="chat-eyebrow">AURA-2 BY UNTOZ</span>
-                <h1>How can I help?</h1>
-                <p>AI that lives on your computer.</p>
-
-                <div className="chat-suggestions">
-                  <button
-                    type="button"
-                    onClick={() => void runQuickCommand("What app am I using?")}
-                  >
-                    <strong>Computer status</strong>
-                    <span>Understand what you are working in</span>
-                  </button>
-                  <button type="button" onClick={() => setView("create")}>
-                    <strong>Create with AURA</strong>
-                    <span>Images now, video-ready architecture</span>
-                  </button>
-                  <button type="button" onClick={() => setView("director")}>
-                    <strong>Director Mode</strong>
-                    <span>OBS production and saved presets</span>
-                  </button>
-                </div>
-
-                <div className="chat-context-strip">
-                  <div>
-                    <span>Current app</span>
-                    <strong>{currentApp?.appName ?? "Detecting…"}</strong>
+              {chatMessages.length === 0 ? (
+                <div className="chat-welcome">
+                  <div className={`aura-presence ${status.toLowerCase()}`}>
+                    <AuraMark />
                   </div>
-                  <div>
-                    <span>Activity</span>
-                    <strong>{activity}</strong>
+
+                  <span className="chat-eyebrow">AURA-2 BY UNTOZ</span>
+                  <h1>How can I help?</h1>
+                  <p>AI that lives on your computer.</p>
+
+                  <div className="chat-suggestions">
+                    <button
+                      type="button"
+                      onClick={() => void runQuickCommand("What app am I using?")}
+                    >
+                      <strong>Computer status</strong>
+                      <span>Understand what you are working in</span>
+                    </button>
+                    <button type="button" onClick={() => setView("create")}>
+                      <strong>Create with AURA</strong>
+                      <span>Images now, video-ready architecture</span>
+                    </button>
+                    <button type="button" onClick={() => setView("director")}>
+                      <strong>Director Mode</strong>
+                      <span>OBS production and saved presets</span>
+                    </button>
+                  </div>
+
+                  <div className="chat-context-strip">
+                    <div>
+                      <span>Current app</span>
+                      <strong>{currentApp?.appName ?? "Detecting…"}</strong>
+                    </div>
+                    <div>
+                      <span>Local model</span>
+                      <strong>
+                        {modelCatalog.activeModelId
+                          ? modelCatalog.models.find(
+                              (model) => model.id === modelCatalog.activeModelId,
+                            )?.name ?? modelCatalog.activeModelId
+                          : "Not selected"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Activity</span>
+                      <strong>{activity}</strong>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="chat-thread">
+                  <div className="chat-thread-inner">
+                    {chatMessages.map((message) => (
+                      <article
+                        className={`chat-message ${message.role}`}
+                        key={message.id}
+                      >
+                        <div className="chat-message-author">
+                          {message.role === "assistant" ? (
+                            <AuraMark compact />
+                          ) : (
+                            <span className="chat-user-mark">You</span>
+                          )}
+                        </div>
+                        <div className="chat-message-body">
+                          <span>
+                            {message.role === "assistant" ? "AURA" : "You"}
+                          </span>
+                          <p>{message.content}</p>
+                        </div>
+                      </article>
+                    ))}
+
+                    {status === "Working" && (
+                      <div className="chat-runtime-state">
+                        <AuraMark compact />
+                        <div>
+                          <strong>
+                            {modelRuntimeStatus.state === "loading"
+                              ? `Loading ${modelCatalog.activeModelId === "aura-1" ? "AURA-1" : "local model"}…`
+                              : modelRuntimeStatus.state === "generating"
+                                ? "AURA is thinking locally…"
+                                : "AURA is working…"}
+                          </strong>
+                          <span>
+                            {modelRuntimeStatus.state === "loading"
+                              ? "The first response can take longer while the model is loaded into memory."
+                              : activity}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                </div>
+              )}
 
               <div className="chat-composer-area">
                 {pendingConfirmation && (
@@ -466,6 +534,7 @@ function App() {
               theme={theme}
               onThemeChange={changeTheme}
               modelCatalog={modelCatalog}
+              modelRuntimeStatus={modelRuntimeStatus}
             />
           )}
         </div>
