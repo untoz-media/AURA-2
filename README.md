@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M002 Desktop Foundation complete · AURA-2 0.2.0-alpha.1 · pre-Beta
+> **Current stage:** M003 Computer Control complete · AURA-2 0.3.0-alpha.1 · pre-Beta
 
 ---
 
@@ -121,8 +121,8 @@ Repository, architecture, documentation and development foundations.
 ### M002 — Desktop Foundation ✅
 Native Windows app, Core bridge, tray, Overlay, Settings, background mode, autostart and packaged NSIS build.
 
-### M003 — Computer Control
-Windows actions, app launching and controlled desktop interaction.
+### M003 — Computer Control ✅
+Deterministic Windows control for applications, windows, keyboard, mouse, audio/media and system actions, with persistent permissions and one-shot confirmations.
 
 ### M004 — OBS Integration
 OBS WebSocket integration and first Director Mode controls.
@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M002 — Desktop Foundation**. Development now moves to **M003 — Computer Control**.
+AURA-2 has completed **M003 — Computer Control**. Development now moves to **M004 — OBS Control / Director Mode**.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 
