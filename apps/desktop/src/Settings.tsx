@@ -20,6 +20,7 @@ import type {
   DirectorPreset,
   DirectorPresetRunResult,
   SaveDirectorPresetRequest,
+  ModelCatalog,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -96,6 +97,7 @@ type Props = {
   ) => Promise<ObsAudioControlResult>;
   theme: AuraTheme;
   onThemeChange: (theme: AuraTheme) => void;
+  modelCatalog: ModelCatalog;
 };
 
 const sections: Array<{
@@ -246,6 +248,7 @@ export default function Settings({
   onObsAudioVolumeChange,
   theme,
   onThemeChange,
+  modelCatalog,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -672,13 +675,35 @@ export default function Settings({
             <Surface className="settings-card">
               <SectionLabel>Runtime</SectionLabel>
               <SettingRow
-                title="Local language model"
-                description="AURA-2 model runtime has not been connected to the desktop generation yet."
-                trailing={<Badge tone="planned">Not configured</Badge>}
+                title="Selected local model"
+                description={
+                  modelCatalog.activeModelId
+                    ? `${modelCatalog.models.find((model) => model.id === modelCatalog.activeModelId)?.name ?? modelCatalog.activeModelId} is selected in Model Manager.`
+                    : "No local language model is selected yet. Install one from the Models workspace."
+                }
+                trailing={
+                  modelCatalog.activeModelId
+                    ? <Badge tone="ready">Selected</Badge>
+                    : <Badge tone="planned">None</Badge>
+                }
+              />
+              <SettingRow
+                title="Installed models"
+                description="Model files are stored in AURA Local Data and verified before installation is finalized."
+                trailing={
+                  <Badge tone="ready">
+                    {modelCatalog.models.filter((model) => model.installed).length} installed
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Conversation inference"
+                description="The selected model is persisted now; wiring it into free-form chat generation is the next Model Runtime step."
+                trailing={<Badge tone="planned">Next</Badge>}
               />
               <SettingRow
                 title="Model Router"
-                description="Routes simple actions directly and uses AI only when reasoning is required."
+                description="Deterministic computer actions stay direct; AI reasoning will only be used when it is actually needed."
                 trailing={<Badge tone="planned">Planned</Badge>}
               />
             </Surface>

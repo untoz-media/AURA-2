@@ -2,6 +2,7 @@ mod computer;
 mod core;
 mod integrations;
 mod memory;
+mod model_manager;
 mod permissions;
 
 use computer::app_launcher::launch_app;
@@ -27,6 +28,7 @@ use memory::{
     create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
     CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
 };
+use model_manager::{ModelCatalog, ModelManager};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -2865,6 +2867,68 @@ fn process_user_command(
 }
 
 #[tauri::command]
+fn get_model_catalog(
+    app: AppHandle,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.catalog(&app)
+}
+
+#[tauri::command]
+fn start_model_download(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.start_download(app, &model_id)
+}
+
+#[tauri::command]
+fn pause_model_download(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.pause_download(&app, &model_id)
+}
+
+#[tauri::command]
+fn resume_model_download(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.resume_download(&app, &model_id)
+}
+
+#[tauri::command]
+fn cancel_model_download(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.cancel_download(&app, &model_id)
+}
+
+#[tauri::command]
+fn set_active_model(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.set_active(&app, &model_id)
+}
+
+#[tauri::command]
+fn remove_model(
+    app: AppHandle,
+    model_id: String,
+    manager: State<'_, ModelManager>,
+) -> Result<ModelCatalog, String> {
+    manager.remove_model(&app, &model_id)
+}
+
+#[tauri::command]
 fn get_current_app_context(
     awareness: State<'_, CurrentAppAwareness>,
 ) -> Result<CurrentAppInfo, String> {
@@ -3068,6 +3132,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
         .manage(CurrentAppAwareness::default())
+        .manage(ModelManager::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -3220,6 +3285,13 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_model_catalog,
+            start_model_download,
+            pause_model_download,
+            resume_model_download,
+            cancel_model_download,
+            set_active_model,
+            remove_model,
             get_current_app_context,
             get_memories,
             create_memory_command,

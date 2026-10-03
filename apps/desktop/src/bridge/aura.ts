@@ -36,6 +36,8 @@ import type {
   MemoryCreateResult,
   MemoryRecord,
   CurrentAppInfo,
+  ModelCatalog,
+  ModelDownloadProgress,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -43,6 +45,7 @@ export const AURA_EVENTS = {
   error: "aura:core-error",
   runtime: "aura:runtime-state",
   lifecycle: "aura:lifecycle-event",
+  modelDownload: "aura:model-download",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -291,4 +294,42 @@ export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {
 
 export async function getCurrentAppContext(): Promise<CurrentAppInfo> {
   return invoke<CurrentAppInfo>("get_current_app_context");
+}
+
+
+export async function getModelCatalog(): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("get_model_catalog");
+}
+
+export async function startModelDownload(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("start_model_download", { modelId });
+}
+
+export async function pauseModelDownload(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("pause_model_download", { modelId });
+}
+
+export async function resumeModelDownload(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("resume_model_download", { modelId });
+}
+
+export async function cancelModelDownload(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("cancel_model_download", { modelId });
+}
+
+export async function setActiveModel(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("set_active_model", { modelId });
+}
+
+export async function removeModel(modelId: string): Promise<ModelCatalog> {
+  return invoke<ModelCatalog>("remove_model", { modelId });
+}
+
+export async function listenToModelDownloads(
+  handler: (progress: ModelDownloadProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<ModelDownloadProgress>(
+    AURA_EVENTS.modelDownload,
+    ({ payload }) => handler(payload),
+  );
 }

@@ -203,3 +203,21 @@ The desktop also supports persistent visual themes:
 - Light
 
 Model downloads and media-generation engines are intentionally not simulated by the UI foundation. Their buttons remain disabled until the real backend engines are implemented.
+
+
+### Model Manager
+
+The evolved AURA-2 desktop now includes a real local Model Manager.
+
+Current behavior:
+
+- AURA-1 can be downloaded from its existing upstream runtime source
+- large downloads support staging, pause, resume and cancel
+- interrupted partial downloads can resume after restart
+- available disk space is checked before transfer
+- required runtime files are verified before installation is finalized
+- installed models can be selected and removed
+- selected-model state is persisted locally
+- AURA-2 remains unavailable until a real checkpoint is defined
+
+The currently selectable model is not yet connected to free-form chat generation; that is the next Model Runtime step. Deterministic computer and OBS controls continue to work without an LLM.

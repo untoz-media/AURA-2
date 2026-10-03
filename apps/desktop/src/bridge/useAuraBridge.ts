@@ -12,10 +12,12 @@ import {
   getDirectorPresets,
   getMemories,
   getCurrentAppContext,
+  getModelCatalog,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
   listenToLifecycle,
+  listenToModelDownloads,
   resetPermissionPolicy,
   resolveConfirmation,
   setAutostartEnabled,
@@ -38,6 +40,12 @@ import {
   runDirectorPreset,
   createMemory,
   deleteMemory,
+  startModelDownload,
+  pauseModelDownload,
+  resumeModelDownload,
+  cancelModelDownload,
+  setActiveModel,
+  removeModel,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -69,6 +77,8 @@ import type {
   MemorySnapshot,
   MemoryCreateResult,
   CurrentAppInfo,
+  ModelCatalog,
+  ModelDownloadProgress,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -106,6 +116,12 @@ const DEFAULT_MEMORY: MemorySnapshot = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_MODEL_CATALOG: ModelCatalog = {
+  models: [],
+  modelsRoot: "",
+  refreshedAtMs: 0,
+};
+
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
@@ -130,6 +146,8 @@ export function useAuraBridge() {
     useState<DirectorPresetRunResult | null>(null);
   const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
+  const [modelCatalog, setModelCatalog] =
+    useState<ModelCatalog>(DEFAULT_MODEL_CATALOG);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -145,6 +163,7 @@ export function useAuraBridge() {
     let cancelled = false;
     let cleanupCore: (() => void) | undefined;
     let cleanupLifecycle: (() => void) | undefined;
+    let cleanupModels: (() => void) | undefined;
 
     Promise.all([
       getAppStatus(),
@@ -191,6 +210,78 @@ export function useAuraBridge() {
           });
           setActivity(message);
         }
+      });
+
+
+    getModelCatalog()
+      .then((catalog) => {
+        if (!cancelled) setModelCatalog(catalog);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          const message = String(error);
+          setBridgeError({
+            code: "models.load_failed",
+            message,
+          });
+          setActivity(message);
+        }
+      });
+
+    listenToModelDownloads((progress: ModelDownloadProgress) => {
+      if (cancelled) return;
+
+      setModelCatalog((current) => ({
+        ...current,
+        refreshedAtMs: progress.updatedAtMs,
+        models: current.models.map((model) =>
+          model.id === progress.modelId
+            ? {
+                ...model,
+                state: progress.state,
+                bytesDownloaded: progress.bytesDownloaded,
+                totalBytes: progress.totalBytes ?? model.totalBytes,
+                progressPercent: progress.progressPercent,
+                bytesPerSecond: progress.bytesPerSecond,
+                currentFile: progress.currentFile,
+                error: progress.error,
+                installed: progress.state === "installed" ? true : model.installed,
+              }
+            : model,
+        ),
+      }));
+
+      if (progress.state === "installed") {
+        setActivity(`${progress.modelId === "aura-1" ? "AURA-1" : progress.modelId} installed and verified.`);
+      } else if (progress.state === "failed") {
+        setActivity(progress.error ?? "Model download failed.");
+      } else if (progress.state === "notInstalled") {
+        setActivity("Model download cancelled.");
+      }
+
+      if (
+        progress.state === "installed"
+        || progress.state === "notInstalled"
+        || progress.state === "failed"
+      ) {
+        void getModelCatalog()
+          .then((catalog) => {
+            if (!cancelled) setModelCatalog(catalog);
+          })
+          .catch(() => {
+            // The event already carries the terminal state.
+          });
+      }
+    })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          cleanupModels = unlisten;
+        }
+      })
+      .catch(() => {
+        // Model download events are supplementary to explicit catalog refreshes.
       });
 
     listenToAuraCore(
@@ -290,6 +381,7 @@ export function useAuraBridge() {
       cancelled = true;
       cleanupCore?.();
       cleanupLifecycle?.();
+      cleanupModels?.();
     };
   }, []);
 
@@ -388,6 +480,70 @@ export function useAuraBridge() {
     return health;
   }, [obsConnection.connected]);
 
+
+  const refreshModels = useCallback(async () => {
+    const catalog = await getModelCatalog();
+    setModelCatalog(catalog);
+    return catalog;
+  }, []);
+
+  const runModelOperation = useCallback(async (
+    operation:
+      | "download"
+      | "pause"
+      | "resume"
+      | "cancel"
+      | "activate"
+      | "remove",
+    modelId: string,
+  ): Promise<ModelCatalog> => {
+    try {
+      setBridgeError(null);
+
+      const catalog = await (
+        operation === "download"
+          ? startModelDownload(modelId)
+          : operation === "pause"
+            ? pauseModelDownload(modelId)
+            : operation === "resume"
+              ? resumeModelDownload(modelId)
+              : operation === "cancel"
+                ? cancelModelDownload(modelId)
+                : operation === "activate"
+                  ? setActiveModel(modelId)
+                  : removeModel(modelId)
+      );
+
+      setModelCatalog(catalog);
+
+      const model = catalog.models.find((item) => item.id === modelId);
+      const name = model?.name ?? modelId;
+
+      setActivity(
+        operation === "download"
+          ? `Downloading ${name}…`
+          : operation === "pause"
+            ? `${name} download paused.`
+            : operation === "resume"
+              ? `${name} download resumed.`
+              : operation === "cancel"
+                ? `Cancelling ${name} download…`
+                : operation === "activate"
+                  ? `${name} selected as the active local model.`
+                  : `${name} removed from this computer.`,
+      );
+
+      return catalog;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: `models.${operation}_failed`,
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
 
   const refreshCurrentApp = useCallback(async () => {
     const context = await getCurrentAppContext();
@@ -1107,6 +1263,7 @@ export function useAuraBridge() {
     directorLastRun,
     memory,
     currentApp,
+    modelCatalog,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -1125,6 +1282,8 @@ export function useAuraBridge() {
     refreshDirectorPresets,
     refreshMemories,
     refreshCurrentApp,
+    refreshModels,
+    runModelOperation,
     createMemoryControl,
     deleteMemoryControl,
     saveDirectorPresetControl,

@@ -354,3 +354,56 @@ export type CurrentAppInfo = {
   contextSource: "foreground" | "lastExternal";
   capturedAtMs: number;
 };
+
+
+export type ModelInstallState =
+  | "unavailable"
+  | "notInstalled"
+  | "downloading"
+  | "paused"
+  | "installed"
+  | "failed";
+
+export type ModelStatus = {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  generation: string;
+  state: ModelInstallState;
+  downloadAvailable: boolean;
+  installed: boolean;
+  active: boolean;
+  sourceRepo?: string;
+  sourceRevision?: string;
+  license?: string;
+  estimatedSizeBytes?: number;
+  bytesDownloaded: number;
+  totalBytes?: number;
+  progressPercent: number;
+  bytesPerSecond?: number;
+  currentFile?: string;
+  error?: string;
+  availabilityMessage?: string;
+  installPath?: string;
+  installedAtMs?: number;
+};
+
+export type ModelCatalog = {
+  models: ModelStatus[];
+  activeModelId?: string;
+  modelsRoot: string;
+  refreshedAtMs: number;
+};
+
+export type ModelDownloadProgress = {
+  modelId: string;
+  state: ModelInstallState;
+  bytesDownloaded: number;
+  totalBytes?: number;
+  progressPercent: number;
+  bytesPerSecond?: number;
+  currentFile?: string;
+  error?: string;
+  updatedAtMs: number;
+};
