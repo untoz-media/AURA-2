@@ -618,9 +618,14 @@ input:focus-visible {
     background var(--motion-standard) var(--ease-standard);
 }
 
-.new-conversation-button:hover {
+.new-conversation-button:hover:not(:disabled) {
   border-color: var(--aura-border-focus);
   background: var(--aura-surface-3);
+}
+
+.new-conversation-button:disabled {
+  opacity: 0.48;
+  cursor: default;
 }
 
 .new-conversation-button > span {
