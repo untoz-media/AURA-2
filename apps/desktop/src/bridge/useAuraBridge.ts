@@ -11,6 +11,7 @@ import {
   getObsProductionHealth,
   getDirectorPresets,
   getMemories,
+  getCurrentAppContext,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -67,6 +68,7 @@ import type {
   DirectorPresetRunResult,
   MemorySnapshot,
   MemoryCreateResult,
+  CurrentAppInfo,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -127,6 +129,7 @@ export function useAuraBridge() {
   const [directorLastRun, setDirectorLastRun] =
     useState<DirectorPresetRunResult | null>(null);
   const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
+  const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -290,6 +293,33 @@ export function useAuraBridge() {
     };
   }, []);
 
+  useEffect(() => {
+    if (runtimeState.paused) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateCurrentApp = async () => {
+      try {
+        const context = await getCurrentAppContext();
+        if (!cancelled) {
+          setCurrentApp(context);
+        }
+      } catch {
+        // Current-app awareness is contextual; keep the last valid snapshot.
+      }
+    };
+
+    void updateCurrentApp();
+    const interval = window.setInterval(() => void updateCurrentApp(), 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [runtimeState.paused]);
+
   const refreshObsRuntime = useCallback(async () => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
@@ -358,6 +388,12 @@ export function useAuraBridge() {
     return health;
   }, [obsConnection.connected]);
 
+
+  const refreshCurrentApp = useCallback(async () => {
+    const context = await getCurrentAppContext();
+    setCurrentApp(context);
+    return context;
+  }, []);
 
   const refreshMemories = useCallback(async () => {
     const snapshot = await getMemories();
@@ -1070,6 +1106,7 @@ export function useAuraBridge() {
     directorPresets,
     directorLastRun,
     memory,
+    currentApp,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -1087,6 +1124,7 @@ export function useAuraBridge() {
     refreshObsHealth,
     refreshDirectorPresets,
     refreshMemories,
+    refreshCurrentApp,
     createMemoryControl,
     deleteMemoryControl,
     saveDirectorPresetControl,
