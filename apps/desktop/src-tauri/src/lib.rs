@@ -9,7 +9,12 @@ use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
-use core::action_router::{route_command, ActionIntent, RouteResult};
+use core::{
+    action_router::{route_command, ActionIntent, RouteResult},
+    confirmation::{
+        validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
+    },
+};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -139,16 +144,6 @@ struct CoreError {
     code: &'static str,
     message: String,
 }
-
-#[derive(Clone)]
-struct PendingConfirmation {
-    command: String,
-    source: String,
-    permission: PermissionClass,
-    expires_at_ms: u64,
-}
-
-const CONFIRMATION_TTL_MS: u64 = 60_000;
 
 fn unix_timestamp_ms() -> u64 {
     SystemTime::now()
@@ -433,7 +428,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003.9 Confirmation Flow",
+        stage: "M003 Complete · Computer Control",
         local_first: true,
     }
 }
@@ -701,15 +696,15 @@ fn process_user_command(
             return Err("Confirmation is no longer available or has expired.".to_string());
         };
 
-        if pending.expires_at_ms <= unix_timestamp_ms() {
-            return Err("Confirmation expired. Submit the command again.".to_string());
-        }
-
-        if pending.command != text || pending.source != source {
-            return Err("Confirmation does not match this command.".to_string());
-        }
-
-        Some(pending.permission)
+        Some(
+            validate_pending_confirmation(
+                &pending,
+                &text,
+                &source,
+                unix_timestamp_ms(),
+            )
+            .map_err(str::to_string)?,
+        )
     } else {
         None
     };

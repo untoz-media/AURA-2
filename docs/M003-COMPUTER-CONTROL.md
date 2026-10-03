@@ -214,3 +214,26 @@ Only one pending confirmation is retained per command source. A newer request re
 Cancellation removes the pending action and returns AURA to `Idle`.
 
 The confirmation flow does not permanently change permission settings; it approves one specific action only.
+
+
+## M003.10
+
+M003.10 closes the Computer Control milestone with a dedicated validation suite and Windows packaging gate.
+
+Automated validation now covers:
+
+- English and Portuguese deterministic command routing
+- permission-class regressions across Read / Act / Modify / Sensitive / Destructive
+- persistent policy overrides
+- fail-closed handling for invalid volume, mouse, keyboard and unknown-app input
+- Unicode text intent preservation
+- confirmation expiry and command/source binding
+- the safety floor that prevents Sensitive or Destructive from becoming permanent Allow
+
+The Windows CI gate runs Rust Core tests before the frontend/Tauri build and NSIS packaging.
+
+A manual hardware checklist is documented in `docs/M003-10-VALIDATION.md` for behaviours that should not be executed automatically in CI, including actual window focus, multi-monitor pointer movement, audio endpoint changes and power/session actions.
+
+**M003 release marker:** `AURA-2 0.3.0-alpha.1`
+
+With M003 complete, AURA-2 has a deterministic, permission-aware Windows Computer Control foundation. M004 moves into direct OBS WebSocket control and Director Mode.

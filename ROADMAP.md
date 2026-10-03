@@ -30,7 +30,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M003 — Computer Control
 
-**Status: In progress**
+**Status: Complete — AURA-2 0.3.0-alpha.1**
 
 - [x] **M003.1** — Action Router & safe application launching
 - [x] **M003.2** — Application lifecycle (close apps)
@@ -41,7 +41,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M003.7** — System commands
 - [x] **M003.8** — Permission engine
 - [x] **M003.9** — Confirmation flow
-- [ ] **M003.10** — Computer Control validation
+- [x] **M003.10** — Computer Control validation
 
 ## M004 — OBS Control / Director Mode
 
