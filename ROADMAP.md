@@ -45,17 +45,19 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M004 — OBS Control / Director Mode
 
-- [ ] OBS WebSocket connection
-- [ ] Detect OBS state
-- [ ] List scenes
-- [ ] Change scenes
-- [ ] Start / stop recording
-- [ ] Start / stop streaming
-- [ ] Read stream duration
-- [ ] Control source visibility
-- [ ] Control audio levels
-- [ ] Production health checks
-- [ ] Director Mode presets
+**Status: In progress**
+
+- [x] **M004.1** — OBS WebSocket connection
+- [ ] **M004.2** — Detect OBS state
+- [ ] **M004.3** — List scenes
+- [ ] **M004.4** — Change scenes
+- [ ] **M004.5** — Start / stop recording
+- [ ] **M004.6** — Start / stop streaming
+- [ ] **M004.7** — Read stream duration
+- [ ] **M004.8** — Control source visibility
+- [ ] **M004.9** — Control audio levels
+- [ ] **M004.10** — Production health checks
+- [ ] **M004.11** — Director Mode presets
 
 ## M005 — Memory & Context
 

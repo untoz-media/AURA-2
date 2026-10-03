@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   AppStatus,
   PermissionClass,
   PermissionDecision,
   PermissionPolicy,
   RuntimeState,
+  ObsConnectRequest,
+  ObsConnectionState,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -33,6 +35,9 @@ type Props = {
     decision: PermissionDecision,
   ) => Promise<PermissionPolicy>;
   onResetPermissions: () => Promise<PermissionPolicy>;
+  obsConnection: ObsConnectionState;
+  onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
+  onObsDisconnect: () => Promise<ObsConnectionState>;
 };
 
 const sections: Array<{
@@ -143,7 +148,51 @@ export default function Settings({
   permissionPolicy,
   onPermissionChange,
   onResetPermissions,
+  obsConnection,
+  onObsConnect,
+  onObsDisconnect,
 }: Props) {
+  const [obsHost, setObsHost] = useState(obsConnection.host);
+  const [obsPort, setObsPort] = useState(String(obsConnection.port));
+  const [obsPassword, setObsPassword] = useState("");
+  const [obsConnecting, setObsConnecting] = useState(false);
+
+  useEffect(() => {
+    setObsHost(obsConnection.host);
+    setObsPort(String(obsConnection.port));
+  }, [obsConnection.host, obsConnection.port]);
+
+  async function handleObsConnect() {
+    const port = Number(obsPort);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return;
+    }
+
+    setObsConnecting(true);
+    try {
+      await onObsConnect({
+        host: obsHost.trim() || "127.0.0.1",
+        port,
+        password: obsPassword || undefined,
+      });
+      setObsPassword("");
+    } catch {
+      // Connection feedback is exposed through obsConnection.lastError.
+    } finally {
+      setObsConnecting(false);
+    }
+  }
+
+  async function handleObsDisconnect() {
+    setObsConnecting(true);
+    try {
+      await onObsDisconnect();
+      setObsPassword("");
+    } finally {
+      setObsConnecting(false);
+    }
+  }
+
   return (
     <section className="settings-layout">
       <aside className="settings-nav" aria-label="Settings sections">
@@ -454,9 +503,104 @@ export default function Settings({
               <p>Apps and services AURA can control directly.</p>
             </header>
             <Surface className="settings-card">
+              <SectionLabel>OBS Control</SectionLabel>
+              <SettingRow
+                title="OBS Studio"
+                description="Connect AURA directly to the built-in OBS WebSocket server."
+                trailing={
+                  <Badge
+                    tone={
+                      obsConnection.connected
+                        ? "ready"
+                        : obsConnection.lastError
+                          ? "warning"
+                          : "planned"
+                    }
+                  >
+                    {obsConnection.connected ? "Connected" : "Disconnected"}
+                  </Badge>
+                }
+              />
+
+              <div className="obs-connection-form">
+                <label className="settings-field">
+                  <span>Host</span>
+                  <input
+                    value={obsHost}
+                    onChange={(event) => setObsHost(event.target.value)}
+                    placeholder="127.0.0.1"
+                    disabled={obsConnection.connected || obsConnecting}
+                  />
+                </label>
+
+                <label className="settings-field compact">
+                  <span>Port</span>
+                  <input
+                    inputMode="numeric"
+                    value={obsPort}
+                    onChange={(event) => setObsPort(event.target.value)}
+                    placeholder="4455"
+                    disabled={obsConnection.connected || obsConnecting}
+                  />
+                </label>
+
+                <label className="settings-field">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    value={obsPassword}
+                    onChange={(event) => setObsPassword(event.target.value)}
+                    placeholder="OBS WebSocket password"
+                    autoComplete="off"
+                    disabled={obsConnection.connected || obsConnecting}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="settings-action-button obs-connect-button"
+                  disabled={obsConnecting}
+                  onClick={() =>
+                    void (
+                      obsConnection.connected
+                        ? handleObsDisconnect()
+                        : handleObsConnect()
+                    )
+                  }
+                >
+                  {obsConnecting
+                    ? "Working…"
+                    : obsConnection.connected
+                      ? "Disconnect"
+                      : "Connect"}
+                </button>
+              </div>
+
+              {obsConnection.connected && (
+                <div className="obs-connection-meta">
+                  <span>
+                    OBS {obsConnection.obsStudioVersion ?? "Unknown"}
+                  </span>
+                  <span>
+                    WebSocket {obsConnection.obsWebsocketVersion ?? "Unknown"}
+                  </span>
+                  <span>
+                    RPC {obsConnection.rpcVersion ?? "—"}
+                  </span>
+                  <span>
+                    {obsConnection.host}:{obsConnection.port}
+                  </span>
+                </div>
+              )}
+
+              {obsConnection.lastError && (
+                <p className="obs-connection-error">{obsConnection.lastError}</p>
+              )}
+            </Surface>
+
+            <Surface className="settings-card">
               <SectionLabel>Available & planned</SectionLabel>
-              <SettingRow title="OBS Studio" description="Scene, stream, recording and production control through OBS WebSocket." trailing={<Badge tone="planned">M004</Badge>} />
-              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="planned">M003</Badge>} />
+              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
               <SettingRow title="Future Skills" description="Modular app integrations built on the AURA Skills architecture." trailing={<Badge tone="planned">Later</Badge>} />
             </Surface>
           </>

@@ -11,6 +11,8 @@ import type {
   PermissionDecision,
   PermissionPolicy,
   RuntimeState,
+  ObsConnectRequest,
+  ObsConnectionState,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -123,4 +125,19 @@ export async function listenToAuraCore(
     unlistenError();
     unlistenRuntime();
   };
+}
+
+
+export async function getObsConnectionState(): Promise<ObsConnectionState> {
+  return invoke<ObsConnectionState>("get_obs_connection_state");
+}
+
+export async function connectObs(
+  request: ObsConnectRequest,
+): Promise<ObsConnectionState> {
+  return invoke<ObsConnectionState>("connect_obs", { request });
+}
+
+export async function disconnectObs(): Promise<ObsConnectionState> {
+  return invoke<ObsConnectionState>("disconnect_obs");
 }

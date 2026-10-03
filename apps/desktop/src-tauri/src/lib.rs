@@ -1,5 +1,6 @@
 mod computer;
 mod core;
+mod integrations;
 mod permissions;
 
 use computer::app_launcher::launch_app;
@@ -15,6 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1660,10 +1662,29 @@ fn process_user_command(
     })
 }
 
+#[tauri::command]
+async fn get_obs_connection_state(obs: State<'_, ObsController>) -> ObsConnectionState {
+    obs.snapshot().await
+}
+
+#[tauri::command]
+async fn connect_obs(
+    request: ObsConnectRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsConnectionState, String> {
+    obs.connect(request).await
+}
+
+#[tauri::command]
+async fn disconnect_obs(obs: State<'_, ObsController>) -> ObsConnectionState {
+    obs.disconnect().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--background"]),
@@ -1816,7 +1837,10 @@ pub fn run() {
             resolve_confirmation,
             process_user_command,
             open_main_window,
-            hide_overlay
+            hide_overlay,
+            get_obs_connection_state,
+            connect_obs,
+            disconnect_obs
         ])
         .run(tauri::generate_context!())
         .expect("error while running AURA-2");
