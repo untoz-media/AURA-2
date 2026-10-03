@@ -137,3 +137,15 @@ export type ObsSceneList = {
   refreshedAtMs: number;
   lastError?: string;
 };
+
+
+export type ObsSceneSwitchRequest = {
+  sceneUuid: string;
+};
+
+export type ObsSceneSwitchResult = {
+  target: "program" | "preview";
+  sceneName: string;
+  sceneUuid: string;
+  changedAtMs: number;
+};

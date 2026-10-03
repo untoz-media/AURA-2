@@ -461,3 +461,16 @@
     justify-self: start;
   }
 }
+
+
+.obs-scene-action {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.obs-scene-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -16,6 +16,8 @@ import {
   setBackgroundEnabled,
   setPermissionDecision,
   setRuntimePaused,
+  setObsProgramScene,
+  setObsPreviewScene,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -33,6 +35,7 @@ import type {
   ObsConnectionState,
   ObsRuntimeState,
   ObsSceneList,
+  ObsSceneSwitchResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -230,6 +233,57 @@ export function useAuraBridge() {
     setObsScenes(scenes);
     return scenes;
   }, [obsConnection.connected]);
+
+
+  const switchObsProgramScene = useCallback(async (
+    sceneUuid: string,
+  ): Promise<ObsSceneSwitchResult> => {
+    try {
+      setBridgeError(null);
+      const result = await setObsProgramScene({ sceneUuid });
+      const [runtime, scenes] = await Promise.all([
+        getObsRuntimeState(),
+        getObsScenes(),
+      ]);
+      setObsRuntime(runtime);
+      setObsScenes(scenes);
+      setActivity(`OBS Program switched to ${result.sceneName}.`);
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.scene_switch_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const switchObsPreviewScene = useCallback(async (
+    sceneUuid: string,
+  ): Promise<ObsSceneSwitchResult> => {
+    try {
+      setBridgeError(null);
+      const result = await setObsPreviewScene({ sceneUuid });
+      const [runtime, scenes] = await Promise.all([
+        getObsRuntimeState(),
+        getObsScenes(),
+      ]);
+      setObsRuntime(runtime);
+      setObsScenes(scenes);
+      setActivity(`OBS Preview switched to ${result.sceneName}.`);
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.preview_switch_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
     if (!obsConnection.connected) {
@@ -476,6 +530,8 @@ export function useAuraBridge() {
     disconnectObsControl,
     refreshObsRuntime,
     refreshObsScenes,
+    switchObsProgramScene,
+    switchObsPreviewScene,
     approveConfirmation,
     cancelConfirmation,
   };

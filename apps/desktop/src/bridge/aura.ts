@@ -15,6 +15,8 @@ import type {
   ObsConnectionState,
   ObsRuntimeState,
   ObsSceneList,
+  ObsSceneSwitchRequest,
+  ObsSceneSwitchResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -152,4 +154,17 @@ export async function getObsRuntimeState(): Promise<ObsRuntimeState> {
 
 export async function getObsScenes(): Promise<ObsSceneList> {
   return invoke<ObsSceneList>("get_obs_scenes");
+}
+
+
+export async function setObsProgramScene(
+  request: ObsSceneSwitchRequest,
+): Promise<ObsSceneSwitchResult> {
+  return invoke<ObsSceneSwitchResult>("set_obs_program_scene", { request });
+}
+
+export async function setObsPreviewScene(
+  request: ObsSceneSwitchRequest,
+): Promise<ObsSceneSwitchResult> {
+  return invoke<ObsSceneSwitchResult>("set_obs_preview_scene", { request });
 }

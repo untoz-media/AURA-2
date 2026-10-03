@@ -9,6 +9,7 @@ import type {
   ObsConnectionState,
   ObsRuntimeState,
   ObsSceneList,
+  ObsSceneSwitchResult,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -44,6 +45,8 @@ type Props = {
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
   onObsScenesRefresh: () => Promise<ObsSceneList>;
+  onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
+  onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
 };
 
 const sections: Array<{
@@ -161,11 +164,14 @@ export default function Settings({
   onObsDisconnect,
   onObsRefresh,
   onObsScenesRefresh,
+  onObsProgramSceneChange,
+  onObsPreviewSceneChange,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
   const [obsPassword, setObsPassword] = useState("");
   const [obsConnecting, setObsConnecting] = useState(false);
+  const [obsSceneChanging, setObsSceneChanging] = useState<string | null>(null);
 
   useEffect(() => {
     setObsHost(obsConnection.host);
@@ -200,6 +206,25 @@ export default function Settings({
       setObsPassword("");
     } finally {
       setObsConnecting(false);
+    }
+  }
+
+
+  async function handleObsSceneChange(
+    target: "program" | "preview",
+    sceneUuid: string,
+  ) {
+    setObsSceneChanging(`${target}:${sceneUuid}`);
+    try {
+      if (target === "program") {
+        await onObsProgramSceneChange(sceneUuid);
+      } else {
+        await onObsPreviewSceneChange(sceneUuid);
+      }
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsSceneChanging(null);
     }
   }
 
@@ -696,11 +721,40 @@ export default function Settings({
                             <span>{scene.uuid}</span>
                           </div>
                           <div className="obs-scene-flags">
-                            {scene.isProgram && (
+                            {scene.isProgram ? (
                               <Badge tone="ready">Program</Badge>
+                            ) : (
+                              <button
+                                type="button"
+                                className="settings-action-button obs-scene-action"
+                                disabled={obsSceneChanging !== null}
+                                onClick={() =>
+                                  void handleObsSceneChange("program", scene.uuid)
+                                }
+                              >
+                                {obsSceneChanging === `program:${scene.uuid}`
+                                  ? "Taking…"
+                                  : "Take Program"}
+                              </button>
                             )}
-                            {scene.isPreview && (
-                              <Badge>Preview</Badge>
+
+                            {obsRuntime.studioMode && (
+                              scene.isPreview ? (
+                                <Badge>Preview</Badge>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="settings-action-button obs-scene-action"
+                                  disabled={obsSceneChanging !== null}
+                                  onClick={() =>
+                                    void handleObsSceneChange("preview", scene.uuid)
+                                  }
+                                >
+                                  {obsSceneChanging === `preview:${scene.uuid}`
+                                    ? "Setting…"
+                                    : "Set Preview"}
+                                </button>
+                              )
                             )}
                           </div>
                         </div>
