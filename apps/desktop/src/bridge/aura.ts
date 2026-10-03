@@ -49,6 +49,7 @@ import type {
   SaveProjectRequest,
   AudioInputSnapshot,
   VoiceCaptureEvent,
+  SpeechRuntimeStatus,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -457,4 +458,9 @@ export async function listenToVoiceCapture(
     AURA_EVENTS.voiceCapture,
     ({ payload }) => handler(payload),
   );
+}
+
+
+export async function getSpeechRuntimeStatus(): Promise<SpeechRuntimeStatus> {
+  return invoke<SpeechRuntimeStatus>("get_speech_runtime_status");
 }
