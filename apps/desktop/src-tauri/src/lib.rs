@@ -6,6 +6,7 @@ mod memory;
 mod model_manager;
 mod model_runtime;
 mod permissions;
+mod routines;
 
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
@@ -37,6 +38,11 @@ use managed_runtime::{ManagedRuntimeSetup, ManagedRuntimeStatus};
 use model_manager::{ModelCatalog, ModelManager};
 use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
+use routines::{
+    delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
+    routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
+    SaveRoutineRequest, UserRoutine,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -226,6 +232,52 @@ fn should_prefer_director_preset(text: &str, base_route: &RouteResult) -> bool {
         .any(|prefix| normalized.starts_with(prefix)),
         _ => false,
     }
+}
+
+fn should_prefer_user_routine(text: &str, base_route: &RouteResult) -> bool {
+    let normalized = text
+        .trim()
+        .trim_matches(|character: char| {
+            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
+        })
+        .to_lowercase();
+
+    let explicit_routine = [
+        "run routine ",
+        "execute routine ",
+        "start routine ",
+        "executa a rotina ",
+        "executa rotina ",
+        "inicia a rotina ",
+        "inicia rotina ",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix));
+
+    explicit_routine
+        || matches!(
+            base_route,
+            RouteResult::NoMatch | RouteResult::UnsupportedApp(_)
+        )
+}
+
+fn route_user_routine(
+    app: &AppHandle,
+    text: &str,
+    policy: &PermissionPolicy,
+) -> Option<RouteResult> {
+    let routine = resolve_routine_command(app, text)?;
+    let permission = if routine_requires_sensitive_permission(app, &routine) {
+        PermissionClass::Sensitive
+    } else {
+        PermissionClass::Act
+    };
+
+    Some(RouteResult::Action(RoutedAction {
+        intent: ActionIntent::UserRoutine(routine.id),
+        permission,
+        decision: policy.decision_for(permission),
+    }))
 }
 
 fn route_director_preset(
@@ -869,11 +921,15 @@ fn process_user_command(
         .clone();
 
     let base_route = route_command(&text, &policy);
+    let routine_route = route_user_routine(&app, &text, &policy);
     let director_route = route_director_preset(&app, &text, &policy);
 
-    let routed = match director_route {
-        Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
-        _ => base_route,
+    let routed = match routine_route {
+        Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
+        _ => match director_route {
+            Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+            _ => base_route,
+        },
     };
 
     match routed {
@@ -1910,6 +1966,131 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::UserRoutine(routine_id) => {
+                            let routine = find_routine_by_id(&worker_app, &routine_id);
+                            match routine {
+                                Some(routine) => {
+                                    let became_sensitive =
+                                        routine_requires_sensitive_permission(&worker_app, &routine);
+                                    if became_sensitive
+                                        && worker_permission != PermissionClass::Sensitive
+                                    {
+                                        let message =
+                                            "Routine changed and now contains a Sensitive action. Submit it again so AURA can request confirmation."
+                                                .to_string();
+
+                                        emit_core_event(
+                                            &worker_app,
+                                            CoreEvent {
+                                                id: worker_id.clone(),
+                                                kind: "command.failed",
+                                                status: AuraRuntimeStatus::Idle,
+                                                message: message.clone(),
+                                                command: Some(worker_text),
+                                                timestamp_ms: unix_timestamp_ms(),
+                                            },
+                                        );
+
+                                        emit_core_error(
+                                            &worker_app,
+                                            CoreError {
+                                                id: Some(worker_id),
+                                                code: "routine.permission_changed",
+                                                message,
+                                            },
+                                        );
+                                        return;
+                                    }
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.processing",
+                                            status: AuraRuntimeStatus::Working,
+                                            message: format!(
+                                                "Running routine {}…",
+                                                routine.name
+                                            ),
+                                            command: Some(worker_text.clone()),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    let result = tauri::async_runtime::block_on(async {
+                                        let obs = worker_app.state::<ObsController>();
+                                        run_routine(&worker_app, &obs, &routine).await
+                                    });
+
+                                    let kind = if result.success {
+                                        "command.completed"
+                                    } else {
+                                        "command.failed"
+                                    };
+                                    let message = if result.success {
+                                        format!(
+                                            "Routine {} completed ({} steps).",
+                                            result.routine_name, result.completed_steps
+                                        )
+                                    } else {
+                                        format!(
+                                            "Routine {} failed at step {}: {}",
+                                            result.routine_name,
+                                            result.failed_step.unwrap_or(0) + 1,
+                                            result
+                                                .error
+                                                .clone()
+                                                .unwrap_or_else(|| "Unknown error.".to_string())
+                                        )
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind,
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    if !result.success {
+                                        emit_core_error(
+                                            &worker_app,
+                                            CoreError {
+                                                id: Some(worker_id),
+                                                code: "routine.execution_failed",
+                                                message,
+                                            },
+                                        );
+                                    }
+                                }
+                                None => {
+                                    let message = "Routine no longer exists.".to_string();
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "routine.not_found",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::MemoryRemember(content) => {
                             emit_core_event(
                                 &worker_app,
@@ -2737,6 +2918,10 @@ fn process_user_command(
                         "Reading Windows Recent Items requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::UserRoutine(routine_id) => format!(
+                        "Running routine {} requires confirmation under the current permission policy.",
+                        routine_id
+                    )
                     ActionIntent::MemoryRemember(content) => format!(
                         "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
                         content
@@ -3220,6 +3405,49 @@ fn get_recent_files_context() -> Result<RecentFilesSnapshot, String> {
 }
 
 #[tauri::command]
+fn get_user_routines(app: AppHandle) -> Result<Vec<UserRoutine>, String> {
+    list_routines(&app)
+}
+
+#[tauri::command]
+fn save_user_routine(
+    app: AppHandle,
+    request: SaveRoutineRequest,
+) -> Result<UserRoutine, String> {
+    save_routine(&app, request)
+}
+
+#[tauri::command]
+fn delete_user_routine(app: AppHandle, routine_id: String) -> Result<(), String> {
+    delete_routine(&app, &routine_id)
+}
+
+#[tauri::command]
+fn run_user_routine(
+    app: AppHandle,
+    routine_id: String,
+) -> Result<RoutineRunResult, String> {
+    let routine = find_routine_by_id(&app, &routine_id)
+        .ok_or_else(|| "Routine no longer exists.".to_string())?;
+
+    let permission = if routine_requires_sensitive_permission(&app, &routine) {
+        PermissionClass::Sensitive
+    } else {
+        PermissionClass::Act
+    };
+
+    if permission == PermissionClass::Sensitive {
+        return Err(
+            "This routine contains a Sensitive action. Run it from Chat so AURA can request confirmation."
+                .to_string(),
+        );
+    }
+
+    let obs = app.state::<ObsController>();
+    Ok(tauri::async_runtime::block_on(run_routine(&app, &obs, &routine)))
+}
+
+#[tauri::command]
 fn get_memories(app: AppHandle) -> Result<MemorySnapshot, String> {
     memory_snapshot(&app)
 }
@@ -3590,6 +3818,10 @@ pub fn run() {
             remove_model,
             get_current_app_context,
             get_recent_files_context,
+            get_user_routines,
+            save_user_routine,
+            delete_user_routine,
+            run_user_routine,
             get_memories,
             create_memory_command,
             delete_memory_command,
