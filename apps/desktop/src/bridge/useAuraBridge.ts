@@ -54,6 +54,7 @@ import {
   deleteProjectMemory,
   setActiveProjectMemory,
   getAudioInputState,
+  getSpeechRuntimeStatus,
   selectAudioInputDevice,
   startAudioInputTest,
   stopAudioInputTest,
@@ -112,6 +113,7 @@ import type {
   ProjectMemory,
   AudioInputSnapshot,
   VoiceCaptureEvent,
+  SpeechRuntimeStatus,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -167,6 +169,12 @@ const DEFAULT_AUDIO_INPUT: AudioInputSnapshot = {
   level: 0,
   capturedSamples: 0,
   captureDurationMs: 0,
+};
+
+const DEFAULT_SPEECH_RUNTIME: SpeechRuntimeStatus = {
+  state: "stopped",
+  modelId: "voice-whisper-base",
+  refreshedAtMs: 0,
 };
 
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
@@ -229,6 +237,8 @@ export function useAuraBridge() {
     useState<AudioInputSnapshot>(DEFAULT_AUDIO_INPUT);
   const [voiceCapture, setVoiceCapture] =
     useState<VoiceCaptureEvent | null>(null);
+  const [speechRuntime, setSpeechRuntime] =
+    useState<SpeechRuntimeStatus>(DEFAULT_SPEECH_RUNTIME);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -303,6 +313,14 @@ export function useAuraBridge() {
         }
       });
 
+
+    getSpeechRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setSpeechRuntime(runtime);
+      })
+      .catch(() => {
+        // Speech runtime remains stopped until Voice STT is used.
+      });
 
     getAudioInputState()
       .then((snapshot) => {
@@ -420,6 +438,13 @@ export function useAuraBridge() {
       setVoiceCapture(event);
       setStatus(event.phase === "listening" ? "Listening" : "Idle");
       setActivity(event.message);
+      if (event.phase === "transcribed" || event.phase === "error") {
+        void getSpeechRuntimeStatus()
+          .then((runtime) => {
+            if (!cancelled) setSpeechRuntime(runtime);
+          })
+          .catch(() => undefined);
+      }
       void getAudioInputState()
         .then((snapshot) => {
           if (!cancelled) setAudioInput(snapshot);
@@ -1723,6 +1748,7 @@ export function useAuraBridge() {
     projectMemory,
     audioInput,
     voiceCapture,
+    speechRuntime,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
