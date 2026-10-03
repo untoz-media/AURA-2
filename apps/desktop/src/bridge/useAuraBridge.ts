@@ -12,6 +12,7 @@ import {
   getDirectorPresets,
   getMemories,
   getCurrentAppContext,
+  getRecentFilesContext,
   getModelCatalog,
   getModelRuntimeStatus,
   getManagedRuntimeStatus,
@@ -84,6 +85,7 @@ import type {
   MemorySnapshot,
   MemoryCreateResult,
   CurrentAppInfo,
+  RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
   ModelRuntimeStatus,
@@ -123,6 +125,12 @@ const DEFAULT_OBS_AUDIO: ObsAudioInputList = {
 
 const DEFAULT_MEMORY: MemorySnapshot = {
   records: [],
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_RECENT_FILES: RecentFilesSnapshot = {
+  items: [],
+  source: "windowsRecentItems",
   refreshedAtMs: 0,
 };
 
@@ -168,6 +176,8 @@ export function useAuraBridge() {
     useState<DirectorPresetRunResult | null>(null);
   const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
+  const [recentFiles, setRecentFiles] =
+    useState<RecentFilesSnapshot>(DEFAULT_RECENT_FILES);
   const [modelCatalog, setModelCatalog] =
     useState<ModelCatalog>(DEFAULT_MODEL_CATALOG);
   const [modelRuntimeStatus, setModelRuntimeStatus] =
@@ -223,6 +233,14 @@ export function useAuraBridge() {
             message: String(error),
           });
         }
+      });
+
+    getRecentFilesContext()
+      .then((snapshot) => {
+        if (!cancelled) setRecentFiles(snapshot);
+      })
+      .catch(() => {
+        // Windows Recent Items can legitimately be unavailable or empty.
       });
 
     getMemories()
@@ -712,6 +730,12 @@ export function useAuraBridge() {
     const context = await getCurrentAppContext();
     setCurrentApp(context);
     return context;
+  }, []);
+
+  const refreshRecentFiles = useCallback(async () => {
+    const snapshot = await getRecentFilesContext();
+    setRecentFiles(snapshot);
+    return snapshot;
   }, []);
 
   const refreshMemories = useCallback(async () => {
@@ -1474,6 +1498,7 @@ export function useAuraBridge() {
     directorLastRun,
     memory,
     currentApp,
+    recentFiles,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1496,6 +1521,7 @@ export function useAuraBridge() {
     refreshDirectorPresets,
     refreshMemories,
     refreshCurrentApp,
+    refreshRecentFiles,
     refreshModels,
     refreshModelRuntime,
     refreshManagedRuntime,
