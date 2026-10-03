@@ -1740,15 +1740,6 @@ fn process_user_command(
                                 );
                             }
                         }
-                        ActionIntent::DirectorPreset(preset_id) => {
-                        let preset_name = find_director_preset_by_id(&app, preset_id)
-                            .map(|preset| preset.name)
-                            .unwrap_or_else(|| preset_id.clone());
-                        format!(
-                            "Running Director Mode preset {} requires confirmation under the current permission policy.",
-                            preset_name
-                        )
-                    }
                     ActionIntent::ObsProductionHealth => {
                             emit_core_event(
                                 &worker_app,
@@ -2290,6 +2281,15 @@ fn process_user_command(
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
                     ),
+                    ActionIntent::DirectorPreset(preset_id) => {
+                        let preset_name = find_director_preset_by_id(&app, preset_id)
+                            .map(|preset| preset.name)
+                            .unwrap_or_else(|| preset_id.clone());
+                        format!(
+                            "Running Director Mode preset {} requires confirmation under the current permission policy.",
+                            preset_name
+                        )
+                    }
                     ActionIntent::ObsProductionHealth => {
                         "Reading OBS production health requires confirmation under the current permission policy."
                             .to_string()
