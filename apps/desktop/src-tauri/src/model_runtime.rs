@@ -196,7 +196,7 @@ impl ModelRuntime {
 
         let request = json!({
             "type": "generate",
-            "id": request_id,
+            "id": request_id.clone(),
             "messages": messages,
         });
 
