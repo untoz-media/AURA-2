@@ -22,6 +22,7 @@ import {
   listenToLifecycle,
   listenToModelDownloads,
   listenToManagedRuntime,
+  listenToVoiceCapture,
   resetPermissionPolicy,
   resolveConfirmation,
   setAutostartEnabled,
@@ -110,6 +111,7 @@ import type {
   SaveProjectRequest,
   ProjectMemory,
   AudioInputSnapshot,
+  VoiceCaptureEvent,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -222,6 +224,8 @@ export function useAuraBridge() {
     useState<ProjectMemorySnapshot>(DEFAULT_PROJECT_MEMORY);
   const [audioInput, setAudioInput] =
     useState<AudioInputSnapshot>(DEFAULT_AUDIO_INPUT);
+  const [voiceCapture, setVoiceCapture] =
+    useState<VoiceCaptureEvent | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -239,6 +243,7 @@ export function useAuraBridge() {
     let cleanupLifecycle: (() => void) | undefined;
     let cleanupModels: (() => void) | undefined;
     let cleanupManagedRuntime: (() => void) | undefined;
+    let cleanupVoiceCapture: (() => void) | undefined;
 
     Promise.all([
       getAppStatus(),
@@ -407,6 +412,25 @@ export function useAuraBridge() {
         // Model download events are supplementary to explicit catalog refreshes.
       });
 
+    listenToVoiceCapture((event: VoiceCaptureEvent) => {
+      if (cancelled) return;
+      setVoiceCapture(event);
+      setStatus(event.phase === "listening" ? "Listening" : "Idle");
+      setActivity(event.message);
+      void getAudioInputState()
+        .then((snapshot) => {
+          if (!cancelled) setAudioInput(snapshot);
+        })
+        .catch(() => undefined);
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else cleanupVoiceCapture = unlisten;
+      })
+      .catch(() => {
+        // Voice capture events are supplementary to the microphone state.
+      });
+
     listenToManagedRuntime((runtime: ManagedRuntimeStatus) => {
       if (cancelled) return;
       setManagedRuntimeStatus(runtime);
@@ -553,11 +577,12 @@ export function useAuraBridge() {
       cleanupLifecycle?.();
       cleanupModels?.();
       cleanupManagedRuntime?.();
+      cleanupVoiceCapture?.();
     };
   }, []);
 
   useEffect(() => {
-    if (!audioInput.testing) return;
+    if (!audioInput.testing && !audioInput.pushToTalk) return;
 
     let cancelled = false;
 
@@ -575,7 +600,7 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [audioInput.testing]);
+  }, [audioInput.testing, audioInput.pushToTalk]);
 
   useEffect(() => {
     if (runtimeState.paused) {
@@ -1694,6 +1719,7 @@ export function useAuraBridge() {
     routineLastRun,
     projectMemory,
     audioInput,
+    voiceCapture,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
