@@ -1,4 +1,4 @@
-use obws::{requests::scene_items::SetEnabled, Client};
+use obws::{requests::{inputs::Volume, scene_items::SetEnabled}, Client};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
@@ -98,6 +98,53 @@ pub struct ObsSourceVisibilityResult {
     pub item_id: i64,
     pub source_name: String,
     pub enabled: bool,
+    pub changed_at_ms: u64,
+}
+
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsAudioInputSummary {
+    pub input_name: String,
+    pub input_uuid: String,
+    pub input_kind: String,
+    pub muted: bool,
+    pub volume_percent: u8,
+    pub volume_mul: f32,
+    pub volume_db: f32,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsAudioInputList {
+    pub inputs: Vec<ObsAudioInputSummary>,
+    pub refreshed_at_ms: u64,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsAudioMuteRequest {
+    pub input_uuid: String,
+    pub muted: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsAudioVolumeRequest {
+    pub input_uuid: String,
+    pub percent: u8,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsAudioControlResult {
+    pub input_name: String,
+    pub input_uuid: String,
+    pub muted: bool,
+    pub volume_percent: u8,
+    pub volume_mul: f32,
+    pub volume_db: f32,
     pub changed_at_ms: u64,
 }
 
@@ -890,6 +937,174 @@ impl ObsController {
         })
     }
 
+    pub async fn audio_inputs(&self) -> Result<ObsAudioInputList, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        audio_inputs_snapshot(client).await
+    }
+
+    pub async fn set_audio_muted(
+        &self,
+        request: ObsAudioMuteRequest,
+    ) -> Result<ObsAudioControlResult, String> {
+        let input_uuid = validate_input_uuid(&request.input_uuid)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let input = find_input_by_uuid(client, &input_uuid).await?;
+        let input_id = (&input.id).into();
+
+        client
+            .inputs()
+            .set_muted(input_id, request.muted)
+            .await
+            .map_err(|error| format!("Could not change OBS input mute state: {error}"))?;
+
+        let confirmed = client
+            .inputs()
+            .muted((&input.id).into())
+            .await
+            .map_err(|error| format!("OBS changed mute state, but verification failed: {error}"))?;
+
+        if confirmed != request.muted {
+            return Err("OBS did not confirm the requested input mute state.".to_string());
+        }
+
+        audio_control_result(client, input, confirmed).await
+    }
+
+    pub async fn set_audio_volume(
+        &self,
+        request: ObsAudioVolumeRequest,
+    ) -> Result<ObsAudioControlResult, String> {
+        let input_uuid = validate_input_uuid(&request.input_uuid)?;
+        let percent = validate_audio_percent(request.percent)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let input = find_input_by_uuid(client, &input_uuid).await?;
+        let requested_mul = f32::from(percent) / 100.0;
+
+        client
+            .inputs()
+            .set_volume((&input.id).into(), Volume::Mul(requested_mul))
+            .await
+            .map_err(|error| format!("Could not change OBS input volume: {error}"))?;
+
+        let volume = client
+            .inputs()
+            .volume((&input.id).into())
+            .await
+            .map_err(|error| format!("OBS changed input volume, but verification failed: {error}"))?;
+
+        if (volume.mul - requested_mul).abs() > 0.02 {
+            return Err("OBS did not confirm the requested input volume.".to_string());
+        }
+
+        let muted = client
+            .inputs()
+            .muted((&input.id).into())
+            .await
+            .map_err(|error| format!("Could not refresh OBS input mute state: {error}"))?;
+
+        Ok(ObsAudioControlResult {
+            input_name: input.id.name,
+            input_uuid: input.id.uuid.to_string(),
+            muted,
+            volume_percent: volume_mul_to_percent(volume.mul),
+            volume_mul: volume.mul,
+            volume_db: volume.db,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn set_audio_muted_by_name(
+        &self,
+        input_name: &str,
+        muted: bool,
+    ) -> Result<ObsAudioControlResult, String> {
+        let requested = validate_source_name(input_name)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let input = find_input_by_name(client, &requested).await?;
+
+        client
+            .inputs()
+            .set_muted((&input.id).into(), muted)
+            .await
+            .map_err(|error| format!("Could not change OBS input mute state: {error}"))?;
+
+        let confirmed = client
+            .inputs()
+            .muted((&input.id).into())
+            .await
+            .map_err(|error| format!("OBS changed mute state, but verification failed: {error}"))?;
+
+        if confirmed != muted {
+            return Err("OBS did not confirm the requested input mute state.".to_string());
+        }
+
+        audio_control_result(client, input, confirmed).await
+    }
+
+    pub async fn set_audio_volume_by_name(
+        &self,
+        input_name: &str,
+        percent: u8,
+    ) -> Result<ObsAudioControlResult, String> {
+        let requested = validate_source_name(input_name)?;
+        let percent = validate_audio_percent(percent)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let input = find_input_by_name(client, &requested).await?;
+        let requested_mul = f32::from(percent) / 100.0;
+
+        client
+            .inputs()
+            .set_volume((&input.id).into(), Volume::Mul(requested_mul))
+            .await
+            .map_err(|error| format!("Could not change OBS input volume: {error}"))?;
+
+        let volume = client
+            .inputs()
+            .volume((&input.id).into())
+            .await
+            .map_err(|error| format!("OBS changed input volume, but verification failed: {error}"))?;
+
+        if (volume.mul - requested_mul).abs() > 0.02 {
+            return Err("OBS did not confirm the requested input volume.".to_string());
+        }
+
+        let muted = client
+            .inputs()
+            .muted((&input.id).into())
+            .await
+            .map_err(|error| format!("Could not refresh OBS input mute state: {error}"))?;
+
+        Ok(ObsAudioControlResult {
+            input_name: input.id.name,
+            input_uuid: input.id.uuid.to_string(),
+            muted,
+            volume_percent: volume_mul_to_percent(volume.mul),
+            volume_mul: volume.mul,
+            volume_db: volume.db,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn start_streaming(&self) -> Result<ObsStreamingActionResult, String> {
         let client_guard = self.client.lock().await;
         let client = client_guard
@@ -1042,6 +1257,143 @@ impl ObsController {
         state.connected_at_ms = None;
         state.last_error = Some(message);
     }
+}
+
+async fn audio_inputs_snapshot(client: &Client) -> Result<ObsAudioInputList, String> {
+    let inputs = client
+        .inputs()
+        .list(None)
+        .await
+        .map_err(|error| format!("Could not list OBS inputs: {error}"))?;
+
+    let mut summaries = Vec::new();
+
+    for input in inputs {
+        let muted = match client.inputs().muted((&input.id).into()).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let volume = match client.inputs().volume((&input.id).into()).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        summaries.push(ObsAudioInputSummary {
+            input_name: input.id.name,
+            input_uuid: input.id.uuid.to_string(),
+            input_kind: input.kind,
+            muted,
+            volume_percent: volume_mul_to_percent(volume.mul),
+            volume_mul: volume.mul,
+            volume_db: volume.db,
+        });
+    }
+
+    summaries.sort_by(|left, right| {
+        left.input_name
+            .to_lowercase()
+            .cmp(&right.input_name.to_lowercase())
+    });
+
+    Ok(ObsAudioInputList {
+        inputs: summaries,
+        refreshed_at_ms: timestamp_ms(),
+        last_error: None,
+    })
+}
+
+async fn find_input_by_uuid(
+    client: &Client,
+    input_uuid: &str,
+) -> Result<obws::responses::inputs::Input, String> {
+    client
+        .inputs()
+        .list(None)
+        .await
+        .map_err(|error| format!("Could not list OBS inputs: {error}"))?
+        .into_iter()
+        .find(|input| input.id.uuid.to_string() == input_uuid)
+        .ok_or_else(|| "The requested OBS input no longer exists.".to_string())
+}
+
+async fn find_input_by_name(
+    client: &Client,
+    input_name: &str,
+) -> Result<obws::responses::inputs::Input, String> {
+    let mut matches = client
+        .inputs()
+        .list(None)
+        .await
+        .map_err(|error| format!("Could not list OBS inputs: {error}"))?
+        .into_iter()
+        .filter(|input| input.id.name.eq_ignore_ascii_case(input_name));
+
+    let input = matches
+        .next()
+        .ok_or_else(|| format!("No OBS audio input named “{input_name}” exists."))?;
+
+    if matches.next().is_some() {
+        return Err(format!(
+            "More than one OBS input named “{input_name}” exists. Use the audio controls in Settings."
+        ));
+    }
+
+    client
+        .inputs()
+        .volume((&input.id).into())
+        .await
+        .map_err(|_| format!("OBS input “{}” does not expose audio volume control.", input.id.name))?;
+
+    Ok(input)
+}
+
+async fn audio_control_result(
+    client: &Client,
+    input: obws::responses::inputs::Input,
+    muted: bool,
+) -> Result<ObsAudioControlResult, String> {
+    let volume = client
+        .inputs()
+        .volume((&input.id).into())
+        .await
+        .map_err(|error| format!("Could not refresh OBS input volume: {error}"))?;
+
+    Ok(ObsAudioControlResult {
+        input_name: input.id.name,
+        input_uuid: input.id.uuid.to_string(),
+        muted,
+        volume_percent: volume_mul_to_percent(volume.mul),
+        volume_mul: volume.mul,
+        volume_db: volume.db,
+        changed_at_ms: timestamp_ms(),
+    })
+}
+
+fn volume_mul_to_percent(value: f32) -> u8 {
+    (value.clamp(0.0, 1.0) * 100.0).round() as u8
+}
+
+fn validate_audio_percent(percent: u8) -> Result<u8, String> {
+    if percent > 100 {
+        return Err("OBS input volume must be between 0 and 100 percent.".to_string());
+    }
+
+    Ok(percent)
+}
+
+fn validate_input_uuid(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() {
+        return Err("OBS input UUID cannot be empty.".to_string());
+    }
+
+    if trimmed.len() > 64 {
+        return Err("OBS input UUID is invalid.".to_string());
+    }
+
+    Ok(trimmed.to_string())
 }
 
 async fn source_items_for_scene(
@@ -1351,6 +1703,39 @@ mod tests {
         assert_eq!(value["itemId"], 7);
         assert_eq!(value["sourceName"], "Lower Third");
         assert_eq!(value["enabled"], true);
+    }
+
+
+    #[test]
+    fn converts_audio_multiplier_to_percent() {
+        assert_eq!(volume_mul_to_percent(0.0), 0);
+        assert_eq!(volume_mul_to_percent(0.5), 50);
+        assert_eq!(volume_mul_to_percent(1.0), 100);
+        assert_eq!(volume_mul_to_percent(1.5), 100);
+    }
+
+    #[test]
+    fn validates_audio_percent() {
+        assert_eq!(validate_audio_percent(0).unwrap(), 0);
+        assert_eq!(validate_audio_percent(100).unwrap(), 100);
+    }
+
+    #[test]
+    fn audio_control_result_serializes_expected_state() {
+        let result = ObsAudioControlResult {
+            input_name: "Mic/Aux".to_string(),
+            input_uuid: "123".to_string(),
+            muted: false,
+            volume_percent: 70,
+            volume_mul: 0.7,
+            volume_db: -3.1,
+            changed_at_ms: 42,
+        };
+
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(value["inputName"], "Mic/Aux");
+        assert_eq!(value["volumePercent"], 70);
+        assert_eq!(value["muted"], false);
     }
 
 
