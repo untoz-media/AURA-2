@@ -18,6 +18,8 @@ pub enum ActionIntent {
     Mouse(MouseAction),
     Media(MediaAction),
     System(SystemAction),
+    ObsProgramScene(String),
+    ObsPreviewScene(String),
 }
 
 #[derive(Debug, Clone)]
@@ -446,6 +448,37 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn obs_scene_request(input: &str) -> Option<ActionIntent> {
+    const PROGRAM_PREFIXES: &[&str] = &[
+        "switch scene to ",
+        "switch to scene ",
+        "set program scene to ",
+        "take scene ",
+        "muda a cena para ",
+        "muda para a cena ",
+        "troca a cena para ",
+        "troca para a cena ",
+    ];
+
+    const PREVIEW_PREFIXES: &[&str] = &[
+        "preview scene ",
+        "set preview scene to ",
+        "set preview to ",
+        "prepara a cena ",
+        "preparar a cena ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, PROGRAM_PREFIXES) {
+        let scene = unwrap_text_quotes(value).trim();
+        return (!scene.is_empty()).then(|| ActionIntent::ObsProgramScene(scene.to_string()));
+    }
+
+    value_after_prefix(input, PREVIEW_PREFIXES).and_then(|value| {
+        let scene = unwrap_text_quotes(value).trim();
+        (!scene.is_empty()).then(|| ActionIntent::ObsPreviewScene(scene.to_string()))
+    })
+}
+
 fn is_list_windows_command(input: &str) -> bool {
     matches!(
         input,
@@ -570,6 +603,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         };
     }
 
+    if let Some(intent) = obs_scene_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     let normalized = normalize_command(input);
 
     if is_list_windows_command(&normalized) {
@@ -590,6 +632,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     }
 
     let Some(target) = AppTarget::from_alias(target_text) else {
+        if matches!(operation, AppOperation::Switch) {
+            let permission = PermissionClass::Act;
+            return RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsProgramScene(target_text.to_string()),
+                permission,
+                decision: policy.decision_for(permission),
+            });
+        }
+
         return RouteResult::UnsupportedApp(target_text.to_string());
     };
 
@@ -772,6 +823,46 @@ mod tests {
                 permission: PermissionClass::Modify,
                 ..
             }) if text == "Hello AURA"
+        ));
+    }
+
+
+    #[test]
+    fn routes_explicit_obs_program_scene_as_act() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Switch scene to Camera 2", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsProgramScene(scene),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if scene == "Camera 2"
+        ));
+    }
+
+    #[test]
+    fn routes_obs_preview_scene_as_act() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Set preview scene to Interview", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsPreviewScene(scene),
+                permission: PermissionClass::Act,
+                ..
+            }) if scene == "Interview"
+        ));
+    }
+
+    #[test]
+    fn unknown_switch_target_falls_back_to_obs_program_scene() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Switch to Camera 2", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsProgramScene(scene),
+                permission: PermissionClass::Act,
+                ..
+            }) if scene == "camera 2"
         ));
     }
 }
