@@ -3421,9 +3421,13 @@ fn remove_model(
     model_id: String,
     manager: State<'_, ModelManager>,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
 ) -> Result<ModelCatalog, String> {
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
+    if model_id == "voice-whisper-base" {
+        speech.stop();
+    }
     Ok(catalog)
 }
 
