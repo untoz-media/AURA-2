@@ -52,6 +52,10 @@ import {
   saveProjectMemory,
   deleteProjectMemory,
   setActiveProjectMemory,
+  getAudioInputState,
+  selectAudioInputDevice,
+  startAudioInputTest,
+  stopAudioInputTest,
   startModelDownload,
   pauseModelDownload,
   resumeModelDownload,
@@ -105,6 +109,7 @@ import type {
   ProjectMemorySnapshot,
   SaveProjectRequest,
   ProjectMemory,
+  AudioInputSnapshot,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -151,6 +156,12 @@ const DEFAULT_RECENT_FILES: RecentFilesSnapshot = {
 const DEFAULT_PROJECT_MEMORY: ProjectMemorySnapshot = {
   projects: [],
   refreshedAtMs: 0,
+};
+
+const DEFAULT_AUDIO_INPUT: AudioInputSnapshot = {
+  devices: [],
+  testing: false,
+  level: 0,
 };
 
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
@@ -209,6 +220,8 @@ export function useAuraBridge() {
     useState<RoutineRunResult | null>(null);
   const [projectMemory, setProjectMemory] =
     useState<ProjectMemorySnapshot>(DEFAULT_PROJECT_MEMORY);
+  const [audioInput, setAudioInput] =
+    useState<AudioInputSnapshot>(DEFAULT_AUDIO_INPUT);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -282,6 +295,14 @@ export function useAuraBridge() {
         }
       });
 
+
+    getAudioInputState()
+      .then((snapshot) => {
+        if (!cancelled) setAudioInput(snapshot);
+      })
+      .catch(() => {
+        // Microphone access can be unavailable or blocked by Windows privacy settings.
+      });
 
     getProjectMemory()
       .then((snapshot) => {
@@ -787,6 +808,30 @@ export function useAuraBridge() {
   const refreshProjectMemory = useCallback(async () => {
     const snapshot = await getProjectMemory();
     setProjectMemory(snapshot);
+    return snapshot;
+  }, []);
+
+  const refreshAudioInput = useCallback(async () => {
+    const snapshot = await getAudioInputState();
+    setAudioInput(snapshot);
+    return snapshot;
+  }, []);
+
+  const selectAudioInput = useCallback(async (deviceName?: string) => {
+    const snapshot = await selectAudioInputDevice(deviceName);
+    setAudioInput(snapshot);
+    return snapshot;
+  }, []);
+
+  const startAudioTest = useCallback(async () => {
+    const snapshot = await startAudioInputTest();
+    setAudioInput(snapshot);
+    return snapshot;
+  }, []);
+
+  const stopAudioTest = useCallback(async () => {
+    const snapshot = await stopAudioInputTest();
+    setAudioInput(snapshot);
     return snapshot;
   }, []);
 
@@ -1627,6 +1672,7 @@ export function useAuraBridge() {
     routines,
     routineLastRun,
     projectMemory,
+    audioInput,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1658,6 +1704,10 @@ export function useAuraBridge() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    refreshAudioInput,
+    selectAudioInput,
+    startAudioTest,
+    stopAudioTest,
     refreshModels,
     refreshModelRuntime,
     refreshManagedRuntime,
