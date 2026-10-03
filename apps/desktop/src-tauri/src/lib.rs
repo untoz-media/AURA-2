@@ -1,6 +1,7 @@
 mod computer;
 mod core;
 mod integrations;
+mod managed_runtime;
 mod memory;
 mod model_manager;
 mod model_runtime;
@@ -29,6 +30,7 @@ use memory::{
     create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
     CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
 };
+use managed_runtime::{ManagedRuntimeSetup, ManagedRuntimeStatus};
 use model_manager::{ModelCatalog, ModelManager};
 use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
@@ -2916,6 +2918,42 @@ fn process_user_command(
 }
 
 #[tauri::command]
+fn get_managed_runtime_status(
+    app: AppHandle,
+    setup: State<'_, ManagedRuntimeSetup>,
+) -> ManagedRuntimeStatus {
+    setup.status(&app)
+}
+
+#[tauri::command]
+fn install_managed_runtime(
+    app: AppHandle,
+    setup: State<'_, ManagedRuntimeSetup>,
+) -> Result<ManagedRuntimeStatus, String> {
+    setup.start_install(app, false)
+}
+
+#[tauri::command]
+fn repair_managed_runtime(
+    app: AppHandle,
+    runtime: State<'_, ModelRuntime>,
+    setup: State<'_, ManagedRuntimeSetup>,
+) -> Result<ManagedRuntimeStatus, String> {
+    runtime.stop();
+    setup.start_install(app, true)
+}
+
+#[tauri::command]
+fn remove_managed_runtime(
+    app: AppHandle,
+    runtime: State<'_, ModelRuntime>,
+    setup: State<'_, ManagedRuntimeSetup>,
+) -> Result<ManagedRuntimeStatus, String> {
+    runtime.stop();
+    setup.remove(&app)
+}
+
+#[tauri::command]
 fn get_model_runtime_status(
     runtime: State<'_, ModelRuntime>,
 ) -> ModelRuntimeStatus {
@@ -3202,6 +3240,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
         .manage(CurrentAppAwareness::default())
+        .manage(ManagedRuntimeSetup::default())
         .manage(ModelManager::default())
         .manage(ModelRuntime::default())
         .manage(ObsController::default())
@@ -3360,6 +3399,10 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_managed_runtime_status,
+            install_managed_runtime,
+            repair_managed_runtime,
+            remove_managed_runtime,
             get_model_runtime_status,
             clear_model_conversation,
             get_model_catalog,
