@@ -25,8 +25,10 @@ const PYTHON_INSTALLER_URL: &str =
 const PYTHON_INSTALLER_SIZE: u64 = 26_964_224;
 const RUNTIME_MARKER: &str = "managed-runtime.json";
 
+const PYTORCH_CUDA_INDEX: &str = "https://download.pytorch.org/whl/cu128";
+const PYTORCH_CPU_INDEX: &str = "https://download.pytorch.org/whl/cpu";
+
 const RUNTIME_PACKAGES: &[&str] = &[
-    "torch>=2.7",
     "transformers>=5.0",
     "accelerate>=1.0",
     "bitsandbytes>=0.45",
@@ -270,11 +272,45 @@ impl ManagedRuntimeSetup {
                 ],
             )?;
 
+            let nvidia = nvidia_gpu_available();
+
             self.update_phase(
                 app,
                 "installingPackages",
-                54.0,
-                "Installing PyTorch, Transformers and local AI dependencies…",
+                50.0,
+                if nvidia {
+                    "Installing CUDA-enabled PyTorch for the detected NVIDIA GPU…"
+                } else {
+                    "Installing CPU PyTorch runtime…"
+                },
+            );
+
+            let torch_index = if nvidia {
+                PYTORCH_CUDA_INDEX
+            } else {
+                PYTORCH_CPU_INDEX
+            };
+
+            run_python(
+                &python_exe,
+                &[
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    "--no-input",
+                    "--upgrade",
+                    "--index-url",
+                    torch_index,
+                    "torch>=2.7",
+                ],
+            )?;
+
+            self.update_phase(
+                app,
+                "installingPackages",
+                76.0,
+                "Installing Transformers, Accelerate and quantization dependencies…",
             );
 
             let mut args = vec![
@@ -291,7 +327,7 @@ impl ManagedRuntimeSetup {
             self.update_phase(
                 app,
                 "verifying",
-                92.0,
+                94.0,
                 "Verifying the managed AI runtime…",
             );
 
@@ -588,6 +624,22 @@ fn install_python(installer: &Path, target: &Path) -> Result<(), String> {
 }
 
 #[cfg(windows)]
+fn nvidia_gpu_available() -> bool {
+    let mut command = Command::new("nvidia-smi");
+    command
+        .arg("-L")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW);
+
+    command
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
 fn run_python(python: &Path, args: &[&str]) -> Result<String, String> {
     let output = Command::new(python)
         .args(args)
@@ -696,7 +748,8 @@ mod tests {
 
     #[test]
     fn managed_runtime_packages_cover_aura_one_runtime() {
-        assert!(RUNTIME_PACKAGES.iter().any(|value| value.starts_with("torch")));
+        assert!(PYTORCH_CUDA_INDEX.ends_with("/cu128"));
+        assert!(PYTORCH_CPU_INDEX.ends_with("/cpu"));
         assert!(RUNTIME_PACKAGES
             .iter()
             .any(|value| value.starts_with("transformers")));
