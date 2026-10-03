@@ -551,10 +551,7 @@ impl ObsController {
             .await
             .map_err(|error| format!("Could not start OBS recording: {error}"))?;
 
-        let (recording, paused) = read_recording_flags(client).await?;
-        if !recording {
-            return Err("OBS did not confirm that recording started.".to_string());
-        }
+        let (recording, paused) = wait_for_recording_state(client, true, false).await?;
 
         Ok(ObsRecordingActionResult {
             action: "start".to_string(),
@@ -582,10 +579,7 @@ impl ObsController {
             .await
             .map_err(|error| format!("Could not stop OBS recording: {error}"))?;
 
-        let (recording, paused) = read_recording_flags(client).await?;
-        if recording {
-            return Err("OBS did not confirm that recording stopped.".to_string());
-        }
+        let (recording, paused) = wait_for_recording_state(client, false, false).await?;
 
         Ok(ObsRecordingActionResult {
             action: "stop".to_string(),
@@ -616,10 +610,7 @@ impl ObsController {
             .await
             .map_err(|error| format!("Could not pause OBS recording: {error}"))?;
 
-        let (recording, paused) = read_recording_flags(client).await?;
-        if !recording || !paused {
-            return Err("OBS did not confirm that recording paused.".to_string());
-        }
+        let (recording, paused) = wait_for_recording_state(client, true, true).await?;
 
         Ok(ObsRecordingActionResult {
             action: "pause".to_string(),
@@ -650,10 +641,7 @@ impl ObsController {
             .await
             .map_err(|error| format!("Could not resume OBS recording: {error}"))?;
 
-        let (recording, paused) = read_recording_flags(client).await?;
-        if !recording || paused {
-            return Err("OBS did not confirm that recording resumed.".to_string());
-        }
+        let (recording, paused) = wait_for_recording_state(client, true, false).await?;
 
         Ok(ObsRecordingActionResult {
             action: "resume".to_string(),
@@ -766,6 +754,26 @@ impl ObsController {
         state.connected_at_ms = None;
         state.last_error = Some(message);
     }
+}
+
+async fn wait_for_recording_state(
+    client: &Client,
+    expected_active: bool,
+    expected_paused: bool,
+) -> Result<(bool, bool), String> {
+    for _ in 0..6 {
+        let state = read_recording_flags(client).await?;
+        if state == (expected_active, expected_paused) {
+            return Ok(state);
+        }
+
+        tokio::time::sleep(Duration::from_millis(60)).await;
+    }
+
+    Err(format!(
+        "OBS did not confirm recording state active={} paused={}.",
+        expected_active, expected_paused
+    ))
 }
 
 async fn read_recording_flags(client: &Client) -> Result<(bool, bool), String> {
