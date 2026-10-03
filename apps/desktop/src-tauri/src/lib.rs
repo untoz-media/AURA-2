@@ -233,6 +233,44 @@ fn route_director_preset(
     }))
 }
 
+#[cfg(test)]
+mod director_route_tests {
+    use super::*;
+
+    fn routed(intent: ActionIntent) -> RouteResult {
+        RouteResult::Action(RoutedAction {
+            intent,
+            permission: PermissionClass::Act,
+            decision: PermissionDecision::Allow,
+        })
+    }
+
+    #[test]
+    fn director_presets_override_only_generic_fallbacks() {
+        assert!(should_prefer_director_preset(
+            "run preset Prepare Match",
+            &RouteResult::NoMatch,
+        ));
+        assert!(should_prefer_director_preset(
+            "start show",
+            &RouteResult::UnsupportedApp("show".to_string()),
+        ));
+        assert!(should_prefer_director_preset(
+            "go to break",
+            &routed(ActionIntent::ObsProgramScene("break".to_string())),
+        ));
+
+        assert!(!should_prefer_director_preset(
+            "Mute",
+            &routed(ActionIntent::Media(MediaAction::Mute)),
+        ));
+        assert!(!should_prefer_director_preset(
+            "switch scene to Camera 2",
+            &routed(ActionIntent::ObsProgramScene("Camera 2".to_string())),
+        ));
+    }
+}
+
 fn next_command_id() -> String {
     let counter = COMMAND_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("cmd-{}-{}", unix_timestamp_ms(), counter)
