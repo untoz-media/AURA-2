@@ -1075,18 +1075,52 @@ fn inspect_installation(
         ));
     }
 
-    for file in &marker.files {
-        let path = directory.join(&file.path);
+    if marker.files.len() != definition.files.len() {
+        return Err(format!(
+            "{} installation marker does not contain the complete runtime manifest.",
+            definition.name
+        ));
+    }
+
+    let mut verified_total = 0_u64;
+
+    for expected_path in definition.files {
+        let file = marker
+            .files
+            .iter()
+            .find(|file| file.path == *expected_path)
+            .ok_or_else(|| {
+                format!(
+                    "{} installation marker is missing {}.",
+                    definition.name, expected_path
+                )
+            })?;
+
+        let path = directory.join(expected_path);
         let actual = std_fs::metadata(&path)
-            .map_err(|_| format!("{} installation is missing {}.", definition.name, file.path))?
+            .map_err(|_| {
+                format!(
+                    "{} installation is missing {}.",
+                    definition.name, expected_path
+                )
+            })?
             .len();
 
-        if actual != file.size_bytes {
+        if actual == 0 || actual != file.size_bytes {
             return Err(format!(
                 "{} installation failed verification for {}.",
-                definition.name, file.path
+                definition.name, expected_path
             ));
         }
+
+        verified_total = verified_total.saturating_add(actual);
+    }
+
+    if verified_total != marker.total_bytes {
+        return Err(format!(
+            "{} installation total size does not match its verification marker.",
+            definition.name
+        ));
     }
 
     Ok(Some(marker))
