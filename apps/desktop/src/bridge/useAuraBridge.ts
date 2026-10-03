@@ -22,6 +22,8 @@ import {
   stopObsRecording,
   pauseObsRecording,
   resumeObsRecording,
+  startObsStreaming,
+  stopObsStreaming,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -41,6 +43,7 @@ import type {
   ObsSceneList,
   ObsSceneSwitchResult,
   ObsRecordingActionResult,
+  ObsStreamingActionResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -333,6 +336,40 @@ export function useAuraBridge() {
     }
   }, []);
 
+
+  const controlObsStreaming = useCallback(async (
+    action: ObsStreamingActionResult["action"],
+  ): Promise<ObsStreamingActionResult> => {
+    try {
+      setBridgeError(null);
+
+      const result = await (
+        action === "start"
+          ? startObsStreaming()
+          : stopObsStreaming()
+      );
+
+      const runtime = await getObsRuntimeState();
+      setObsRuntime(runtime);
+
+      setActivity(
+        action === "start"
+          ? "OBS stream is live."
+          : "OBS stream stopped.",
+      );
+
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.streaming_control_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
@@ -581,6 +618,7 @@ export function useAuraBridge() {
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
+    controlObsStreaming,
     approveConfirmation,
     cancelConfirmation,
   };
