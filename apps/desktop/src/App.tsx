@@ -50,6 +50,7 @@ function App() {
     refreshObsScenes,
     switchObsProgramScene,
     switchObsPreviewScene,
+    controlObsRecording,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -240,6 +241,7 @@ function App() {
             onObsScenesRefresh={refreshObsScenes}
             onObsProgramSceneChange={switchObsProgramScene}
             onObsPreviewSceneChange={switchObsPreviewScene}
+            onObsRecordingAction={controlObsRecording}
           />
         )}
       </section>
