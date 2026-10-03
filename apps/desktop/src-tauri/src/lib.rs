@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
+use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1616,6 +1616,10 @@ fn process_user_command(
                                 }
                             }
                         }
+                    ActionIntent::ObsProductionHealth => {
+                        "Reading OBS production health requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::ObsStreamDuration => {
                             emit_core_event(
                                 &worker_app,
@@ -2344,6 +2348,13 @@ async fn get_obs_stream_duration(
 }
 
 #[tauri::command]
+async fn get_obs_production_health(
+    obs: State<'_, ObsController>,
+) -> Result<ObsProductionHealth, String> {
+    obs.production_health().await
+}
+
+#[tauri::command]
 async fn get_obs_source_items(
     obs: State<'_, ObsController>,
 ) -> Result<ObsSourceItemList, String> {
@@ -2603,6 +2614,7 @@ pub fn run() {
             get_obs_runtime_state,
             get_obs_scenes,
             get_obs_stream_duration,
+            get_obs_production_health,
             get_obs_source_items,
             set_obs_source_visibility,
             get_obs_audio_inputs,
