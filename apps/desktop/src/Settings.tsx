@@ -16,6 +16,7 @@ import type {
   ObsSourceVisibilityResult,
   ObsAudioInputList,
   ObsAudioControlResult,
+  ObsProductionHealth,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -49,12 +50,14 @@ type Props = {
   obsScenes: ObsSceneList;
   obsSources: ObsSourceItemList;
   obsAudio: ObsAudioInputList;
+  obsHealth: ObsProductionHealth | null;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
   onObsScenesRefresh: () => Promise<ObsSceneList>;
   onObsSourcesRefresh: () => Promise<ObsSourceItemList>;
   onObsAudioRefresh: () => Promise<ObsAudioInputList>;
+  onObsHealthRefresh: () => Promise<ObsProductionHealth | null>;
   onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsRecordingAction: (
@@ -203,12 +206,14 @@ export default function Settings({
   obsScenes,
   obsSources,
   obsAudio,
+  obsHealth,
   onObsConnect,
   onObsDisconnect,
   onObsRefresh,
   onObsScenesRefresh,
   onObsSourcesRefresh,
   onObsAudioRefresh,
+  onObsHealthRefresh,
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
   onObsRecordingAction,
@@ -955,6 +960,92 @@ export default function Settings({
 
                   {obsRuntime.lastError && (
                     <p className="obs-connection-error">{obsRuntime.lastError}</p>
+                  )}
+                </div>
+              )}
+
+              {obsConnection.connected && obsHealth && (
+                <div className="obs-health-panel">
+                  <div className="obs-runtime-heading">
+                    <div>
+                      <strong>Production Health</strong>
+                      <span>{obsHealth.summary}</span>
+                    </div>
+                    <div className="obs-health-heading-actions">
+                      <Badge
+                        tone={
+                          obsHealth.status === "good"
+                            ? "ready"
+                            : obsHealth.status === "warning"
+                              ? "warning"
+                              : "warning"
+                        }
+                      >
+                        {obsHealth.status.toUpperCase()}
+                      </Badge>
+                      <button
+                        type="button"
+                        className="settings-action-button"
+                        onClick={() => void onObsHealthRefresh()}
+                      >
+                        Check now
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="obs-health-grid">
+                    <div className="obs-health-metric">
+                      <span>FPS</span>
+                      <strong>{obsHealth.activeFps.toFixed(1)}</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>OBS CPU</span>
+                      <strong>{obsHealth.cpuUsagePercent.toFixed(1)}%</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Memory</span>
+                      <strong>{(obsHealth.memoryUsageMb / 1024).toFixed(2)} GB</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Disk Free</span>
+                      <strong>{(obsHealth.availableDiskSpaceMb / 1024).toFixed(1)} GB</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Render Time</span>
+                      <strong>{obsHealth.averageFrameRenderTimeMs.toFixed(2)} ms</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Render Skips</span>
+                      <strong>{obsHealth.renderSkippedPercent.toFixed(2)}%</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Output Skips</span>
+                      <strong>{obsHealth.outputSkippedPercent.toFixed(2)}%</strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Congestion</span>
+                      <strong>
+                        {obsHealth.streamCongestionPercent == null
+                          ? "—"
+                          : `${obsHealth.streamCongestionPercent.toFixed(0)}%`}
+                      </strong>
+                    </div>
+                    <div className="obs-health-metric">
+                      <span>Bitrate</span>
+                      <strong>
+                        {obsHealth.streamBitrateKbps == null
+                          ? "—"
+                          : `${Math.round(obsHealth.streamBitrateKbps)} kbps`}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {obsHealth.issues.length > 0 && (
+                    <div className="obs-health-issues">
+                      {obsHealth.issues.map((issue) => (
+                        <div key={issue}>{issue}</div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
