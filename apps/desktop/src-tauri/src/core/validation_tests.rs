@@ -371,6 +371,71 @@ fn obs_scene_commands_respect_act_policy_override() {
 }
 
 #[test]
+fn obs_source_visibility_commands_route_through_act_permission() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Hide Scoreboard",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsSourceVisibility {
+            source_name,
+            enabled: false,
+        } if source_name == "Scoreboard"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Show Lower Third",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsSourceVisibility {
+            source_name,
+            enabled: true,
+        } if source_name == "Lower Third"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Esconde Marcador",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsSourceVisibility {
+            source_name,
+            enabled: false,
+        } if source_name == "Marcador"
+    ));
+}
+
+#[test]
+fn obs_source_visibility_respects_act_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Act, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Mostra Lower Third",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsSourceVisibility {
+            source_name,
+            enabled: true,
+        } if source_name == "Lower Third"
+    ));
+}
+
+#[test]
 fn obs_stream_duration_queries_are_read_only() {
     let policy = PermissionPolicy::default();
 
