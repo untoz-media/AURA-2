@@ -34,6 +34,7 @@ function App() {
     runtimeState,
     permissionPolicy,
     obsConnection,
+    obsRuntime,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -44,6 +45,7 @@ function App() {
     resetPermissions,
     connectObsControl,
     disconnectObsControl,
+    refreshObsRuntime,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -226,8 +228,10 @@ function App() {
             onPermissionChange={setPermission}
             onResetPermissions={resetPermissions}
             obsConnection={obsConnection}
+            obsRuntime={obsRuntime}
             onObsConnect={connectObsControl}
             onObsDisconnect={disconnectObsControl}
+            onObsRefresh={refreshObsRuntime}
           />
         )}
       </section>

@@ -13,6 +13,7 @@ import type {
   RuntimeState,
   ObsConnectRequest,
   ObsConnectionState,
+  ObsRuntimeState,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -140,4 +141,9 @@ export async function connectObs(
 
 export async function disconnectObs(): Promise<ObsConnectionState> {
   return invoke<ObsConnectionState>("disconnect_obs");
+}
+
+
+export async function getObsRuntimeState(): Promise<ObsRuntimeState> {
+  return invoke<ObsRuntimeState>("get_obs_runtime_state");
 }

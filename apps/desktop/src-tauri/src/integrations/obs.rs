@@ -28,6 +28,37 @@ pub struct ObsConnectionState {
     pub last_error: Option<String>,
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsRuntimeState {
+    pub available: bool,
+    pub streaming: bool,
+    pub recording: bool,
+    pub recording_paused: bool,
+    pub studio_mode: bool,
+    pub current_program_scene: Option<String>,
+    pub current_preview_scene: Option<String>,
+    pub refreshed_at_ms: u64,
+    pub last_error: Option<String>,
+}
+
+impl Default for ObsRuntimeState {
+    fn default() -> Self {
+        Self {
+            available: false,
+            streaming: false,
+            recording: false,
+            recording_paused: false,
+            studio_mode: false,
+            current_program_scene: None,
+            current_preview_scene: None,
+            refreshed_at_ms: timestamp_ms(),
+            last_error: None,
+        }
+    }
+}
+
 impl Default for ObsConnectionState {
     fn default() -> Self {
         Self {
@@ -60,6 +91,98 @@ impl Default for ObsController {
 impl ObsController {
     pub async fn snapshot(&self) -> ObsConnectionState {
         self.state.lock().await.clone()
+    }
+
+
+    pub async fn runtime_state(&self) -> ObsRuntimeState {
+        let client_guard = self.client.lock().await;
+        let Some(client) = client_guard.as_ref() else {
+            return ObsRuntimeState {
+                last_error: Some("OBS Studio is not connected.".to_string()),
+                ..ObsRuntimeState::default()
+            };
+        };
+
+        let studio_mode = match client.ui().studio_mode_enabled().await {
+            Ok(enabled) => enabled,
+            Err(error) => {
+                return self
+                    .runtime_failure(format!("Could not read OBS Studio Mode: {error}"))
+                    .await;
+            }
+        };
+
+        let stream_status = match client.streaming().status().await {
+            Ok(status) => status,
+            Err(error) => {
+                return self
+                    .runtime_failure(format!("Could not read OBS streaming state: {error}"))
+                    .await;
+            }
+        };
+
+        let record_status = match client.recording().status().await {
+            Ok(status) => status,
+            Err(error) => {
+                return self
+                    .runtime_failure(format!("Could not read OBS recording state: {error}"))
+                    .await;
+            }
+        };
+
+        let program_scene = match client.scenes().current_program_scene().await {
+            Ok(scene) => Some(scene.id.name),
+            Err(error) => {
+                return self
+                    .runtime_failure(format!("Could not read the current OBS program scene: {error}"))
+                    .await;
+            }
+        };
+
+        let preview_scene = if studio_mode {
+            client
+                .scenes()
+                .current_preview_scene()
+                .await
+                .ok()
+                .map(|scene| scene.id.name)
+        } else {
+            None
+        };
+
+        let stream_json = serde_json::to_value(stream_status).unwrap_or_default();
+        let record_json = serde_json::to_value(record_status).unwrap_or_default();
+
+        {
+            let mut connection = self.state.lock().await;
+            connection.connected = true;
+            connection.last_error = None;
+        }
+
+        ObsRuntimeState {
+            available: true,
+            streaming: json_bool(&stream_json, "outputActive"),
+            recording: json_bool(&record_json, "outputActive"),
+            recording_paused: json_bool(&record_json, "outputPaused"),
+            studio_mode,
+            current_program_scene: program_scene,
+            current_preview_scene: preview_scene,
+            refreshed_at_ms: timestamp_ms(),
+            last_error: None,
+        }
+    }
+
+    async fn runtime_failure(&self, message: String) -> ObsRuntimeState {
+        {
+            let mut connection = self.state.lock().await;
+            connection.connected = false;
+            connection.last_error = Some(message.clone());
+        }
+
+        ObsRuntimeState {
+            last_error: Some(message),
+            ..ObsRuntimeState::default()
+        }
     }
 
     pub async fn connect(
@@ -166,6 +289,10 @@ impl ObsController {
     }
 }
 
+fn json_bool(value: &serde_json::Value, key: &str) -> bool {
+    value.get(key).and_then(serde_json::Value::as_bool).unwrap_or(false)
+}
+
 fn validate_target(host: &str, port: u16) -> Result<(), String> {
     if host.is_empty() {
         return Err("OBS WebSocket host cannot be empty.".to_string());
@@ -210,5 +337,30 @@ mod tests {
         assert!(validate_target("", 4455).is_err());
         assert!(validate_target("ws://127.0.0.1", 4455).is_err());
         assert!(validate_target("127.0.0.1", 0).is_err());
+    }
+
+
+    #[test]
+    fn runtime_state_defaults_to_unavailable() {
+        let state = ObsRuntimeState::default();
+        assert!(!state.available);
+        assert!(!state.streaming);
+        assert!(!state.recording);
+        assert!(!state.recording_paused);
+        assert!(!state.studio_mode);
+        assert!(state.current_program_scene.is_none());
+        assert!(state.current_preview_scene.is_none());
+    }
+
+    #[test]
+    fn reads_obs_boolean_response_fields_safely() {
+        let value = serde_json::json!({
+            "outputActive": true,
+            "outputPaused": false
+        });
+
+        assert!(json_bool(&value, "outputActive"));
+        assert!(!json_bool(&value, "outputPaused"));
+        assert!(!json_bool(&value, "missing"));
     }
 }

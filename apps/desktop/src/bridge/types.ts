@@ -107,3 +107,16 @@ export type ObsConnectionState = {
   connectedAtMs?: number;
   lastError?: string;
 };
+
+
+export type ObsRuntimeState = {
+  available: boolean;
+  streaming: boolean;
+  recording: boolean;
+  recordingPaused: boolean;
+  studioMode: boolean;
+  currentProgramScene?: string;
+  currentPreviewScene?: string;
+  refreshedAtMs: number;
+  lastError?: string;
+};
