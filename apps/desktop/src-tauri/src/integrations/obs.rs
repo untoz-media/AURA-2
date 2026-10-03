@@ -131,7 +131,7 @@ impl ObsController {
         };
 
         let program_scene = match client.scenes().current_program_scene().await {
-            Ok(scene) => Some(scene),
+            Ok(scene) => Some(scene.id.name),
             Err(error) => {
                 return self
                     .runtime_failure(format!("Could not read the current OBS program scene: {error}"))
@@ -140,7 +140,12 @@ impl ObsController {
         };
 
         let preview_scene = if studio_mode {
-            client.scenes().current_preview_scene().await.ok()
+            client
+                .scenes()
+                .current_preview_scene()
+                .await
+                .ok()
+                .map(|scene| scene.id.name)
         } else {
             None
         };
