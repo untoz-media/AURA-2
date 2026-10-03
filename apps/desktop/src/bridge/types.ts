@@ -244,3 +244,28 @@ export type ObsAudioControlResult = {
   volumeDb: number;
   changedAtMs: number;
 };
+
+
+export type ObsProductionHealth = {
+  status: "good" | "warning" | "critical";
+  summary: string;
+  issues: string[];
+  cpuUsagePercent: number;
+  memoryUsageMb: number;
+  availableDiskSpaceMb: number;
+  activeFps: number;
+  averageFrameRenderTimeMs: number;
+  renderSkippedFrames: number;
+  renderTotalFrames: number;
+  renderSkippedPercent: number;
+  outputSkippedFrames: number;
+  outputTotalFrames: number;
+  outputSkippedPercent: number;
+  streaming: boolean;
+  streamReconnecting: boolean;
+  streamCongestionPercent?: number;
+  streamBitrateKbps?: number;
+  streamOutputSkippedFrames?: number;
+  streamOutputTotalFrames?: number;
+  checkedAtMs: number;
+};
