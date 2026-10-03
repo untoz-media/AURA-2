@@ -165,7 +165,7 @@ pub fn create_memory(
 }
 
 pub fn delete_memory(app: &AppHandle, memory_id: &str) -> Result<MemoryRecord, String> {
-    let mut records = load_memories(app);
+    let mut records = read_records(app)?;
     let index = records
         .iter()
         .position(|record| record.id == memory_id)
@@ -203,11 +203,11 @@ pub fn delete_memory_by_content(
     delete_memory(app, &matches[0].id)
 }
 
-pub fn summarize_memories(app: &AppHandle, limit: usize) -> String {
-    let records = load_memories(app);
+pub fn summarize_memories(app: &AppHandle, limit: usize) -> Result<String, String> {
+    let records = read_records(app)?;
 
     if records.is_empty() {
-        return "I do not have any explicit local memories yet.".to_string();
+        return Ok("I do not have any explicit local memories yet.".to_string());
     }
 
     let visible = records.iter().take(limit).collect::<Vec<_>>();
