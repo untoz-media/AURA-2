@@ -23,6 +23,10 @@ import type {
   ObsSourceItemList,
   ObsSourceVisibilityRequest,
   ObsSourceVisibilityResult,
+  ObsAudioInputList,
+  ObsAudioMuteRequest,
+  ObsAudioVolumeRequest,
+  ObsAudioControlResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -215,4 +219,21 @@ export async function setObsSourceVisibility(
   request: ObsSourceVisibilityRequest,
 ): Promise<ObsSourceVisibilityResult> {
   return invoke<ObsSourceVisibilityResult>("set_obs_source_visibility", { request });
+}
+
+
+export async function getObsAudioInputs(): Promise<ObsAudioInputList> {
+  return invoke<ObsAudioInputList>("get_obs_audio_inputs");
+}
+
+export async function setObsAudioMuted(
+  request: ObsAudioMuteRequest,
+): Promise<ObsAudioControlResult> {
+  return invoke<ObsAudioControlResult>("set_obs_audio_muted", { request });
+}
+
+export async function setObsAudioVolume(
+  request: ObsAudioVolumeRequest,
+): Promise<ObsAudioControlResult> {
+  return invoke<ObsAudioControlResult>("set_obs_audio_volume", { request });
 }
