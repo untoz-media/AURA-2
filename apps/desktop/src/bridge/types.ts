@@ -70,7 +70,6 @@ export type LifecycleEventKind =
 export type LifecycleEvent = {
   kind: LifecycleEventKind;
   message: string;
-  text?: string | null;
   timestampMs: number;
 };
 
@@ -568,6 +567,7 @@ export type VoiceCaptureEvent = {
   sampleRate?: number | null;
   channels?: number | null;
   message: string;
+  text?: string | null;
   timestampMs: number;
 };
 
