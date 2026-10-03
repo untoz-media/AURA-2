@@ -18,6 +18,7 @@ import type {
   ObsSceneSwitchRequest,
   ObsSceneSwitchResult,
   ObsRecordingActionResult,
+  ObsStreamingActionResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -185,4 +186,13 @@ export async function pauseObsRecording(): Promise<ObsRecordingActionResult> {
 
 export async function resumeObsRecording(): Promise<ObsRecordingActionResult> {
   return invoke<ObsRecordingActionResult>("resume_obs_recording");
+}
+
+
+export async function startObsStreaming(): Promise<ObsStreamingActionResult> {
+  return invoke<ObsStreamingActionResult>("start_obs_streaming");
+}
+
+export async function stopObsStreaming(): Promise<ObsStreamingActionResult> {
+  return invoke<ObsStreamingActionResult>("stop_obs_streaming");
 }
