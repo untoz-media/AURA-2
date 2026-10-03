@@ -8,6 +8,7 @@ import {
   getObsScenes,
   getObsSourceItems,
   getObsAudioInputs,
+  getObsProductionHealth,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -53,6 +54,7 @@ import type {
   ObsSourceVisibilityResult,
   ObsAudioInputList,
   ObsAudioControlResult,
+  ObsProductionHealth,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -103,6 +105,7 @@ export function useAuraBridge() {
   const [obsScenes, setObsScenes] = useState<ObsSceneList>(DEFAULT_OBS_SCENES);
   const [obsSources, setObsSources] = useState<ObsSourceItemList>(DEFAULT_OBS_SOURCES);
   const [obsAudio, setObsAudio] = useState<ObsAudioInputList>(DEFAULT_OBS_AUDIO);
+  const [obsHealth, setObsHealth] = useState<ObsProductionHealth | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -288,6 +291,18 @@ export function useAuraBridge() {
     const audio = await getObsAudioInputs();
     setObsAudio(audio);
     return audio;
+  }, [obsConnection.connected]);
+
+
+  const refreshObsHealth = useCallback(async () => {
+    if (!obsConnection.connected) {
+      setObsHealth(null);
+      return null;
+    }
+
+    const health = await getObsProductionHealth();
+    setObsHealth(health);
+    return health;
   }, [obsConnection.connected]);
 
 
@@ -661,6 +676,36 @@ export function useAuraBridge() {
     };
   }, [obsConnection.connected]);
 
+  useEffect(() => {
+    if (!obsConnection.connected) {
+      setObsHealth(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateHealth = async () => {
+      try {
+        const health = await getObsProductionHealth();
+        if (!cancelled) {
+          setObsHealth(health);
+        }
+      } catch {
+        if (!cancelled) {
+          setObsHealth(null);
+        }
+      }
+    };
+
+    void updateHealth();
+    const interval = window.setInterval(() => void updateHealth(), 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [obsConnection.connected]);
+
   const submitCommand = useCallback(async (
     text: string,
     source: "desktop" | "overlay" | "voice" = "desktop",
@@ -761,6 +806,7 @@ export function useAuraBridge() {
     setObsScenes(DEFAULT_OBS_SCENES);
     setObsSources(DEFAULT_OBS_SOURCES);
     setObsAudio(DEFAULT_OBS_AUDIO);
+    setObsHealth(null);
     setBridgeError(null);
     setActivity("OBS Studio disconnected from AURA.");
     return state;
@@ -816,6 +862,7 @@ export function useAuraBridge() {
     obsScenes,
     obsSources,
     obsAudio,
+    obsHealth,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -830,6 +877,7 @@ export function useAuraBridge() {
     refreshObsScenes,
     refreshObsSources,
     refreshObsAudio,
+    refreshObsHealth,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
