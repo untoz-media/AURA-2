@@ -1,3 +1,4 @@
+mod audio_input;
 mod computer;
 mod core;
 mod integrations;
@@ -9,6 +10,7 @@ mod permissions;
 mod project_memory;
 mod routines;
 
+use audio_input::{AudioInputManager, AudioInputSnapshot};
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
@@ -3406,6 +3408,35 @@ fn remove_model(
 }
 
 #[tauri::command]
+fn get_audio_input_state(
+    audio: State<'_, AudioInputManager>,
+) -> Result<AudioInputSnapshot, String> {
+    audio.snapshot()
+}
+
+#[tauri::command]
+fn select_audio_input_device(
+    audio: State<'_, AudioInputManager>,
+    device_name: Option<String>,
+) -> Result<AudioInputSnapshot, String> {
+    audio.select_device(device_name)
+}
+
+#[tauri::command]
+fn start_audio_input_test(
+    audio: State<'_, AudioInputManager>,
+) -> Result<AudioInputSnapshot, String> {
+    audio.start_test()
+}
+
+#[tauri::command]
+fn stop_audio_input_test(
+    audio: State<'_, AudioInputManager>,
+) -> AudioInputSnapshot {
+    audio.stop_test()
+}
+
+#[tauri::command]
 fn get_current_app_context(
     awareness: State<'_, CurrentAppAwareness>,
 ) -> Result<CurrentAppInfo, String> {
@@ -3682,6 +3713,7 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
         .manage(ManagedRuntimeSetup::default())
         .manage(ModelManager::default())
@@ -3855,6 +3887,10 @@ pub fn run() {
             cancel_model_download,
             set_active_model,
             remove_model,
+            get_audio_input_state,
+            select_audio_input_device,
+            start_audio_input_test,
+            stop_audio_input_test,
             get_current_app_context,
             get_recent_files_context,
             get_project_memory,

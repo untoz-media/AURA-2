@@ -47,6 +47,7 @@ import type {
   ProjectMemory,
   ProjectMemorySnapshot,
   SaveProjectRequest,
+  AudioInputSnapshot,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -423,4 +424,25 @@ export async function setActiveProjectMemory(
   return invoke<ProjectMemorySnapshot>("set_active_project_memory", {
     projectId: projectId ?? null,
   });
+}
+
+
+export async function getAudioInputState(): Promise<AudioInputSnapshot> {
+  return invoke<AudioInputSnapshot>("get_audio_input_state");
+}
+
+export async function selectAudioInputDevice(
+  deviceName?: string,
+): Promise<AudioInputSnapshot> {
+  return invoke<AudioInputSnapshot>("select_audio_input_device", {
+    deviceName: deviceName ?? null,
+  });
+}
+
+export async function startAudioInputTest(): Promise<AudioInputSnapshot> {
+  return invoke<AudioInputSnapshot>("start_audio_input_test");
+}
+
+export async function stopAudioInputTest(): Promise<AudioInputSnapshot> {
+  return invoke<AudioInputSnapshot>("stop_audio_input_test");
 }

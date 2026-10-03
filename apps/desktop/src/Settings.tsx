@@ -23,6 +23,7 @@ import type {
   ModelCatalog,
   ModelRuntimeStatus,
   ManagedRuntimeStatus,
+  AudioInputSnapshot,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -102,6 +103,11 @@ type Props = {
   modelCatalog: ModelCatalog;
   modelRuntimeStatus: ModelRuntimeStatus;
   managedRuntimeStatus: ManagedRuntimeStatus;
+  audioInput: AudioInputSnapshot;
+  onAudioRefresh: () => Promise<AudioInputSnapshot>;
+  onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
+  onAudioTestStart: () => Promise<AudioInputSnapshot>;
+  onAudioTestStop: () => Promise<AudioInputSnapshot>;
 };
 
 const sections: Array<{
@@ -255,6 +261,11 @@ export default function Settings({
   modelCatalog,
   modelRuntimeStatus,
   managedRuntimeStatus,
+  audioInput,
+  onAudioRefresh,
+  onAudioSelect,
+  onAudioTestStart,
+  onAudioTestStop,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -799,13 +810,92 @@ export default function Settings({
             <header className="settings-header">
               <span className="eyebrow">AURA SETTINGS</span>
               <h2>Voice</h2>
-              <p>Speech input, output and wake-word controls.</p>
+              <p>Local microphone input foundation for AURA Voice.</p>
             </header>
+
             <Surface className="settings-card">
-              <SectionLabel>Voice</SectionLabel>
-              <SettingRow title="Push to talk" description="Talk to AURA without opening the main window." trailing={<Badge tone="planned">M006</Badge>} />
-              <SettingRow title="Wake word" description="Optional hands-free activation." trailing={<Badge tone="planned">M006</Badge>} />
-              <SettingRow title="Voice output" description="Natural spoken responses for actions and status." trailing={<Badge tone="planned">M006</Badge>} />
+              <SectionLabel>Microphone</SectionLabel>
+
+              <div className="voice-input-panel">
+                <label className="voice-device-field">
+                  <span>Input device</span>
+                  <select
+                    value={audioInput.selectedDevice ?? ""}
+                    onChange={(event) =>
+                      void onAudioSelect(event.target.value || undefined)
+                    }
+                    disabled={audioInput.testing}
+                  >
+                    {audioInput.devices.length === 0 && (
+                      <option value="">No microphone detected</option>
+                    )}
+                    {audioInput.devices.map((device) => (
+                      <option value={device.name} key={device.name}>
+                        {device.name}{device.isDefault ? " · Default" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="voice-test-actions">
+                  <button
+                    type="button"
+                    className="feature-secondary-button"
+                    onClick={() => void onAudioRefresh()}
+                    disabled={audioInput.testing}
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    type="button"
+                    className={audioInput.testing ? "feature-secondary-button" : "feature-primary-button"}
+                    onClick={() =>
+                      void (audioInput.testing ? onAudioTestStop() : onAudioTestStart())
+                    }
+                    disabled={!audioInput.selectedDevice && audioInput.devices.length === 0}
+                  >
+                    {audioInput.testing ? "Stop test" : "Test microphone"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="voice-meter-card">
+                <div className="voice-meter-heading">
+                  <div>
+                    <strong>{audioInput.testing ? "Listening locally" : "Input level"}</strong>
+                    <span>
+                      {audioInput.testing
+                        ? "AURA is reading microphone amplitude only. Audio is not stored."
+                        : "Start a microphone test to verify the selected input."}
+                    </span>
+                  </div>
+                  <Badge tone={audioInput.testing ? "ready" : "neutral"}>
+                    {audioInput.testing ? "Live" : "Idle"}
+                  </Badge>
+                </div>
+
+                <div className="voice-meter-track" aria-label="Microphone input level">
+                  <span style={{ width: `${Math.round(Math.min(1, audioInput.level) * 100)}%` }} />
+                </div>
+
+                <div className="voice-stream-meta">
+                  <span>{audioInput.sampleRate ? `${audioInput.sampleRate} Hz` : "Sample rate —"}</span>
+                  <span>{audioInput.channels ? `${audioInput.channels} ch` : "Channels —"}</span>
+                  <span>{audioInput.sampleFormat ?? "Format —"}</span>
+                </div>
+              </div>
+
+              {audioInput.lastError && (
+                <p className="voice-input-error">{audioInput.lastError}</p>
+              )}
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Coming next</SectionLabel>
+              <SettingRow title="Push to talk" description="Hold a shortcut to capture a voice command and send it to AURA Core." trailing={<Badge tone="planned">M006.2</Badge>} />
+              <SettingRow title="Local speech-to-text" description="Convert microphone audio to text with an on-device open-source model." trailing={<Badge tone="planned">M006.3</Badge>} />
+              <SettingRow title="Voice output" description="Natural local spoken responses for actions and status." trailing={<Badge tone="planned">M006.5</Badge>} />
+              <SettingRow title="Wake word" description="Optional hands-free activation after the core voice path is stable." trailing={<Badge tone="planned">M006.9</Badge>} />
             </Surface>
           </>
         )}

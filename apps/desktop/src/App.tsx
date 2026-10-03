@@ -59,6 +59,7 @@ function App() {
     routines,
     routineLastRun,
     projectMemory,
+    audioInput,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -89,6 +90,10 @@ function App() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    refreshAudioInput,
+    selectAudioInput,
+    startAudioTest,
+    stopAudioTest,
     refreshModels,
     refreshManagedRuntime,
     runManagedRuntimeAction,
@@ -584,6 +589,11 @@ function App() {
               modelCatalog={modelCatalog}
               modelRuntimeStatus={modelRuntimeStatus}
               managedRuntimeStatus={managedRuntimeStatus}
+              audioInput={audioInput}
+              onAudioRefresh={refreshAudioInput}
+              onAudioSelect={selectAudioInput}
+              onAudioTestStart={startAudioTest}
+              onAudioTestStop={stopAudioTest}
             />
           )}
         </div>

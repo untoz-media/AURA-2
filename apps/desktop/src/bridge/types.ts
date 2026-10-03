@@ -536,3 +536,20 @@ export type SaveProjectRequest = {
   notes?: string[];
   routineIds?: string[];
 };
+
+
+export type AudioInputDevice = {
+  name: string;
+  isDefault: boolean;
+};
+
+export type AudioInputSnapshot = {
+  devices: AudioInputDevice[];
+  selectedDevice?: string | null;
+  testing: boolean;
+  level: number;
+  sampleRate?: number | null;
+  channels?: number | null;
+  sampleFormat?: string | null;
+  lastError?: string | null;
+};
