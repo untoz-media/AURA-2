@@ -89,3 +89,21 @@ export type PermissionPolicy = {
   destructive: PermissionDecision;
   sensitive: PermissionDecision;
 };
+
+
+export type ObsConnectRequest = {
+  host?: string;
+  port?: number;
+  password?: string;
+};
+
+export type ObsConnectionState = {
+  connected: boolean;
+  host: string;
+  port: number;
+  obsStudioVersion?: string;
+  obsWebsocketVersion?: string;
+  rpcVersion?: number;
+  connectedAtMs?: number;
+  lastError?: string;
+};
