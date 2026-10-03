@@ -12,6 +12,8 @@ import type {
   ObsSceneSwitchResult,
   ObsRecordingActionResult,
   ObsStreamingActionResult,
+  ObsSourceItemList,
+  ObsSourceVisibilityResult,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -43,10 +45,12 @@ type Props = {
   obsConnection: ObsConnectionState;
   obsRuntime: ObsRuntimeState;
   obsScenes: ObsSceneList;
+  obsSources: ObsSourceItemList;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
   onObsScenesRefresh: () => Promise<ObsSceneList>;
+  onObsSourcesRefresh: () => Promise<ObsSourceItemList>;
   onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsRecordingAction: (
@@ -55,6 +59,11 @@ type Props = {
   onObsStreamingAction: (
     action: ObsStreamingActionResult["action"],
   ) => Promise<ObsStreamingActionResult>;
+  onObsSourceVisibilityChange: (
+    sceneName: string,
+    itemId: number,
+    enabled: boolean,
+  ) => Promise<ObsSourceVisibilityResult>;
 };
 
 const sections: Array<{
@@ -180,20 +189,24 @@ export default function Settings({
   obsConnection,
   obsRuntime,
   obsScenes,
+  obsSources,
   onObsConnect,
   onObsDisconnect,
   onObsRefresh,
   onObsScenesRefresh,
+  onObsSourcesRefresh,
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
   onObsRecordingAction,
   onObsStreamingAction,
+  onObsSourceVisibilityChange,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
   const [obsPassword, setObsPassword] = useState("");
   const [obsConnecting, setObsConnecting] = useState(false);
   const [obsSceneChanging, setObsSceneChanging] = useState<string | null>(null);
+  const [obsSourceChanging, setObsSourceChanging] = useState<number | null>(null);
   const [obsRecordingAction, setObsRecordingAction] =
     useState<ObsRecordingActionResult["action"] | null>(null);
   const [obsStreamingAction, setObsStreamingAction] =
@@ -278,6 +291,22 @@ export default function Settings({
       // Bridge activity/error state already carries the failure details.
     } finally {
       setObsSceneChanging(null);
+    }
+  }
+
+
+  async function handleObsSourceVisibility(
+    sceneName: string,
+    itemId: number,
+    enabled: boolean,
+  ) {
+    setObsSourceChanging(itemId);
+    try {
+      await onObsSourceVisibilityChange(sceneName, itemId, enabled);
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsSourceChanging(null);
     }
   }
 
@@ -956,6 +985,90 @@ export default function Settings({
 
                   {obsScenes.lastError && (
                     <p className="obs-connection-error">{obsScenes.lastError}</p>
+                  )}
+                </div>
+              )}
+
+              {obsConnection.connected && (
+                <div className="obs-sources-panel">
+                  <div className="obs-runtime-heading">
+                    <div>
+                      <strong>Program Sources</strong>
+                      <span>
+                        {obsSources.sceneName
+                          ? `${obsSources.items.length} item${obsSources.items.length === 1 ? "" : "s"} in ${obsSources.sceneName} · refreshed every 5 seconds.`
+                          : "Waiting for the current Program scene."}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={!obsRuntime.currentProgramScene}
+                      onClick={() => void onObsSourcesRefresh()}
+                    >
+                      Refresh sources
+                    </button>
+                  </div>
+
+                  {obsSources.items.length > 0 ? (
+                    <div className="obs-source-list">
+                      {obsSources.items.map((source) => (
+                        <div
+                          className={`obs-source-row ${source.enabled ? "visible" : "hidden"}`}
+                          key={`${source.sceneName}:${source.itemId}`}
+                        >
+                          <div className="obs-source-index">
+                            {String(source.index + 1).padStart(2, "0")}
+                          </div>
+
+                          <div className="obs-source-copy">
+                            <strong>{source.sourceName}</strong>
+                            <span>
+                              {source.isGroup
+                                ? "Group"
+                                : source.inputKind ?? "Scene source"}
+                              {" · "}item #{source.itemId}
+                            </span>
+                          </div>
+
+                          <div className="obs-source-actions">
+                            <Badge tone={source.enabled ? "ready" : "planned"}>
+                              {source.enabled ? "Visible" : "Hidden"}
+                            </Badge>
+                            <button
+                              type="button"
+                              className="settings-action-button obs-source-action"
+                              disabled={obsSourceChanging !== null}
+                              onClick={() =>
+                                void handleObsSourceVisibility(
+                                  source.sceneName,
+                                  source.itemId,
+                                  !source.enabled,
+                                )
+                              }
+                            >
+                              {obsSourceChanging === source.itemId
+                                ? "Updating…"
+                                : source.enabled
+                                  ? "Hide"
+                                  : "Show"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="obs-scenes-empty">
+                      {obsSources.lastError
+                        ? "Could not load the Program scene sources."
+                        : obsRuntime.currentProgramScene
+                          ? "No source items were found in the Program scene."
+                          : "No Program scene is available yet."}
+                    </div>
+                  )}
+
+                  {obsSources.lastError && (
+                    <p className="obs-connection-error">{obsSources.lastError}</p>
                   )}
                 </div>
               )}

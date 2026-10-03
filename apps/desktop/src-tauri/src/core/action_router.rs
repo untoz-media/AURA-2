@@ -37,6 +37,7 @@ pub enum ActionIntent {
     ObsRecording(ObsRecordingAction),
     ObsStreaming(ObsStreamingAction),
     ObsStreamDuration,
+    ObsSourceVisibility { source_name: String, enabled: bool },
 }
 
 #[derive(Debug, Clone)]
@@ -465,6 +466,57 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn obs_source_visibility_request(input: &str) -> Option<ActionIntent> {
+    const SHOW_PREFIXES: &[&str] = &[
+        "show source ",
+        "show ",
+        "enable source ",
+        "enable ",
+        "turn on source ",
+        "turn on ",
+        "mostra a source ",
+        "mostra ",
+        "mostrar ",
+        "ativa a source ",
+        "ativa ",
+        "ativar ",
+    ];
+
+    const HIDE_PREFIXES: &[&str] = &[
+        "hide source ",
+        "hide ",
+        "disable source ",
+        "disable ",
+        "turn off source ",
+        "turn off ",
+        "esconde a source ",
+        "esconde ",
+        "esconder ",
+        "oculta a source ",
+        "oculta ",
+        "ocultar ",
+        "desativa a source ",
+        "desativa ",
+        "desativar ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, SHOW_PREFIXES) {
+        let source = unwrap_text_quotes(value).trim();
+        return (!source.is_empty()).then(|| ActionIntent::ObsSourceVisibility {
+            source_name: source.to_string(),
+            enabled: true,
+        });
+    }
+
+    value_after_prefix(input, HIDE_PREFIXES).and_then(|value| {
+        let source = unwrap_text_quotes(value).trim();
+        (!source.is_empty()).then(|| ActionIntent::ObsSourceVisibility {
+            source_name: source.to_string(),
+            enabled: false,
+        })
+    })
+}
+
 fn is_obs_stream_duration_request(input: &str) -> bool {
     let normalized = normalize_command(input);
 
@@ -792,6 +844,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = obs_source_visibility_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     let Some((operation, target_text)) = app_request(&normalized) else {
         return RouteResult::NoMatch;
     };
@@ -995,6 +1056,52 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn source_visibility_does_not_override_window_discovery() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Show windows", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ListWindows,
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_obs_source_visibility_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Hide Scoreboard", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsSourceVisibility { source_name, enabled: false },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if source_name == "Scoreboard"
+        ));
+
+        assert!(matches!(
+            route_command("Show Lower Third", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsSourceVisibility { source_name, enabled: true },
+                permission: PermissionClass::Act,
+                ..
+            }) if source_name == "Lower Third"
+        ));
+
+        assert!(matches!(
+            route_command("Esconde Marcador", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsSourceVisibility { source_name, enabled: false },
+                permission: PermissionClass::Act,
+                ..
+            }) if source_name == "Marcador"
+        ));
+    }
 
     #[test]
     fn routes_obs_stream_duration_as_read() {

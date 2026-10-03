@@ -175,3 +175,35 @@ export type ObsStreamDuration = {
   timecode: string;
   refreshedAtMs: number;
 };
+
+
+export type ObsSourceItemSummary = {
+  sceneName: string;
+  itemId: number;
+  index: number;
+  sourceName: string;
+  enabled: boolean;
+  inputKind?: string;
+  isGroup: boolean;
+};
+
+export type ObsSourceItemList = {
+  sceneName: string;
+  items: ObsSourceItemSummary[];
+  refreshedAtMs: number;
+  lastError?: string;
+};
+
+export type ObsSourceVisibilityRequest = {
+  sceneName: string;
+  itemId: number;
+  enabled: boolean;
+};
+
+export type ObsSourceVisibilityResult = {
+  sceneName: string;
+  itemId: number;
+  sourceName: string;
+  enabled: boolean;
+  changedAtMs: number;
+};

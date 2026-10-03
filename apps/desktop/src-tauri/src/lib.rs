@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsStreamDuration, ObsStreamingActionResult};
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1408,7 +1408,76 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::ObsStreamDuration => {
+                        ActionIntent::ObsSourceVisibility {
+                            source_name,
+                            enabled,
+                        } => {
+                            let verb = if enabled { "Showing" } else { "Hiding" };
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("{verb} OBS source {source_name}…"),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                obs.set_source_visibility_by_name(&source_name, enabled).await
+                            });
+
+                            match result {
+                                Ok(changed) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "{} {} in OBS Program scene {}.",
+                                            if changed.enabled { "Showing" } else { "Hidden" },
+                                            changed.source_name,
+                                            changed.scene_name
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not change OBS source visibility: {}",
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.source_visibility_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    ActionIntent::ObsStreamDuration => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -1851,6 +1920,14 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ObsSourceVisibility {
+                        source_name,
+                        enabled,
+                    } => format!(
+                        "{} OBS source {} requires confirmation under the current permission policy.",
+                        if *enabled { "Showing" } else { "Hiding" },
+                        source_name
+                    ),
                     ActionIntent::ObsStreamDuration => {
                         "Reading OBS stream duration requires confirmation under the current permission policy."
                             .to_string()
@@ -2060,7 +2137,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS Program/Preview scene switching."
+                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS scenes, sources, recording and streaming controls."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
@@ -2109,6 +2186,21 @@ async fn get_obs_stream_duration(
     obs: State<'_, ObsController>,
 ) -> Result<ObsStreamDuration, String> {
     obs.stream_duration().await
+}
+
+#[tauri::command]
+async fn get_obs_source_items(
+    obs: State<'_, ObsController>,
+) -> Result<ObsSourceItemList, String> {
+    obs.current_program_source_items().await
+}
+
+#[tauri::command]
+async fn set_obs_source_visibility(
+    request: ObsSourceVisibilityRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsSourceVisibilityResult, String> {
+    obs.set_source_visibility(request).await
 }
 
 #[tauri::command]
@@ -2333,6 +2425,8 @@ pub fn run() {
             get_obs_runtime_state,
             get_obs_scenes,
             get_obs_stream_duration,
+            get_obs_source_items,
+            set_obs_source_visibility,
             set_obs_program_scene,
             set_obs_preview_scene,
             start_obs_recording,
