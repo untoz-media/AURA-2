@@ -13,6 +13,7 @@ import {
   getMemories,
   getCurrentAppContext,
   getModelCatalog,
+  getModelRuntimeStatus,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -46,6 +47,7 @@ import {
   cancelModelDownload,
   setActiveModel,
   removeModel,
+  clearModelConversation,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -79,6 +81,8 @@ import type {
   CurrentAppInfo,
   ModelCatalog,
   ModelDownloadProgress,
+  ModelRuntimeStatus,
+  ChatMessage,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -122,6 +126,11 @@ const DEFAULT_MODEL_CATALOG: ModelCatalog = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_MODEL_RUNTIME: ModelRuntimeStatus = {
+  state: "stopped",
+  refreshedAtMs: 0,
+};
+
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
@@ -148,6 +157,9 @@ export function useAuraBridge() {
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
   const [modelCatalog, setModelCatalog] =
     useState<ModelCatalog>(DEFAULT_MODEL_CATALOG);
+  const [modelRuntimeStatus, setModelRuntimeStatus] =
+    useState<ModelRuntimeStatus>(DEFAULT_MODEL_RUNTIME);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -212,6 +224,14 @@ export function useAuraBridge() {
         }
       });
 
+
+    getModelRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setModelRuntimeStatus(runtime);
+      })
+      .catch(() => {
+        // Runtime remains stopped until a selected model is used.
+      });
 
     getModelCatalog()
       .then((catalog) => {
@@ -290,6 +310,27 @@ export function useAuraBridge() {
         setStatus(event.status);
         setActivity(event.message);
         setBridgeError(null);
+
+        if (
+          ["command.completed", "command.failed", "command.cancelled"].includes(
+            event.kind,
+          )
+        ) {
+          const messageId = `${event.id}:assistant`;
+          setChatMessages((current) =>
+            current.some((message) => message.id === messageId)
+              ? current
+              : [
+                  ...current,
+                  {
+                    id: messageId,
+                    role: "assistant",
+                    content: event.message,
+                    timestampMs: event.timestampMs,
+                  },
+                ],
+          );
+        }
 
         if (event.kind === "command.completed") {
           void getMemories()
@@ -481,6 +522,31 @@ export function useAuraBridge() {
   }, [obsConnection.connected]);
 
 
+  const refreshModelRuntime = useCallback(async () => {
+    const runtime = await getModelRuntimeStatus();
+    setModelRuntimeStatus(runtime);
+    return runtime;
+  }, []);
+
+  const clearConversationControl = useCallback(async () => {
+    setChatMessages([]);
+
+    try {
+      const runtime = await clearModelConversation();
+      setModelRuntimeStatus(runtime);
+      setActivity("Started a new local conversation.");
+      return runtime;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "models.conversation_reset_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   const refreshModels = useCallback(async () => {
     const catalog = await getModelCatalog();
     setModelCatalog(catalog);
@@ -515,6 +581,11 @@ export function useAuraBridge() {
       );
 
       setModelCatalog(catalog);
+
+      if (operation === "activate" || operation === "remove") {
+        const runtime = await getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME);
+        setModelRuntimeStatus(runtime);
+      }
 
       const model = catalog.models.find((item) => item.id === modelId);
       const name = model?.name ?? modelId;
@@ -922,6 +993,34 @@ export function useAuraBridge() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const updateRuntime = async () => {
+      try {
+        const runtime = await getModelRuntimeStatus();
+        if (!cancelled) setModelRuntimeStatus(runtime);
+      } catch {
+        // Runtime status is supplementary to Core command events.
+      }
+    };
+
+    void updateRuntime();
+
+    if (status !== "Working") {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const interval = window.setInterval(() => void updateRuntime(), 600);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [status]);
+
+  useEffect(() => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
       return;
@@ -1109,6 +1208,17 @@ export function useAuraBridge() {
     const trimmed = text.trim();
     if (!trimmed) return null;
 
+    const clientMessageId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setChatMessages((current) => [
+      ...current,
+      {
+        id: clientMessageId,
+        role: "user",
+        content: trimmed,
+        timestampMs: Date.now(),
+      },
+    ]);
+
     try {
       setBridgeError(null);
       const ack = await submitAuraCommand({
@@ -1125,6 +1235,15 @@ export function useAuraBridge() {
       setBridgeError(coreError);
       setStatus("Idle");
       setActivity(coreError.message);
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: `${clientMessageId}:error`,
+          role: "assistant",
+          content: coreError.message,
+          timestampMs: Date.now(),
+        },
+      ]);
       return null;
     }
   }, []);
@@ -1264,6 +1383,8 @@ export function useAuraBridge() {
     memory,
     currentApp,
     modelCatalog,
+    modelRuntimeStatus,
+    chatMessages,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -1283,6 +1404,8 @@ export function useAuraBridge() {
     refreshMemories,
     refreshCurrentApp,
     refreshModels,
+    refreshModelRuntime,
+    clearConversationControl,
     runModelOperation,
     createMemoryControl,
     deleteMemoryControl,

@@ -38,6 +38,7 @@ import type {
   CurrentAppInfo,
   ModelCatalog,
   ModelDownloadProgress,
+  ModelRuntimeStatus,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -332,4 +333,13 @@ export async function listenToModelDownloads(
     AURA_EVENTS.modelDownload,
     ({ payload }) => handler(payload),
   );
+}
+
+
+export async function getModelRuntimeStatus(): Promise<ModelRuntimeStatus> {
+  return invoke<ModelRuntimeStatus>("get_model_runtime_status");
+}
+
+export async function clearModelConversation(): Promise<ModelRuntimeStatus> {
+  return invoke<ModelRuntimeStatus>("clear_model_conversation");
 }

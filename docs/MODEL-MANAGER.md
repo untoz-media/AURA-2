@@ -165,13 +165,13 @@ When the first model finishes installing and no model is selected, AURA selects 
 
 If an active model is removed manually or becomes invalid, the catalog repairs the stale active selection.
 
-### Current scope
+### Runtime integration
 
 Active-model selection is implemented and persistent.
 
-Free-form conversation inference has **not yet** been wired into the AURA-2 chat runtime. The next Model Runtime step will use the selected installation when AI reasoning is required.
+The selected verified installation now feeds the AURA local Model Runtime for free-form chat when no deterministic action matches.
 
-Deterministic computer and OBS actions remain independent from the LLM runtime.
+Deterministic computer and OBS actions remain independent from the LLM runtime and continue to route directly.
 
 ## Removal
 

@@ -380,6 +380,27 @@ impl ModelManager {
         self.catalog(app)
     }
 
+    pub fn active_installation(
+        &self,
+        app: &AppHandle,
+    ) -> Result<(String, PathBuf), String> {
+        let catalog = self.catalog(app)?;
+        let active_id = catalog
+            .active_model_id
+            .ok_or_else(|| "No active local model is selected. Install and select a model from Models.".to_string())?;
+
+        let definition = definition_for(&active_id)
+            .ok_or_else(|| format!("Unknown active model: {active_id}."))?;
+
+        match inspect_installation(app, &definition)? {
+            Some(_) => Ok((active_id.clone(), final_model_dir(app, &active_id)?)),
+            None => Err(format!(
+                "{} is selected but its local installation is unavailable.",
+                definition.name
+            )),
+        }
+    }
+
     pub fn remove_model(&self, app: &AppHandle, model_id: &str) -> Result<ModelCatalog, String> {
         let definition = definition_for(model_id)
             .ok_or_else(|| format!("Unknown model: {model_id}."))?;
