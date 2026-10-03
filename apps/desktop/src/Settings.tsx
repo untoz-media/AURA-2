@@ -1031,6 +1031,14 @@ export default function Settings({
                       </strong>
                     </div>
                     <div className="obs-health-metric">
+                      <span>Stream Drops</span>
+                      <strong>
+                        {obsHealth.streamDroppedPercent == null
+                          ? "—"
+                          : `${obsHealth.streamDroppedPercent.toFixed(2)}%`}
+                      </strong>
+                    </div>
+                    <div className="obs-health-metric">
                       <span>Bitrate</span>
                       <strong>
                         {obsHealth.streamBitrateKbps == null
