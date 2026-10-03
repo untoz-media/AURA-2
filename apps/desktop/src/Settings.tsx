@@ -24,6 +24,7 @@ import type {
   ModelRuntimeStatus,
   ManagedRuntimeStatus,
   AudioInputSnapshot,
+  VoiceCaptureEvent,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -104,6 +105,7 @@ type Props = {
   modelRuntimeStatus: ModelRuntimeStatus;
   managedRuntimeStatus: ManagedRuntimeStatus;
   audioInput: AudioInputSnapshot;
+  voiceCapture: VoiceCaptureEvent | null;
   onAudioRefresh: () => Promise<AudioInputSnapshot>;
   onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
   onAudioTestStart: () => Promise<AudioInputSnapshot>;
@@ -262,6 +264,7 @@ export default function Settings({
   modelRuntimeStatus,
   managedRuntimeStatus,
   audioInput,
+  voiceCapture,
   onAudioRefresh,
   onAudioSelect,
   onAudioTestStart,
@@ -892,7 +895,25 @@ export default function Settings({
 
             <Surface className="settings-card">
               <SectionLabel>Coming next</SectionLabel>
-              <SettingRow title="Push to talk" description="Hold a shortcut to capture a voice command and send it to AURA Core." trailing={<Badge tone="planned">M006.2</Badge>} />
+              <SettingRow
+                title="Push to talk"
+                description={
+                  voiceCapture?.phase === "captured"
+                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for M006.3 STT.`
+                    : "Hold Ctrl + Shift + V anywhere in Windows. AURA listens while held and stops when released."
+                }
+                trailing={
+                  audioInput.pushToTalk ? (
+                    <Badge tone="ready">Listening</Badge>
+                  ) : (
+                    <span className="settings-keys">
+                      <ShortcutKey>Ctrl</ShortcutKey><span>+</span>
+                      <ShortcutKey>Shift</ShortcutKey><span>+</span>
+                      <ShortcutKey>V</ShortcutKey>
+                    </span>
+                  )
+                }
+              />
               <SettingRow title="Local speech-to-text" description="Convert microphone audio to text with an on-device open-source model." trailing={<Badge tone="planned">M006.3</Badge>} />
               <SettingRow title="Voice output" description="Natural local spoken responses for actions and status." trailing={<Badge tone="planned">M006.5</Badge>} />
               <SettingRow title="Wake word" description="Optional hands-free activation after the core voice path is stable." trailing={<Badge tone="planned">M006.9</Badge>} />
