@@ -3,6 +3,7 @@ mod core;
 mod integrations;
 mod memory;
 mod model_manager;
+mod model_runtime;
 mod permissions;
 
 use computer::app_launcher::launch_app;
@@ -29,6 +30,7 @@ use memory::{
     CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
 };
 use model_manager::{ModelCatalog, ModelManager};
+use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -2843,19 +2845,66 @@ fn process_user_command(
             );
         }
         RouteResult::NoMatch => {
-            emit_core_event(
-                &app,
-                CoreEvent {
-                    id: id.clone(),
-                    kind: "command.unhandled",
-                    status: AuraRuntimeStatus::Idle,
-                    message:
-                        "No deterministic action matched yet. AURA currently supports Windows computer control, OBS production control, Director Mode presets and explicit local memory."
-                            .to_string(),
-                    command: Some(text.clone()),
-                    timestamp_ms: unix_timestamp_ms(),
-                },
-            );
+            let worker_app = app.clone();
+            let worker_id = id.clone();
+            let worker_text = text.clone();
+
+            thread::spawn(move || {
+                emit_core_event(
+                    &worker_app,
+                    CoreEvent {
+                        id: worker_id.clone(),
+                        kind: "command.processing",
+                        status: AuraRuntimeStatus::Working,
+                        message: "Thinking with the selected local model…".to_string(),
+                        command: Some(worker_text.clone()),
+                        timestamp_ms: unix_timestamp_ms(),
+                    },
+                );
+
+                let manager = worker_app.state::<ModelManager>();
+                let runtime = worker_app.state::<ModelRuntime>();
+
+                match runtime.generate(&worker_app, &manager, &worker_text) {
+                    Ok(response) => {
+                        emit_core_event(
+                            &worker_app,
+                            CoreEvent {
+                                id: worker_id,
+                                kind: "command.completed",
+                                status: AuraRuntimeStatus::Idle,
+                                message: response,
+                                command: Some(worker_text),
+                                timestamp_ms: unix_timestamp_ms(),
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        let message = format!("Local model unavailable: {error}");
+
+                        emit_core_event(
+                            &worker_app,
+                            CoreEvent {
+                                id: worker_id.clone(),
+                                kind: "command.failed",
+                                status: AuraRuntimeStatus::Idle,
+                                message: message.clone(),
+                                command: Some(worker_text),
+                                timestamp_ms: unix_timestamp_ms(),
+                            },
+                        );
+
+                        emit_core_error(
+                            &worker_app,
+                            CoreError {
+                                id: Some(worker_id),
+                                code: "model.runtime_failed",
+                                message,
+                            },
+                        );
+                    }
+                }
+            });
         }
     }
 
@@ -2864,6 +2913,21 @@ fn process_user_command(
         accepted: true,
         status: AuraRuntimeStatus::Thinking,
     })
+}
+
+#[tauri::command]
+fn get_model_runtime_status(
+    runtime: State<'_, ModelRuntime>,
+) -> ModelRuntimeStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+fn clear_model_conversation(
+    runtime: State<'_, ModelRuntime>,
+) -> ModelRuntimeStatus {
+    runtime.clear_conversation();
+    runtime.status()
 }
 
 #[tauri::command]
@@ -2915,8 +2979,11 @@ fn set_active_model(
     app: AppHandle,
     model_id: String,
     manager: State<'_, ModelManager>,
+    runtime: State<'_, ModelRuntime>,
 ) -> Result<ModelCatalog, String> {
-    manager.set_active(&app, &model_id)
+    let catalog = manager.set_active(&app, &model_id)?;
+    runtime.stop();
+    Ok(catalog)
 }
 
 #[tauri::command]
@@ -2924,8 +2991,11 @@ fn remove_model(
     app: AppHandle,
     model_id: String,
     manager: State<'_, ModelManager>,
+    runtime: State<'_, ModelRuntime>,
 ) -> Result<ModelCatalog, String> {
-    manager.remove_model(&app, &model_id)
+    let catalog = manager.remove_model(&app, &model_id)?;
+    runtime.stop();
+    Ok(catalog)
 }
 
 #[tauri::command]
@@ -3133,6 +3203,7 @@ pub fn run() {
         .manage(RuntimeState::default())
         .manage(CurrentAppAwareness::default())
         .manage(ModelManager::default())
+        .manage(ModelRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -3285,6 +3356,8 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_model_runtime_status,
+            clear_model_conversation,
             get_model_catalog,
             start_model_download,
             pause_model_download,
