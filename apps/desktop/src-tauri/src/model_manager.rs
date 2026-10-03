@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use reqwest::{header::RANGE, Client, StatusCode};
+use reqwest::{header::{CONTENT_RANGE, RANGE}, Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -987,13 +987,41 @@ fn emit_download_progress(
 }
 
 async fn remote_file_size(client: &Client, url: &str) -> Result<Option<u64>, String> {
+    if let Ok(response) = client.head(url).send().await {
+        if response.status().is_success() {
+            if let Some(size) = response.content_length() {
+                if size > 0 {
+                    return Ok(Some(size));
+                }
+            }
+        }
+    }
+
     let response = client
-        .head(url)
+        .get(url)
+        .header(RANGE, "bytes=0-0")
         .send()
         .await
-        .map_err(|error| format!("Could not inspect model file: {error}"))?
-        .error_for_status()
         .map_err(|error| format!("Could not inspect model file: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Could not inspect model file: server returned {}.",
+            response.status()
+        ));
+    }
+
+    if let Some(content_range) = response.headers().get(CONTENT_RANGE) {
+        if let Ok(value) = content_range.to_str() {
+            if let Some(total) = value.rsplit('/').next() {
+                if total != "*" {
+                    if let Ok(size) = total.parse::<u64>() {
+                        return Ok(Some(size));
+                    }
+                }
+            }
+        }
+    }
 
     Ok(response.content_length())
 }
