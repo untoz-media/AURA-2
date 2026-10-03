@@ -74,12 +74,12 @@ If the Model Manager installation is incomplete, loading fails explicitly.
 AURA looks for Python in this order:
 
 1. `AURA_PYTHON` environment variable
-2. future managed runtime at `<AppLocalData>/runtime/python/python.exe`
+2. managed runtime at `<AppLocalData>/runtime/python/python.exe`
 3. `python`
 4. `py -3`
 5. `python3`
 
-The future managed-runtime location is already part of the lookup order so a bundled runtime can be added without redesigning the inference manager.
+The managed runtime can now be installed directly from the **Models** workspace. `AURA_PYTHON` remains first so developers can intentionally override the managed environment.
 
 ## Quantization
 
@@ -207,7 +207,6 @@ If model loading or generation fails, the deterministic computer/OBS layers rema
 
 This runtime does not yet add:
 
-- automatic managed Python/PyTorch installation
 - token streaming
 - persistent conversation history
 - memory retrieval injection into the LLM prompt
