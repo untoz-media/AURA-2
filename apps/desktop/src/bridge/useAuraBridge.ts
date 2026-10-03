@@ -55,6 +55,8 @@ const DEFAULT_OBS_RUNTIME: ObsRuntimeState = {
   recording: false,
   recordingPaused: false,
   studioMode: false,
+  streamDurationMs: 0,
+  streamTimecode: "00:00:00.000",
   refreshedAtMs: 0,
 };
 

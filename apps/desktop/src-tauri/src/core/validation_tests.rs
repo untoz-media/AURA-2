@@ -371,6 +371,45 @@ fn obs_scene_commands_respect_act_policy_override() {
 }
 
 #[test]
+fn obs_stream_duration_queries_are_read_only() {
+    let policy = PermissionPolicy::default();
+
+    for command in [
+        "How long have we been live?",
+        "Stream duration",
+        "Há quanto tempo estamos em direto?",
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Read,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::ObsStreamDuration
+        ));
+    }
+}
+
+#[test]
+fn obs_stream_duration_respects_read_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "What is the stream duration?",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsStreamDuration
+    ));
+}
+
+#[test]
 fn obs_streaming_start_is_sensitive_and_stop_is_act() {
     let policy = PermissionPolicy::default();
 

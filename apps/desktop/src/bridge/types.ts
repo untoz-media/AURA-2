@@ -117,6 +117,8 @@ export type ObsRuntimeState = {
   studioMode: boolean;
   currentProgramScene?: string;
   currentPreviewScene?: string;
+  streamDurationMs: number;
+  streamTimecode: string;
   refreshedAtMs: number;
   lastError?: string;
 };
@@ -164,4 +166,12 @@ export type ObsStreamingActionResult = {
   action: "start" | "stop";
   streaming: boolean;
   changedAtMs: number;
+};
+
+
+export type ObsStreamDuration = {
+  streaming: boolean;
+  durationMs: number;
+  timecode: string;
+  refreshedAtMs: number;
 };

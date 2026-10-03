@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsStreamingActionResult};
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsStreamDuration, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -152,6 +152,16 @@ fn unix_timestamp_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+
+fn format_duration_ms(duration_ms: u64) -> String {
+    let total_seconds = duration_ms / 1_000;
+    let hours = total_seconds / 3_600;
+    let minutes = (total_seconds % 3_600) / 60;
+    let seconds = total_seconds % 60;
+
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
 }
 
 fn next_command_id() -> String {
@@ -1398,6 +1408,76 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ObsStreamDuration => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Reading OBS stream duration…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                obs.stream_duration().await
+                            });
+
+                            match result {
+                                Ok(duration) => {
+                                    let message = if duration.streaming {
+                                        format!(
+                                            "We have been live for {}.",
+                                            format_duration_ms(duration.duration_ms)
+                                        )
+                                    } else {
+                                        "OBS is not currently live.".to_string()
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not read OBS stream duration: {}",
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.stream_duration_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::ObsStreaming(action) => {
                             let action_label = match action {
                                 ObsStreamingAction::Start => "Starting OBS stream…",
@@ -1771,6 +1851,10 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ObsStreamDuration => {
+                        "Reading OBS stream duration requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::ObsStreaming(action) => match action {
                         ObsStreamingAction::Start => {
                             "Going live can publish audio/video externally. Confirm before starting the OBS stream."
@@ -2021,6 +2105,13 @@ async fn get_obs_scenes(obs: State<'_, ObsController>) -> ObsSceneList {
 }
 
 #[tauri::command]
+async fn get_obs_stream_duration(
+    obs: State<'_, ObsController>,
+) -> Result<ObsStreamDuration, String> {
+    obs.stream_duration().await
+}
+
+#[tauri::command]
 async fn set_obs_program_scene(
     request: ObsSceneSwitchRequest,
     obs: State<'_, ObsController>,
@@ -2241,6 +2332,7 @@ pub fn run() {
             disconnect_obs,
             get_obs_runtime_state,
             get_obs_scenes,
+            get_obs_stream_duration,
             set_obs_program_scene,
             set_obs_preview_scene,
             start_obs_recording,

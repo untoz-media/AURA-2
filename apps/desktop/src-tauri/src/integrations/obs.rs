@@ -51,6 +51,16 @@ pub struct ObsStreamingActionResult {
     pub changed_at_ms: u64,
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsStreamDuration {
+    pub streaming: bool,
+    pub duration_ms: u64,
+    pub timecode: String,
+    pub refreshed_at_ms: u64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsConnectionState {
@@ -75,6 +85,8 @@ pub struct ObsRuntimeState {
     pub studio_mode: bool,
     pub current_program_scene: Option<String>,
     pub current_preview_scene: Option<String>,
+    pub stream_duration_ms: u64,
+    pub stream_timecode: String,
     pub refreshed_at_ms: u64,
     pub last_error: Option<String>,
 }
@@ -89,6 +101,8 @@ impl Default for ObsRuntimeState {
             studio_mode: false,
             current_program_scene: None,
             current_preview_scene: None,
+            stream_duration_ms: 0,
+            stream_timecode: "00:00:00.000".to_string(),
             refreshed_at_ms: timestamp_ms(),
             last_error: None,
         }
@@ -236,6 +250,9 @@ impl ObsController {
             studio_mode,
             current_program_scene: program_scene,
             current_preview_scene: preview_scene,
+            stream_duration_ms: json_u64(&stream_json, "outputDuration").unwrap_or(0),
+            stream_timecode: json_string(&stream_json, "outputTimecode")
+                .unwrap_or_else(|| "00:00:00.000".to_string()),
             refreshed_at_ms: timestamp_ms(),
             last_error: None,
         }
@@ -661,6 +678,29 @@ impl ObsController {
         })
     }
 
+    pub async fn stream_duration(&self) -> Result<ObsStreamDuration, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let status = client
+            .streaming()
+            .status()
+            .await
+            .map_err(|error| format!("Could not read OBS stream duration: {error}"))?;
+        let value = serde_json::to_value(status)
+            .map_err(|error| format!("Could not decode OBS stream duration: {error}"))?;
+
+        Ok(ObsStreamDuration {
+            streaming: json_bool(&value, "outputActive"),
+            duration_ms: json_u64(&value, "outputDuration").unwrap_or(0),
+            timecode: json_string(&value, "outputTimecode")
+                .unwrap_or_else(|| "00:00:00.000".to_string()),
+            refreshed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn start_streaming(&self) -> Result<ObsStreamingActionResult, String> {
         let client_guard = self.client.lock().await;
         let client = client_guard
@@ -880,6 +920,18 @@ fn json_bool(value: &serde_json::Value, key: &str) -> bool {
     value.get(key).and_then(serde_json::Value::as_bool).unwrap_or(false)
 }
 
+
+fn json_u64(value: &serde_json::Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(serde_json::Value::as_u64)
+}
+
+fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
 fn validate_scene_uuid(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
 
@@ -966,6 +1018,8 @@ mod tests {
         assert!(!state.studio_mode);
         assert!(state.current_program_scene.is_none());
         assert!(state.current_preview_scene.is_none());
+        assert_eq!(state.stream_duration_ms, 0);
+        assert_eq!(state.stream_timecode, "00:00:00.000");
     }
 
     #[test]
@@ -978,6 +1032,23 @@ mod tests {
         assert!(json_bool(&value, "outputActive"));
         assert!(!json_bool(&value, "outputPaused"));
         assert!(!json_bool(&value, "missing"));
+    }
+
+
+    #[test]
+    fn reads_stream_duration_fields_safely() {
+        let value = serde_json::json!({
+            "outputActive": true,
+            "outputDuration": 3723456,
+            "outputTimecode": "01:02:03.456"
+        });
+
+        assert_eq!(json_u64(&value, "outputDuration"), Some(3_723_456));
+        assert_eq!(
+            json_string(&value, "outputTimecode").as_deref(),
+            Some("01:02:03.456")
+        );
+        assert_eq!(json_u64(&value, "missing"), None);
     }
 
 

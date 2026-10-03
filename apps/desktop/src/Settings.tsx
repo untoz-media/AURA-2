@@ -154,6 +154,18 @@ function Badge({
   return <span className={`settings-badge ${tone}`}>{children}</span>;
 }
 
+
+function formatObsDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+}
+
 export default function Settings({
   activeSection,
   onSectionChange,
@@ -187,11 +199,37 @@ export default function Settings({
   const [obsStreamingAction, setObsStreamingAction] =
     useState<ObsStreamingActionResult["action"] | null>(null);
   const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
+  const [obsStreamClockMs, setObsStreamClockMs] = useState(0);
 
   useEffect(() => {
     setObsHost(obsConnection.host);
     setObsPort(String(obsConnection.port));
   }, [obsConnection.host, obsConnection.port]);
+
+
+  useEffect(() => {
+    if (!obsRuntime.streaming) {
+      setObsStreamClockMs(0);
+      return;
+    }
+
+    const updateClock = () => {
+      const elapsedSinceRefresh = Math.max(
+        0,
+        Date.now() - obsRuntime.refreshedAtMs,
+      );
+      setObsStreamClockMs(obsRuntime.streamDurationMs + elapsedSinceRefresh);
+    };
+
+    updateClock();
+    const interval = window.setInterval(updateClock, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [
+    obsRuntime.streaming,
+    obsRuntime.streamDurationMs,
+    obsRuntime.refreshedAtMs,
+  ]);
 
   async function handleObsConnect() {
     const port = Number(obsPort);
@@ -697,8 +735,13 @@ export default function Settings({
                   <div className="obs-runtime-grid">
                     <div className="obs-runtime-item">
                       <span>Streaming</span>
-                      <strong className={obsRuntime.streaming ? "active" : ""}>
-                        {obsRuntime.streaming ? "LIVE" : "Off"}
+                      <strong
+                        className={obsRuntime.streaming ? "active" : ""}
+                        title={obsRuntime.streaming ? obsRuntime.streamTimecode : undefined}
+                      >
+                        {obsRuntime.streaming
+                          ? `LIVE · ${formatObsDuration(obsStreamClockMs)}`
+                          : "Off"}
                       </strong>
                     </div>
                     <div className="obs-runtime-item">
@@ -736,7 +779,7 @@ export default function Settings({
                       <strong>Streaming Control</strong>
                       <span>
                         {obsRuntime.streaming
-                          ? "The OBS stream is LIVE."
+                          ? `LIVE for ${formatObsDuration(obsStreamClockMs)}.`
                           : "The OBS stream is offline."}
                       </span>
                     </div>
