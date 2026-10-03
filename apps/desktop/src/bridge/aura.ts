@@ -20,6 +20,9 @@ import type {
   ObsRecordingActionResult,
   ObsStreamingActionResult,
   ObsStreamDuration,
+  ObsSourceItemList,
+  ObsSourceVisibilityRequest,
+  ObsSourceVisibilityResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -201,4 +204,15 @@ export async function stopObsStreaming(): Promise<ObsStreamingActionResult> {
 
 export async function getObsStreamDuration(): Promise<ObsStreamDuration> {
   return invoke<ObsStreamDuration>("get_obs_stream_duration");
+}
+
+
+export async function getObsSourceItems(): Promise<ObsSourceItemList> {
+  return invoke<ObsSourceItemList>("get_obs_source_items");
+}
+
+export async function setObsSourceVisibility(
+  request: ObsSourceVisibilityRequest,
+): Promise<ObsSourceVisibilityResult> {
+  return invoke<ObsSourceVisibilityResult>("set_obs_source_visibility", { request });
 }
