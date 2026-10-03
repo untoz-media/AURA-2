@@ -318,6 +318,72 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn memory_commands_preserve_read_modify_and_destructive_boundaries() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Remember that I prefer Brave",
+            &policy,
+            PermissionClass::Modify,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::MemoryRemember(content) if content == "I prefer Brave"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "What do you remember?",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::MemoryList
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Forget that I prefer Brave",
+            &policy,
+            PermissionClass::Destructive,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::MemoryForget(content) if content == "I prefer Brave"
+    ));
+}
+
+#[test]
+fn memory_commands_respect_policy_overrides() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Modify, PermissionDecision::Allow)
+        .unwrap();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Lembra-te que uso Brave",
+            &policy,
+            PermissionClass::Modify,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::MemoryRemember(content) if content == "uso Brave"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Mostra as memórias",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::MemoryList
+    ));
+}
+
+#[test]
 fn obs_scene_commands_route_through_act_permission() {
     let policy = PermissionPolicy::default();
 
