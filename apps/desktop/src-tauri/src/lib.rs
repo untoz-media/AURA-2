@@ -1477,14 +1477,6 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::ObsSourceVisibility {
-                        source_name,
-                        enabled,
-                    } => format!(
-                        "{} OBS source {} requires confirmation under the current permission policy.",
-                        if *enabled { "Showing" } else { "Hiding" },
-                        source_name
-                    ),
                     ActionIntent::ObsStreamDuration => {
                             emit_core_event(
                                 &worker_app,
@@ -1928,6 +1920,14 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ObsSourceVisibility {
+                        source_name,
+                        enabled,
+                    } => format!(
+                        "{} OBS source {} requires confirmation under the current permission policy.",
+                        if *enabled { "Showing" } else { "Hiding" },
+                        source_name
+                    ),
                     ActionIntent::ObsStreamDuration => {
                         "Reading OBS stream duration requires confirmation under the current permission policy."
                             .to_string()
