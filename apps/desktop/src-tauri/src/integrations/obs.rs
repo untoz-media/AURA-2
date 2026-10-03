@@ -31,6 +31,17 @@ pub struct ObsSceneSwitchResult {
     pub changed_at_ms: u64,
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsRecordingActionResult {
+    pub action: String,
+    pub recording: bool,
+    pub paused: bool,
+    pub output_path: Option<String>,
+    pub changed_at_ms: u64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsConnectionState {
@@ -523,6 +534,124 @@ impl ObsController {
         })
     }
 
+    pub async fn start_recording(&self) -> Result<ObsRecordingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let (active, _) = read_recording_flags(client).await?;
+        if active {
+            return Err("OBS is already recording.".to_string());
+        }
+
+        client
+            .recording()
+            .start()
+            .await
+            .map_err(|error| format!("Could not start OBS recording: {error}"))?;
+
+        let (recording, paused) = wait_for_recording_state(client, true, false).await?;
+
+        Ok(ObsRecordingActionResult {
+            action: "start".to_string(),
+            recording,
+            paused,
+            output_path: None,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn stop_recording(&self) -> Result<ObsRecordingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let (active, _) = read_recording_flags(client).await?;
+        if !active {
+            return Err("OBS is not currently recording.".to_string());
+        }
+
+        let output_path = client
+            .recording()
+            .stop()
+            .await
+            .map_err(|error| format!("Could not stop OBS recording: {error}"))?;
+
+        let (recording, paused) = wait_for_recording_state(client, false, false).await?;
+
+        Ok(ObsRecordingActionResult {
+            action: "stop".to_string(),
+            recording,
+            paused,
+            output_path: Some(output_path),
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn pause_recording(&self) -> Result<ObsRecordingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let (active, paused) = read_recording_flags(client).await?;
+        if !active {
+            return Err("OBS recording is not running.".to_string());
+        }
+        if paused {
+            return Err("OBS recording is already paused.".to_string());
+        }
+
+        client
+            .recording()
+            .pause()
+            .await
+            .map_err(|error| format!("Could not pause OBS recording: {error}"))?;
+
+        let (recording, paused) = wait_for_recording_state(client, true, true).await?;
+
+        Ok(ObsRecordingActionResult {
+            action: "pause".to_string(),
+            recording,
+            paused,
+            output_path: None,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn resume_recording(&self) -> Result<ObsRecordingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let (active, paused) = read_recording_flags(client).await?;
+        if !active {
+            return Err("OBS recording is not running.".to_string());
+        }
+        if !paused {
+            return Err("OBS recording is not paused.".to_string());
+        }
+
+        client
+            .recording()
+            .resume()
+            .await
+            .map_err(|error| format!("Could not resume OBS recording: {error}"))?;
+
+        let (recording, paused) = wait_for_recording_state(client, true, false).await?;
+
+        Ok(ObsRecordingActionResult {
+            action: "resume".to_string(),
+            recording,
+            paused,
+            output_path: None,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn connect(
         &self,
         request: ObsConnectRequest,
@@ -625,6 +754,36 @@ impl ObsController {
         state.connected_at_ms = None;
         state.last_error = Some(message);
     }
+}
+
+async fn wait_for_recording_state(
+    client: &Client,
+    expected_active: bool,
+    expected_paused: bool,
+) -> Result<(bool, bool), String> {
+    for _ in 0..6 {
+        let state = read_recording_flags(client).await?;
+        if state == (expected_active, expected_paused) {
+            return Ok(state);
+        }
+
+        tokio::time::sleep(Duration::from_millis(60)).await;
+    }
+
+    Err(format!(
+        "OBS did not confirm recording state active={} paused={}.",
+        expected_active, expected_paused
+    ))
+}
+
+async fn read_recording_flags(client: &Client) -> Result<(bool, bool), String> {
+    let status = client
+        .recording()
+        .status()
+        .await
+        .map_err(|error| format!("Could not read OBS recording state: {error}"))?;
+
+    Ok((status.active, status.paused))
 }
 
 fn json_bool(value: &serde_json::Value, key: &str) -> bool {
@@ -758,5 +917,23 @@ mod tests {
         assert_eq!(validate_scene_name("  Camera 2  ").unwrap(), "Camera 2");
         assert!(validate_scene_name("").is_err());
         assert!(validate_scene_name(&"x".repeat(257)).is_err());
+    }
+
+
+    #[test]
+    fn recording_action_result_serializes_expected_state() {
+        let result = ObsRecordingActionResult {
+            action: "stop".to_string(),
+            recording: false,
+            paused: false,
+            output_path: Some("C:\\Videos\\capture.mkv".to_string()),
+            changed_at_ms: 42,
+        };
+
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(value["action"], "stop");
+        assert_eq!(value["recording"], false);
+        assert_eq!(value["paused"], false);
+        assert_eq!(value["outputPath"], "C:\\Videos\\capture.mkv");
     }
 }

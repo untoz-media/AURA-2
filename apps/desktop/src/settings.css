@@ -474,3 +474,86 @@
   opacity: 0.5;
   cursor: default;
 }
+
+
+.obs-recording-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-1);
+}
+
+.obs-recording-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.obs-recording-copy strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+  font-weight: 620;
+}
+
+.obs-recording-copy span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.obs-recording-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.obs-recording-stop {
+  border-color: rgba(255, 118, 118, 0.24);
+}
+
+.obs-recording-output {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-1);
+}
+
+.obs-recording-output span {
+  flex: 0 0 auto;
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.obs-recording-output strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--aura-text-3);
+  font-size: var(--text-2xs);
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 850px) {
+  .obs-recording-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .obs-recording-actions {
+    justify-content: flex-start;
+  }
+}

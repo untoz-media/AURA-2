@@ -7,6 +7,14 @@ use crate::computer::{
 };
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObsRecordingAction {
+    Start,
+    Stop,
+    Pause,
+    Resume,
+}
+
 #[derive(Debug, Clone)]
 pub enum ActionIntent {
     LaunchApp(AppTarget),
@@ -20,6 +28,7 @@ pub enum ActionIntent {
     System(SystemAction),
     ObsProgramScene(String),
     ObsPreviewScene(String),
+    ObsRecording(ObsRecordingAction),
 }
 
 #[derive(Debug, Clone)]
@@ -448,6 +457,55 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn obs_recording_request(input: &str) -> Option<ObsRecordingAction> {
+    let normalized = normalize_command(input);
+
+    match normalized.as_str() {
+        "start recording"
+        | "start obs recording"
+        | "record"
+        | "begin recording"
+        | "inicia a gravação"
+        | "inicia a gravacao"
+        | "iniciar gravação"
+        | "iniciar gravacao"
+        | "começa a gravar"
+        | "comeca a gravar"
+        | "começar a gravar"
+        | "comecar a gravar" => Some(ObsRecordingAction::Start),
+
+        "stop recording"
+        | "stop obs recording"
+        | "end recording"
+        | "para a gravação"
+        | "para a gravacao"
+        | "parar gravação"
+        | "parar gravacao"
+        | "termina a gravação"
+        | "termina a gravacao"
+        | "terminar gravação"
+        | "terminar gravacao" => Some(ObsRecordingAction::Stop),
+
+        "pause recording"
+        | "pause obs recording"
+        | "pausa a gravação"
+        | "pausa a gravacao"
+        | "pausar gravação"
+        | "pausar gravacao" => Some(ObsRecordingAction::Pause),
+
+        "resume recording"
+        | "resume obs recording"
+        | "retoma a gravação"
+        | "retoma a gravacao"
+        | "retomar gravação"
+        | "retomar gravacao"
+        | "continua a gravação"
+        | "continua a gravacao" => Some(ObsRecordingAction::Resume),
+
+        _ => None,
+    }
+}
+
 fn obs_scene_request(input: &str) -> Option<ActionIntent> {
     const PROGRAM_PREFIXES: &[&str] = &[
         "switch scene to ",
@@ -601,6 +659,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             }
             Err(message) => RouteResult::InvalidKeyboard(message),
         };
+    }
+
+    if let Some(action) = obs_recording_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsRecording(action),
+            permission,
+            decision: policy.decision_for(permission),
+        });
     }
 
     if let Some(intent) = obs_scene_request(input) {
@@ -826,6 +893,29 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn routes_obs_recording_controls_as_act() {
+        let policy = PermissionPolicy::default();
+
+        for (command, expected) in [
+            ("Start recording", ObsRecordingAction::Start),
+            ("Stop recording", ObsRecordingAction::Stop),
+            ("Pause recording", ObsRecordingAction::Pause),
+            ("Resume recording", ObsRecordingAction::Resume),
+            ("Inicia a gravação", ObsRecordingAction::Start),
+            ("Para a gravação", ObsRecordingAction::Stop),
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::ObsRecording(action),
+                    permission: PermissionClass::Act,
+                    decision: PermissionDecision::Allow,
+                }) if action == expected
+            ));
+        }
+    }
 
     #[test]
     fn routes_explicit_obs_program_scene_as_act() {

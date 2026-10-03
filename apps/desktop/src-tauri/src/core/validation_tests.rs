@@ -1,4 +1,4 @@
-use super::action_router::{route_command, ActionIntent, RouteResult, RoutedAction};
+use super::action_router::{route_command, ActionIntent, ObsRecordingAction, RouteResult, RoutedAction};
 use crate::{
     computer::{
         app_launcher::AppTarget,
@@ -367,6 +367,48 @@ fn obs_scene_commands_respect_act_policy_override() {
             PermissionDecision::Ask,
         ),
         ActionIntent::ObsProgramScene(scene) if scene == "Câmara 1"
+    ));
+}
+
+#[test]
+fn obs_recording_commands_route_through_act_permission() {
+    let policy = PermissionPolicy::default();
+
+    for (command, expected) in [
+        ("Start recording", ObsRecordingAction::Start),
+        ("Stop recording", ObsRecordingAction::Stop),
+        ("Pause recording", ObsRecordingAction::Pause),
+        ("Resume recording", ObsRecordingAction::Resume),
+        ("Começa a gravar", ObsRecordingAction::Start),
+        ("Para a gravação", ObsRecordingAction::Stop),
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Act,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::ObsRecording(action) if action == expected
+        ));
+    }
+}
+
+#[test]
+fn obs_recording_commands_respect_act_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Act, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Pause recording",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsRecording(ObsRecordingAction::Pause)
     ));
 }
 
