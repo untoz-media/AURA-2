@@ -28,6 +28,9 @@ import type {
   ObsAudioVolumeRequest,
   ObsAudioControlResult,
   ObsProductionHealth,
+  DirectorPreset,
+  SaveDirectorPresetRequest,
+  DirectorPresetRunResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -242,4 +245,25 @@ export async function setObsAudioVolume(
 
 export async function getObsProductionHealth(): Promise<ObsProductionHealth> {
   return invoke<ObsProductionHealth>("get_obs_production_health");
+}
+
+
+export async function getDirectorPresets(): Promise<DirectorPreset[]> {
+  return invoke<DirectorPreset[]>("get_director_presets");
+}
+
+export async function saveDirectorPreset(
+  request: SaveDirectorPresetRequest,
+): Promise<DirectorPreset> {
+  return invoke<DirectorPreset>("save_director_preset_command", { request });
+}
+
+export async function deleteDirectorPreset(presetId: string): Promise<void> {
+  return invoke<void>("delete_director_preset_command", { presetId });
+}
+
+export async function runDirectorPreset(
+  presetId: string,
+): Promise<DirectorPresetRunResult> {
+  return invoke<DirectorPresetRunResult>("run_director_preset_command", { presetId });
 }
