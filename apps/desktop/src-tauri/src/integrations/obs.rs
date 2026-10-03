@@ -782,13 +782,8 @@ async fn read_recording_flags(client: &Client) -> Result<(bool, bool), String> {
         .status()
         .await
         .map_err(|error| format!("Could not read OBS recording state: {error}"))?;
-    let value = serde_json::to_value(status)
-        .map_err(|error| format!("Could not decode OBS recording state: {error}"))?;
 
-    Ok((
-        json_bool(&value, "outputActive"),
-        json_bool(&value, "outputPaused"),
-    ))
+    Ok((status.active, status.paused))
 }
 
 fn json_bool(value: &serde_json::Value, key: &str) -> bool {
