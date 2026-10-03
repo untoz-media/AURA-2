@@ -44,6 +44,9 @@ import type {
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
+  ProjectMemory,
+  ProjectMemorySnapshot,
+  SaveProjectRequest,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -397,4 +400,27 @@ export async function deleteUserRoutine(routineId: string): Promise<void> {
 
 export async function runUserRoutine(routineId: string): Promise<RoutineRunResult> {
   return invoke<RoutineRunResult>("run_user_routine", { routineId });
+}
+
+
+export async function getProjectMemory(): Promise<ProjectMemorySnapshot> {
+  return invoke<ProjectMemorySnapshot>("get_project_memory");
+}
+
+export async function saveProjectMemory(
+  request: SaveProjectRequest,
+): Promise<ProjectMemory> {
+  return invoke<ProjectMemory>("save_project_memory", { request });
+}
+
+export async function deleteProjectMemory(projectId: string): Promise<void> {
+  return invoke<void>("delete_project_memory", { projectId });
+}
+
+export async function setActiveProjectMemory(
+  projectId?: string,
+): Promise<ProjectMemorySnapshot> {
+  return invoke<ProjectMemorySnapshot>("set_active_project_memory", {
+    projectId: projectId ?? null,
+  });
 }

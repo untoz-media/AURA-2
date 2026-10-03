@@ -6,6 +6,7 @@ mod memory;
 mod model_manager;
 mod model_runtime;
 mod permissions;
+mod project_memory;
 mod routines;
 
 use computer::app_launcher::launch_app;
@@ -38,6 +39,10 @@ use managed_runtime::{ManagedRuntimeSetup, ManagedRuntimeStatus};
 use model_manager::{ModelCatalog, ModelManager};
 use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
+use project_memory::{
+    active_project, delete_project, project_snapshot, save_project, set_active_project,
+    summarize_active_project, ProjectMemory, ProjectMemorySnapshot, SaveProjectRequest,
+};
 use routines::{
     delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
     routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
@@ -3172,8 +3177,9 @@ fn process_user_command(
                     let awareness = worker_app.state::<CurrentAppAwareness>();
                     let foreground = awareness.snapshot().ok();
                     let recent = recent_files_snapshot(5).ok();
+                    let project = summarize_active_project(&worker_app).ok().flatten();
 
-                    if foreground.is_none() && recent.is_none() {
+                    if foreground.is_none() && recent.is_none() && project.is_none() {
                         None
                     } else {
                         let mut summary = String::new();
@@ -3210,6 +3216,13 @@ fn process_user_command(
                                     .join(" · ");
                                 summary.push_str(&format!("Recent files: {names}"));
                             }
+                        }
+
+                        if let Some(project) = project {
+                            if !summary.is_empty() {
+                                summary.push_str("\n");
+                            }
+                            summary.push_str(&project);
                         }
 
                         (!summary.is_empty()).then_some(summary)
@@ -3402,6 +3415,32 @@ fn get_current_app_context(
 #[tauri::command]
 fn get_recent_files_context() -> Result<RecentFilesSnapshot, String> {
     default_recent_files_snapshot().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_project_memory(app: AppHandle) -> Result<ProjectMemorySnapshot, String> {
+    project_snapshot(&app)
+}
+
+#[tauri::command]
+fn save_project_memory(
+    app: AppHandle,
+    request: SaveProjectRequest,
+) -> Result<ProjectMemory, String> {
+    save_project(&app, request)
+}
+
+#[tauri::command]
+fn delete_project_memory(app: AppHandle, project_id: String) -> Result<(), String> {
+    delete_project(&app, &project_id)
+}
+
+#[tauri::command]
+fn set_active_project_memory(
+    app: AppHandle,
+    project_id: Option<String>,
+) -> Result<ProjectMemorySnapshot, String> {
+    set_active_project(&app, project_id.as_deref())
 }
 
 #[tauri::command]
@@ -3818,6 +3857,10 @@ pub fn run() {
             remove_model,
             get_current_app_context,
             get_recent_files_context,
+            get_project_memory,
+            save_project_memory,
+            delete_project_memory,
+            set_active_project_memory,
             get_user_routines,
             save_user_routine,
             delete_user_routine,

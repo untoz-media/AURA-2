@@ -61,14 +61,14 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M005 — Memory & Context
 
-**Status: In progress**
+**Status: Complete — AURA-2 0.5.0-alpha.1**
 
 - [x] **M005.1** — Local persistent memory
 - [x] **M005.2** — Current app awareness
 - [x] **M005.3** — Active window context
 - [x] **M005.4** — Recent files context
 - [x] **M005.5** — User-defined routines
-- [ ] **M005.6** — Project memory
+- [x] **M005.6** — Project memory
 
 ## M006 — Voice
 

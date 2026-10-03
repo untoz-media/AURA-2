@@ -509,3 +509,30 @@ export type RoutineRunResult = {
   startedAtMs: number;
   completedAtMs: number;
 };
+
+
+export type ProjectMemory = {
+  id: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  notes: string[];
+  routineIds: string[];
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+export type ProjectMemorySnapshot = {
+  projects: ProjectMemory[];
+  activeProjectId?: string | null;
+  refreshedAtMs: number;
+};
+
+export type SaveProjectRequest = {
+  id?: string;
+  name: string;
+  description?: string;
+  aliases?: string[];
+  notes?: string[];
+  routineIds?: string[];
+};

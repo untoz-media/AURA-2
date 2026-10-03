@@ -48,6 +48,10 @@ import {
   saveUserRoutine,
   deleteUserRoutine,
   runUserRoutine,
+  getProjectMemory,
+  saveProjectMemory,
+  deleteProjectMemory,
+  setActiveProjectMemory,
   startModelDownload,
   pauseModelDownload,
   resumeModelDownload,
@@ -98,6 +102,9 @@ import type {
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
+  ProjectMemorySnapshot,
+  SaveProjectRequest,
+  ProjectMemory,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -138,6 +145,11 @@ const DEFAULT_MEMORY: MemorySnapshot = {
 const DEFAULT_RECENT_FILES: RecentFilesSnapshot = {
   items: [],
   source: "windowsRecentItems",
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_PROJECT_MEMORY: ProjectMemorySnapshot = {
+  projects: [],
   refreshedAtMs: 0,
 };
 
@@ -195,6 +207,8 @@ export function useAuraBridge() {
   const [routines, setRoutines] = useState<UserRoutine[]>([]);
   const [routineLastRun, setRoutineLastRun] =
     useState<RoutineRunResult | null>(null);
+  const [projectMemory, setProjectMemory] =
+    useState<ProjectMemorySnapshot>(DEFAULT_PROJECT_MEMORY);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -268,6 +282,14 @@ export function useAuraBridge() {
         }
       });
 
+
+    getProjectMemory()
+      .then((snapshot) => {
+        if (!cancelled) setProjectMemory(snapshot);
+      })
+      .catch(() => {
+        // No project memory is a supported state.
+      });
 
     getUserRoutines()
       .then((items) => {
@@ -760,6 +782,35 @@ export function useAuraBridge() {
     const items = await getUserRoutines();
     setRoutines(items);
     return items;
+  }, []);
+
+  const refreshProjectMemory = useCallback(async () => {
+    const snapshot = await getProjectMemory();
+    setProjectMemory(snapshot);
+    return snapshot;
+  }, []);
+
+  const saveProjectMemoryControl = useCallback(async (request: SaveProjectRequest) => {
+    const project = await saveProjectMemory(request);
+    const snapshot = await getProjectMemory();
+    setProjectMemory(snapshot);
+    setActivity(`Saved project ${project.name}.`);
+    return project;
+  }, []);
+
+  const deleteProjectMemoryControl = useCallback(async (projectId: string) => {
+    await deleteProjectMemory(projectId);
+    const snapshot = await getProjectMemory();
+    setProjectMemory(snapshot);
+    setActivity("Project memory deleted.");
+  }, []);
+
+  const setActiveProjectMemoryControl = useCallback(async (projectId?: string) => {
+    const snapshot = await setActiveProjectMemory(projectId);
+    setProjectMemory(snapshot);
+    const active = snapshot.projects.find((project) => project.id === snapshot.activeProjectId);
+    setActivity(active ? `Active project: ${active.name}.` : "No active project.");
+    return snapshot;
   }, []);
 
   const saveRoutineControl = useCallback(async (request: SaveRoutineRequest) => {
@@ -1575,6 +1626,7 @@ export function useAuraBridge() {
     recentFiles,
     routines,
     routineLastRun,
+    projectMemory,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1602,6 +1654,10 @@ export function useAuraBridge() {
     saveRoutineControl,
     deleteRoutineControl,
     runRoutineControl,
+    refreshProjectMemory,
+    saveProjectMemoryControl,
+    deleteProjectMemoryControl,
+    setActiveProjectMemoryControl,
     refreshModels,
     refreshModelRuntime,
     refreshManagedRuntime,
