@@ -5,6 +5,7 @@ import {
   getAppStatus,
   getObsConnectionState,
   getObsRuntimeState,
+  getObsScenes,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -31,6 +32,7 @@ import type {
   ObsConnectRequest,
   ObsConnectionState,
   ObsRuntimeState,
+  ObsSceneList,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -42,6 +44,11 @@ const DEFAULT_OBS_RUNTIME: ObsRuntimeState = {
   recording: false,
   recordingPaused: false,
   studioMode: false,
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_OBS_SCENES: ObsSceneList = {
+  scenes: [],
   refreshedAtMs: 0,
 };
 
@@ -60,6 +67,7 @@ export function useAuraBridge() {
     port: 4455,
   });
   const [obsRuntime, setObsRuntime] = useState<ObsRuntimeState>(DEFAULT_OBS_RUNTIME);
+  const [obsScenes, setObsScenes] = useState<ObsSceneList>(DEFAULT_OBS_SCENES);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -211,6 +219,18 @@ export function useAuraBridge() {
     return state;
   }, [obsConnection.connected]);
 
+
+  const refreshObsScenes = useCallback(async () => {
+    if (!obsConnection.connected) {
+      setObsScenes(DEFAULT_OBS_SCENES);
+      return DEFAULT_OBS_SCENES;
+    }
+
+    const scenes = await getObsScenes();
+    setObsScenes(scenes);
+    return scenes;
+  }, [obsConnection.connected]);
+
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
@@ -252,6 +272,40 @@ export function useAuraBridge() {
 
     void update();
     const interval = window.setInterval(() => void update(), 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [obsConnection.connected]);
+
+  useEffect(() => {
+    if (!obsConnection.connected) {
+      setObsScenes(DEFAULT_OBS_SCENES);
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateScenes = async () => {
+      try {
+        const scenes = await getObsScenes();
+        if (!cancelled) {
+          setObsScenes(scenes);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setObsScenes({
+            ...DEFAULT_OBS_SCENES,
+            refreshedAtMs: Date.now(),
+            lastError: String(error),
+          });
+        }
+      }
+    };
+
+    void updateScenes();
+    const interval = window.setInterval(() => void updateScenes(), 5000);
 
     return () => {
       cancelled = true;
@@ -324,8 +378,12 @@ export function useAuraBridge() {
       setBridgeError(null);
       const state = await connectObs(request);
       setObsConnection(state);
-      const runtime = await getObsRuntimeState();
+      const [runtime, scenes] = await Promise.all([
+        getObsRuntimeState(),
+        getObsScenes(),
+      ]);
       setObsRuntime(runtime);
+      setObsScenes(scenes);
       setActivity(
         `OBS Studio ${state.obsStudioVersion ?? ""} connected at ${state.host}:${state.port}.`,
       );
@@ -352,6 +410,7 @@ export function useAuraBridge() {
     const state = await disconnectObs();
     setObsConnection(state);
     setObsRuntime(DEFAULT_OBS_RUNTIME);
+    setObsScenes(DEFAULT_OBS_SCENES);
     setBridgeError(null);
     setActivity("OBS Studio disconnected from AURA.");
     return state;
@@ -404,6 +463,7 @@ export function useAuraBridge() {
     permissionPolicy,
     obsConnection,
     obsRuntime,
+    obsScenes,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -415,6 +475,7 @@ export function useAuraBridge() {
     connectObsControl,
     disconnectObsControl,
     refreshObsRuntime,
+    refreshObsScenes,
     approveConfirmation,
     cancelConfirmation,
   };

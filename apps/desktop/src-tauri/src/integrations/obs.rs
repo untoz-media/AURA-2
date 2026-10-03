@@ -59,6 +59,39 @@ impl Default for ObsRuntimeState {
     }
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSceneSummary {
+    pub name: String,
+    pub uuid: String,
+    pub index: usize,
+    pub is_program: bool,
+    pub is_preview: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSceneList {
+    pub scenes: Vec<ObsSceneSummary>,
+    pub current_program_scene: Option<String>,
+    pub current_preview_scene: Option<String>,
+    pub refreshed_at_ms: u64,
+    pub last_error: Option<String>,
+}
+
+impl Default for ObsSceneList {
+    fn default() -> Self {
+        Self {
+            scenes: Vec::new(),
+            current_program_scene: None,
+            current_preview_scene: None,
+            refreshed_at_ms: timestamp_ms(),
+            last_error: None,
+        }
+    }
+}
+
 impl Default for ObsConnectionState {
     fn default() -> Self {
         Self {
@@ -182,6 +215,69 @@ impl ObsController {
         ObsRuntimeState {
             last_error: Some(message),
             ..ObsRuntimeState::default()
+        }
+    }
+
+
+    pub async fn scene_list(&self) -> ObsSceneList {
+        let client_guard = self.client.lock().await;
+        let Some(client) = client_guard.as_ref() else {
+            return ObsSceneList {
+                last_error: Some("OBS Studio is not connected.".to_string()),
+                ..ObsSceneList::default()
+            };
+        };
+
+        let response = match client.scenes().list().await {
+            Ok(response) => response,
+            Err(error) => {
+                return ObsSceneList {
+                    last_error: Some(format!("Could not list OBS scenes: {error}")),
+                    ..ObsSceneList::default()
+                };
+            }
+        };
+
+        let program_name = response
+            .current_program_scene
+            .as_ref()
+            .map(|scene| scene.name.clone());
+        let preview_name = response
+            .current_preview_scene
+            .as_ref()
+            .map(|scene| scene.name.clone());
+        let program_uuid = response
+            .current_program_scene
+            .as_ref()
+            .map(|scene| scene.uuid.to_string());
+        let preview_uuid = response
+            .current_preview_scene
+            .as_ref()
+            .map(|scene| scene.uuid.to_string());
+
+        let mut scenes = response
+            .scenes
+            .into_iter()
+            .map(|scene| {
+                let uuid = scene.id.uuid.to_string();
+                ObsSceneSummary {
+                    name: scene.id.name,
+                    is_program: program_uuid.as_deref() == Some(uuid.as_str()),
+                    is_preview: preview_uuid.as_deref() == Some(uuid.as_str()),
+                    uuid,
+                    index: scene.index,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        scenes.sort_by_key(|scene| scene.index);
+
+        ObsSceneList {
+            scenes,
+            current_program_scene: program_name,
+            current_preview_scene: preview_name,
+            refreshed_at_ms: timestamp_ms(),
+            last_error: None,
         }
     }
 
@@ -362,5 +458,15 @@ mod tests {
         assert!(json_bool(&value, "outputActive"));
         assert!(!json_bool(&value, "outputPaused"));
         assert!(!json_bool(&value, "missing"));
+    }
+
+
+    #[test]
+    fn scene_list_defaults_to_empty() {
+        let scenes = ObsSceneList::default();
+        assert!(scenes.scenes.is_empty());
+        assert!(scenes.current_program_scene.is_none());
+        assert!(scenes.current_preview_scene.is_none());
+        assert!(scenes.last_error.is_none());
     }
 }

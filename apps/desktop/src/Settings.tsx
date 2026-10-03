@@ -8,6 +8,7 @@ import type {
   ObsConnectRequest,
   ObsConnectionState,
   ObsRuntimeState,
+  ObsSceneList,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -38,9 +39,11 @@ type Props = {
   onResetPermissions: () => Promise<PermissionPolicy>;
   obsConnection: ObsConnectionState;
   obsRuntime: ObsRuntimeState;
+  obsScenes: ObsSceneList;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
+  onObsScenesRefresh: () => Promise<ObsSceneList>;
 };
 
 const sections: Array<{
@@ -153,9 +156,11 @@ export default function Settings({
   onResetPermissions,
   obsConnection,
   obsRuntime,
+  obsScenes,
   onObsConnect,
   onObsDisconnect,
   onObsRefresh,
+  onObsScenesRefresh,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -657,6 +662,58 @@ export default function Settings({
 
                   {obsRuntime.lastError && (
                     <p className="obs-connection-error">{obsRuntime.lastError}</p>
+                  )}
+                </div>
+              )}
+
+              {obsConnection.connected && (
+                <div className="obs-scenes-panel">
+                  <div className="obs-runtime-heading">
+                    <div>
+                      <strong>Scenes</strong>
+                      <span>
+                        {obsScenes.scenes.length} scene{obsScenes.scenes.length === 1 ? "" : "s"} detected · refreshed every 5 seconds.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      onClick={() => void onObsScenesRefresh()}
+                    >
+                      Refresh scenes
+                    </button>
+                  </div>
+
+                  {obsScenes.scenes.length > 0 ? (
+                    <div className="obs-scene-list">
+                      {obsScenes.scenes.map((scene) => (
+                        <div className="obs-scene-row" key={scene.uuid}>
+                          <div className="obs-scene-index">
+                            {String(scene.index + 1).padStart(2, "0")}
+                          </div>
+                          <div className="obs-scene-copy">
+                            <strong>{scene.name}</strong>
+                            <span>{scene.uuid}</span>
+                          </div>
+                          <div className="obs-scene-flags">
+                            {scene.isProgram && (
+                              <Badge tone="ready">Program</Badge>
+                            )}
+                            {scene.isPreview && (
+                              <Badge>Preview</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="obs-scenes-empty">
+                      No OBS scenes are available yet.
+                    </div>
+                  )}
+
+                  {obsScenes.lastError && (
+                    <p className="obs-connection-error">{obsScenes.lastError}</p>
                   )}
                 </div>
               )}
