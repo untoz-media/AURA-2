@@ -23,6 +23,7 @@ import type {
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
+import { auraThemes, type AuraTheme } from "./theme";
 
 type SettingsSection =
   | "general"
@@ -93,6 +94,8 @@ type Props = {
     inputUuid: string,
     percent: number,
   ) => Promise<ObsAudioControlResult>;
+  theme: AuraTheme;
+  onThemeChange: (theme: AuraTheme) => void;
 };
 
 const sections: Array<{
@@ -241,6 +244,8 @@ export default function Settings({
   onObsSourceVisibilityChange,
   onObsAudioMuteChange,
   onObsAudioVolumeChange,
+  theme,
+  onThemeChange,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -505,11 +510,27 @@ export default function Settings({
             </header>
             <Surface className="settings-card">
               <SectionLabel>Theme</SectionLabel>
-              <SettingRow
-                title="AURA Dark"
-                description="Current AURA-2 visual system."
-                trailing={<Badge tone="ready">Default</Badge>}
-              />
+              <div className="theme-grid">
+                {auraThemes.map((option) => (
+                  <button
+                    type="button"
+                    className={`theme-card ${theme === option.id ? "active" : ""}`}
+                    key={option.id}
+                    aria-pressed={theme === option.id}
+                    onClick={() => onThemeChange(option.id)}
+                  >
+                    <span className={`theme-preview ${option.id}`} aria-hidden="true">
+                      <i />
+                      <b />
+                    </span>
+                    <span className="theme-card-copy">
+                      <strong>{option.name}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                    {theme === option.id && <Badge tone="ready">Active</Badge>}
+                  </button>
+                ))}
+              </div>
               <SettingRow
                 title="Reduced motion"
                 description="AURA automatically respects the Windows/browser reduced-motion preference."

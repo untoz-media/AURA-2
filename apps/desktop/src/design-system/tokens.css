@@ -77,3 +77,104 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
+
+:root[data-aura-theme="midnight"] {
+  --aura-bg-0: #030814;
+  --aura-bg-1: #06101f;
+  --aura-bg-2: #0a1629;
+  --aura-surface-1: rgba(80, 126, 190, 0.055);
+  --aura-surface-2: rgba(91, 140, 210, 0.085);
+  --aura-surface-3: rgba(104, 153, 226, 0.12);
+  --aura-text-1: #f3f8ff;
+  --aura-text-2: #c2d0e4;
+  --aura-text-3: #8191a9;
+  --aura-text-4: #5d6d84;
+  --aura-border-1: rgba(129, 164, 217, 0.09);
+  --aura-border-2: rgba(129, 164, 217, 0.16);
+  --aura-border-focus: rgba(83, 148, 255, 0.68);
+  --aura-cyan: #38c9ff;
+  --aura-blue: #4f8dff;
+  --aura-violet: #776dff;
+  --aura-accent: #6097ff;
+  --aura-accent-soft: rgba(96, 151, 255, 0.14);
+  --aura-accent-glow: rgba(96, 151, 255, 0.34);
+  --shadow-aura: 0 0 55px rgba(79, 141, 255, 0.28), 0 0 120px rgba(119, 109, 255, 0.11);
+}
+
+:root[data-aura-theme="oled"] {
+  --aura-bg-0: #000000;
+  --aura-bg-1: #000000;
+  --aura-bg-2: #050505;
+  --aura-surface-1: rgba(255, 255, 255, 0.025);
+  --aura-surface-2: rgba(255, 255, 255, 0.045);
+  --aura-surface-3: rgba(255, 255, 255, 0.065);
+  --aura-text-1: #ffffff;
+  --aura-text-2: #d2d5dc;
+  --aura-text-3: #8a909d;
+  --aura-text-4: #606570;
+  --aura-border-1: rgba(255, 255, 255, 0.075);
+  --aura-border-2: rgba(255, 255, 255, 0.13);
+  --aura-border-focus: rgba(103, 126, 255, 0.68);
+  --aura-accent: #6b7dff;
+  --aura-accent-soft: rgba(107, 125, 255, 0.13);
+  --aura-accent-glow: rgba(107, 125, 255, 0.3);
+  --shadow-surface: 0 18px 55px rgba(0, 0, 0, 0.6);
+  --shadow-command: 0 20px 75px rgba(0, 0, 0, 0.68);
+}
+
+:root[data-aura-theme="aurora"] {
+  --aura-bg-0: #050916;
+  --aura-bg-1: #071021;
+  --aura-bg-2: #0b1630;
+  --aura-surface-1: rgba(79, 152, 255, 0.055);
+  --aura-surface-2: rgba(93, 164, 255, 0.085);
+  --aura-surface-3: rgba(118, 98, 255, 0.12);
+  --aura-text-1: #f8fbff;
+  --aura-text-2: #c6d6ef;
+  --aura-text-3: #879abb;
+  --aura-text-4: #627493;
+  --aura-border-1: rgba(92, 182, 255, 0.1);
+  --aura-border-2: rgba(110, 124, 255, 0.17);
+  --aura-border-focus: rgba(32, 199, 255, 0.74);
+  --aura-cyan: #28dcff;
+  --aura-blue: #4f90ff;
+  --aura-violet: #a364ff;
+  --aura-accent: #5e93ff;
+  --aura-accent-soft: rgba(40, 220, 255, 0.13);
+  --aura-accent-glow: rgba(77, 137, 255, 0.38);
+  --shadow-aura: 0 0 65px rgba(40, 220, 255, 0.28), 0 0 135px rgba(163, 100, 255, 0.16);
+}
+
+:root[data-aura-theme="light"] {
+  color-scheme: light;
+  --aura-bg-0: #eef3fb;
+  --aura-bg-1: #f7f9fd;
+  --aura-bg-2: #e7edf7;
+  --aura-surface-1: rgba(255, 255, 255, 0.72);
+  --aura-surface-2: rgba(255, 255, 255, 0.9);
+  --aura-surface-3: rgba(227, 235, 247, 0.94);
+  --aura-text-1: #111827;
+  --aura-text-2: #273449;
+  --aura-text-3: #536176;
+  --aura-text-4: #78859a;
+  --aura-border-1: rgba(33, 54, 88, 0.1);
+  --aura-border-2: rgba(33, 54, 88, 0.16);
+  --aura-border-focus: rgba(75, 101, 235, 0.62);
+  --aura-cyan: #0ca9df;
+  --aura-blue: #4168e9;
+  --aura-violet: #7658e9;
+  --aura-accent: #526be8;
+  --aura-accent-soft: rgba(82, 107, 232, 0.11);
+  --aura-accent-glow: rgba(82, 107, 232, 0.2);
+  --status-idle: #778196;
+  --status-listening: #079ac9;
+  --status-thinking: #7257d7;
+  --status-working: #4f67df;
+  --status-waiting: #bc7622;
+  --status-success: #238455;
+  --status-danger: #c84457;
+  --shadow-surface: 0 18px 55px rgba(63, 76, 105, 0.12);
+  --shadow-command: 0 20px 75px rgba(63, 76, 105, 0.15);
+  --shadow-aura: 0 0 50px rgba(82, 107, 232, 0.18), 0 0 105px rgba(118, 88, 233, 0.08);
+}
