@@ -21,6 +21,7 @@ import type {
   DirectorPresetRunResult,
   SaveDirectorPresetRequest,
   ModelCatalog,
+  ModelRuntimeStatus,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -98,6 +99,7 @@ type Props = {
   theme: AuraTheme;
   onThemeChange: (theme: AuraTheme) => void;
   modelCatalog: ModelCatalog;
+  modelRuntimeStatus: ModelRuntimeStatus;
 };
 
 const sections: Array<{
@@ -249,6 +251,7 @@ export default function Settings({
   theme,
   onThemeChange,
   modelCatalog,
+  modelRuntimeStatus,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -698,8 +701,50 @@ export default function Settings({
               />
               <SettingRow
                 title="Conversation inference"
-                description="The selected model is persisted now; wiring it into free-form chat generation is the next Model Runtime step."
-                trailing={<Badge tone="planned">Next</Badge>}
+                description={
+                  modelRuntimeStatus.state === "ready"
+                    ? `Local inference is ready${modelRuntimeStatus.device ? ` on ${modelRuntimeStatus.device}` : ""}.`
+                    : modelRuntimeStatus.state === "loading"
+                      ? "The selected local model is loading into the inference runtime."
+                      : modelRuntimeStatus.state === "generating"
+                        ? "The selected local model is currently generating a response."
+                        : modelRuntimeStatus.state === "error"
+                          ? modelRuntimeStatus.lastError ?? "The local inference runtime reported an error."
+                          : "The runtime starts on demand when a free-form chat message needs the selected model."
+                }
+                trailing={
+                  <Badge tone={modelRuntimeStatus.state === "error" ? "planned" : modelRuntimeStatus.state === "stopped" ? "planned" : "ready"}>
+                    {modelRuntimeStatus.state}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Python runtime"
+                description={
+                  modelRuntimeStatus.pythonExecutable
+                    ? modelRuntimeStatus.pythonExecutable
+                    : "AURA will look for AURA_PYTHON, a managed runtime, python, py -3 or python3."
+                }
+                trailing={
+                  <Badge tone={modelRuntimeStatus.pythonExecutable ? "ready" : "planned"}>
+                    {modelRuntimeStatus.pythonExecutable ? "Detected" : "On demand"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="GPU acceleration"
+                description={
+                  modelRuntimeStatus.cuda === true
+                    ? "CUDA is available to the local model runtime."
+                    : modelRuntimeStatus.cuda === false
+                      ? "CUDA is not active; local inference may be much slower and use more system memory."
+                      : "GPU capability is reported after the selected model runtime starts."
+                }
+                trailing={
+                  <Badge tone={modelRuntimeStatus.cuda ? "ready" : "planned"}>
+                    {modelRuntimeStatus.cuda == null ? "Unknown" : modelRuntimeStatus.cuda ? "CUDA" : "CPU / Auto"}
+                  </Badge>
+                }
               />
               <SettingRow
                 title="Model Router"
