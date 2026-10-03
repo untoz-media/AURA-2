@@ -169,6 +169,51 @@ fn format_duration_ms(duration_ms: u64) -> String {
     format!("{hours:02}:{minutes:02}:{seconds:02}")
 }
 
+fn should_prefer_director_preset(text: &str, base_route: &RouteResult) -> bool {
+    let normalized = text
+        .trim()
+        .trim_matches(|character: char| {
+            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
+        })
+        .to_lowercase();
+
+    let explicit_preset = [
+        "run director preset ",
+        "run preset ",
+        "execute preset ",
+        "executa o preset ",
+        "executa preset ",
+        "ativa o preset ",
+        "ativa preset ",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix));
+
+    if explicit_preset {
+        return true;
+    }
+
+    match base_route {
+        RouteResult::NoMatch | RouteResult::UnsupportedApp(_) => true,
+        RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsProgramScene(_),
+            ..
+        }) => [
+            "switch to ",
+            "focus ",
+            "go to ",
+            "vai para ",
+            "muda para ",
+            "troca para ",
+            "foca ",
+            "focar ",
+        ]
+        .iter()
+        .any(|prefix| normalized.starts_with(prefix)),
+        _ => false,
+    }
+}
+
 fn route_director_preset(
     app: &AppHandle,
     text: &str,
@@ -771,10 +816,12 @@ fn process_user_command(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
-    let routed = match route_command(&text, &policy) {
-        RouteResult::NoMatch => route_director_preset(&app, &text, &policy)
-            .unwrap_or(RouteResult::NoMatch),
-        other => other,
+    let base_route = route_command(&text, &policy);
+    let director_route = route_director_preset(&app, &text, &policy);
+
+    let routed = match director_route {
+        Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+        _ => base_route,
     };
 
     match routed {
