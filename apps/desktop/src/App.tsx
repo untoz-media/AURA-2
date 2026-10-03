@@ -33,6 +33,7 @@ function App() {
     appStatus,
     runtimeState,
     permissionPolicy,
+    obsConnection,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -41,6 +42,8 @@ function App() {
     setAutostart,
     setPermission,
     resetPermissions,
+    connectObsControl,
+    disconnectObsControl,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -222,6 +225,9 @@ function App() {
             permissionPolicy={permissionPolicy}
             onPermissionChange={setPermission}
             onResetPermissions={resetPermissions}
+            obsConnection={obsConnection}
+            onObsConnect={connectObsControl}
+            onObsDisconnect={disconnectObsControl}
           />
         )}
       </section>
