@@ -318,6 +318,12 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn routine_intent_shape_remains_action_capable() {
+    let intent = ActionIntent::UserRoutine("routine-start-editing".to_string());
+    assert!(matches!(intent, ActionIntent::UserRoutine(id) if id == "routine-start-editing"));
+}
+
+#[test]
 fn recent_files_context_is_read_only() {
     let policy = PermissionPolicy::default();
 
