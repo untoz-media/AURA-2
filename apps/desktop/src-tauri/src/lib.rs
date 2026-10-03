@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
+use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1408,6 +1408,145 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ObsAudioMute {
+                            input_name,
+                            muted,
+                        } => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "{} OBS input {}…",
+                                        if muted { "Muting" } else { "Unmuting" },
+                                        input_name
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                obs.set_audio_muted_by_name(&input_name, muted).await
+                            });
+
+                            match result {
+                                Ok(changed) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "OBS input {} is now {}.",
+                                            changed.input_name,
+                                            if changed.muted { "muted" } else { "unmuted" }
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not change OBS input mute state: {}",
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.audio_mute_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ObsAudioVolume {
+                            input_name,
+                            percent,
+                        } => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Setting OBS input {} to {}%…",
+                                        input_name, percent
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                obs.set_audio_volume_by_name(&input_name, percent).await
+                            });
+
+                            match result {
+                                Ok(changed) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "OBS input {} volume set to {}%.",
+                                            changed.input_name,
+                                            changed.volume_percent
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not change OBS input volume: {}",
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.audio_volume_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::ObsSourceVisibility {
                             source_name,
                             enabled,
@@ -1920,6 +2059,22 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ObsAudioMute {
+                        input_name,
+                        muted,
+                    } => format!(
+                        "{} OBS input {} requires confirmation under the current permission policy.",
+                        if *muted { "Muting" } else { "Unmuting" },
+                        input_name
+                    ),
+                    ActionIntent::ObsAudioVolume {
+                        input_name,
+                        percent,
+                    } => format!(
+                        "Setting OBS input {} to {}% requires confirmation under the current permission policy.",
+                        input_name,
+                        percent
+                    ),
                     ActionIntent::ObsSourceVisibility {
                         source_name,
                         enabled,
@@ -2137,7 +2292,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS scenes, sources, recording and streaming controls."
+                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS scenes, sources, audio, recording and streaming controls."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
@@ -2201,6 +2356,29 @@ async fn set_obs_source_visibility(
     obs: State<'_, ObsController>,
 ) -> Result<ObsSourceVisibilityResult, String> {
     obs.set_source_visibility(request).await
+}
+
+#[tauri::command]
+async fn get_obs_audio_inputs(
+    obs: State<'_, ObsController>,
+) -> Result<ObsAudioInputList, String> {
+    obs.audio_inputs().await
+}
+
+#[tauri::command]
+async fn set_obs_audio_muted(
+    request: ObsAudioMuteRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsAudioControlResult, String> {
+    obs.set_audio_muted(request).await
+}
+
+#[tauri::command]
+async fn set_obs_audio_volume(
+    request: ObsAudioVolumeRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsAudioControlResult, String> {
+    obs.set_audio_volume(request).await
 }
 
 #[tauri::command]
@@ -2427,6 +2605,9 @@ pub fn run() {
             get_obs_stream_duration,
             get_obs_source_items,
             set_obs_source_visibility,
+            get_obs_audio_inputs,
+            set_obs_audio_muted,
+            set_obs_audio_volume,
             set_obs_program_scene,
             set_obs_preview_scene,
             start_obs_recording,
