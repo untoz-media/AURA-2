@@ -38,6 +38,8 @@ pub enum ActionIntent {
     ObsStreaming(ObsStreamingAction),
     ObsStreamDuration,
     ObsSourceVisibility { source_name: String, enabled: bool },
+    ObsAudioMute { input_name: String, muted: bool },
+    ObsAudioVolume { input_name: String, percent: u8 },
 }
 
 #[derive(Debug, Clone)]
@@ -466,6 +468,123 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn obs_audio_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    const MUTE_PREFIXES: &[&str] = &[
+        "mute input ",
+        "mute ",
+        "silencia o input ",
+        "silencia input ",
+        "silencia ",
+        "silenciar ",
+    ];
+
+    const UNMUTE_PREFIXES: &[&str] = &[
+        "unmute input ",
+        "unmute ",
+        "tira o mute de ",
+        "tirar o mute de ",
+        "reativa o som de ",
+        "reativa som de ",
+        "ativa o som de ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, MUTE_PREFIXES) {
+        let input_name = unwrap_text_quotes(value).trim();
+        if input_name.is_empty() {
+            return Some(Err("OBS audio input name cannot be empty.".to_string()));
+        }
+
+        return Some(Ok(ActionIntent::ObsAudioMute {
+            input_name: input_name.to_string(),
+            muted: true,
+        }));
+    }
+
+    if let Some(value) = value_after_prefix(input, UNMUTE_PREFIXES) {
+        let input_name = unwrap_text_quotes(value).trim();
+        if input_name.is_empty() {
+            return Some(Err("OBS audio input name cannot be empty.".to_string()));
+        }
+
+        return Some(Ok(ActionIntent::ObsAudioMute {
+            input_name: input_name.to_string(),
+            muted: false,
+        }));
+    }
+
+    fn parse_named_volume(
+        input: &str,
+        prefix: &str,
+        separator: &str,
+    ) -> Option<Result<ActionIntent, String>> {
+        let rest = input.strip_prefix(prefix)?;
+        let (name, value) = rest.rsplit_once(separator)?;
+        let input_name = unwrap_text_quotes(name).trim();
+
+        if input_name.is_empty() {
+            return Some(Err("OBS audio input name cannot be empty.".to_string()));
+        }
+
+        Some(parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
+            input_name: input_name.to_string(),
+            percent,
+        }))
+    }
+
+    let normalized = input.trim().to_lowercase();
+
+    for (prefix, separator) in [
+        ("set volume of ", " to "),
+        ("set ", " volume to "),
+        ("set obs input ", " to "),
+        ("define o volume de ", " para "),
+        ("define volume de ", " para "),
+        ("define ", " para "),
+        ("mete ", " a "),
+    ] {
+        if let Some(result) = parse_named_volume(&normalized, prefix, separator) {
+            let original_name = match &result {
+                Ok(ActionIntent::ObsAudioVolume { input_name, .. }) => input_name.clone(),
+                _ => String::new(),
+            };
+
+            if original_name.is_empty() {
+                return Some(result);
+            }
+
+            let prefix_len = prefix.len();
+            let original_rest = input.trim().get(prefix_len..)?;
+            let (original_name, _) = original_rest.rsplit_once(separator)?;
+            return Some(result.map(|intent| match intent {
+                ActionIntent::ObsAudioVolume { percent, .. } => ActionIntent::ObsAudioVolume {
+                    input_name: unwrap_text_quotes(original_name).trim().to_string(),
+                    percent,
+                },
+                other => other,
+            }));
+        }
+    }
+
+    if normalized.starts_with("set ") {
+        let rest = input.trim().get(4..)?;
+        if let Some((name, value)) = rest.rsplit_once(" to ") {
+            if value.trim().ends_with('%') {
+                let input_name = unwrap_text_quotes(name).trim();
+                if input_name.is_empty() {
+                    return Some(Err("OBS audio input name cannot be empty.".to_string()));
+                }
+
+                return Some(parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
+                    input_name: input_name.to_string(),
+                    percent,
+                }));
+            }
+        }
+    }
+
+    None
+}
+
 fn obs_source_visibility_request(input: &str) -> Option<ActionIntent> {
     const SHOW_PREFIXES: &[&str] = &[
         "show source ",
@@ -844,6 +963,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(audio) = obs_audio_request(input) {
+        return match audio {
+            Ok(intent) => {
+                let permission = PermissionClass::Act;
+                RouteResult::Action(RoutedAction {
+                    intent,
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Err(message) => RouteResult::InvalidMedia(message),
+        };
+    }
+
     if let Some(intent) = obs_source_visibility_request(input) {
         let permission = PermissionClass::Act;
         return RouteResult::Action(RoutedAction {
@@ -1066,6 +1199,60 @@ mod tests {
             RouteResult::Action(RoutedAction {
                 intent: ActionIntent::ListWindows,
                 permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_obs_audio_controls_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Mute Mic/Aux", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsAudioMute { input_name, muted: true },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if input_name == "Mic/Aux"
+        ));
+
+        assert!(matches!(
+            route_command("Unmute Desktop Audio", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsAudioMute { input_name, muted: false },
+                permission: PermissionClass::Act,
+                ..
+            }) if input_name == "Desktop Audio"
+        ));
+
+        assert!(matches!(
+            route_command("Set Mic/Aux to 70%", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsAudioVolume { input_name, percent: 70 },
+                permission: PermissionClass::Act,
+                ..
+            }) if input_name == "Mic/Aux"
+        ));
+
+        assert!(matches!(
+            route_command("Define Desktop Audio para 45%", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsAudioVolume { input_name, percent: 45 },
+                permission: PermissionClass::Act,
+                ..
+            }) if input_name == "Desktop Audio"
+        ));
+    }
+
+    #[test]
+    fn obs_audio_controls_do_not_override_system_mute() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Mute", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::Media(MediaAction::Mute),
                 ..
             })
         ));
