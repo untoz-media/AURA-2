@@ -149,11 +149,14 @@ fn validate_action(action: &DirectorPresetAction) -> Result<(), String> {
         DirectorPresetAction::SourceVisibility { source_name, .. } => {
             validate_text(source_name, "Source name", 256)?;
         }
-        DirectorPresetAction::AudioMute { input_name, .. }
-        | DirectorPresetAction::AudioVolume { input_name, .. } => {
+        DirectorPresetAction::AudioMute { input_name, .. } => {
             validate_text(input_name, "Audio input name", 256)?;
         }
-        DirectorPresetAction::AudioVolume { percent, .. } => {
+        DirectorPresetAction::AudioVolume {
+            input_name,
+            percent,
+        } => {
+            validate_text(input_name, "Audio input name", 256)?;
             if *percent > 100 {
                 return Err("Audio volume must be between 0 and 100 percent.".to_string());
             }
