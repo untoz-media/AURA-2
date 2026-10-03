@@ -180,7 +180,10 @@ fn validate_preset_request(
     existing: &[DirectorPreset],
 ) -> Result<(String, String, Vec<String>), String> {
     let name = validate_text(&request.name, "Preset name", 64)?;
-    let description = request.description.trim().chars().take(240).collect::<String>();
+    let description = request.description.trim().to_string();
+    if description.chars().count() > 240 {
+        return Err("Preset description is too long.".to_string());
+    }
 
     if request.actions.is_empty() {
         return Err("A Director Mode preset needs at least one action.".to_string());
@@ -290,7 +293,24 @@ pub fn save_director_preset(
         }
         id.to_string()
     } else {
-        format!("director-{}-{now}", slugify(&name))
+        let slug = {
+            let value = slugify(&name);
+            if value.is_empty() {
+                "preset".to_string()
+            } else {
+                value
+            }
+        };
+        let base = format!("director-{slug}-{now}");
+        let mut candidate = base.clone();
+        let mut suffix = 2_u32;
+
+        while presets.iter().any(|preset| preset.id == candidate) {
+            candidate = format!("{base}-{suffix}");
+            suffix += 1;
+        }
+
+        candidate
     };
 
     let preset = DirectorPreset {
@@ -742,6 +762,19 @@ mod tests {
             percent: 101,
         })
         .is_err());
+    }
+
+    #[test]
+    fn rejects_overlong_description() {
+        let request = SaveDirectorPresetRequest {
+            id: None,
+            name: "Test".to_string(),
+            description: "x".repeat(241),
+            aliases: vec![],
+            actions: vec![DirectorPresetAction::Wait { milliseconds: 0 }],
+        };
+
+        assert!(validate_preset_request(&request, &[]).is_err());
     }
 
     #[test]
