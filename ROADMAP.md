@@ -49,7 +49,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 - [x] **M004.1** — OBS WebSocket connection
 - [x] **M004.2** — Detect OBS state
-- [ ] **M004.3** — List scenes
+- [x] **M004.3** — List scenes
 - [ ] **M004.4** — Change scenes
 - [ ] **M004.5** — Start / stop recording
 - [ ] **M004.6** — Start / stop streaming
