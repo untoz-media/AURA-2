@@ -172,6 +172,7 @@ pub struct ObsProductionHealth {
     pub stream_bitrate_kbps: Option<f64>,
     pub stream_output_skipped_frames: Option<u64>,
     pub stream_output_total_frames: Option<u64>,
+    pub stream_dropped_percent: Option<f64>,
     pub checked_at_ms: u64,
 }
 
@@ -1246,6 +1247,13 @@ impl ObsController {
             frame_loss_percent(stats.render_skipped_frames as u64, stats.render_total_frames as u64);
         let output_skipped_percent =
             frame_loss_percent(stats.output_skipped_frames as u64, stats.output_total_frames as u64);
+        let stream_dropped_percent = match (
+            stream_output_skipped_frames,
+            stream_output_total_frames,
+        ) {
+            (Some(skipped), Some(total)) => Some(frame_loss_percent(skipped, total)),
+            _ => None,
+        };
 
         let (status, summary, issues) = evaluate_production_health(
             stats.cpu_usage,
@@ -1256,6 +1264,7 @@ impl ObsController {
             streaming,
             stream_reconnecting,
             stream_congestion,
+            stream_dropped_percent,
         );
 
         Ok(ObsProductionHealth {
@@ -1279,6 +1288,7 @@ impl ObsController {
             stream_bitrate_kbps,
             stream_output_skipped_frames,
             stream_output_total_frames,
+            stream_dropped_percent,
             checked_at_ms,
         })
     }
@@ -1407,6 +1417,7 @@ fn evaluate_production_health(
     streaming: bool,
     stream_reconnecting: bool,
     stream_congestion: Option<f64>,
+    stream_dropped_percent: Option<f64>,
 ) -> (String, String, Vec<String>) {
     let mut critical = Vec::new();
     let mut warnings = Vec::new();
@@ -1426,6 +1437,20 @@ fn evaluate_production_health(
                 warnings.push(format!(
                     "Stream congestion is elevated ({:.0}%).",
                     congestion * 100.0
+                ));
+            }
+        }
+
+        if let Some(dropped_percent) = stream_dropped_percent {
+            if dropped_percent >= 5.0 {
+                critical.push(format!(
+                    "Stream dropped {:.2}% of output frames.",
+                    dropped_percent
+                ));
+            } else if dropped_percent >= 1.0 {
+                warnings.push(format!(
+                    "Stream dropped {:.2}% of output frames.",
+                    dropped_percent
                 ));
             }
         }
@@ -1970,19 +1995,19 @@ mod tests {
     #[test]
     fn production_health_grades_good_warning_and_critical() {
         let good = evaluate_production_health(
-            20.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0),
+            20.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
         );
         assert_eq!(good.0, "good");
         assert!(good.2.is_empty());
 
         let warning = evaluate_production_health(
-            85.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0),
+            85.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
         );
         assert_eq!(warning.0, "warning");
         assert!(!warning.2.is_empty());
 
         let critical = evaluate_production_health(
-            20.0, 500.0, 4.0, 0.0, 0.0, true, false, Some(0.0),
+            20.0, 500.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
         );
         assert_eq!(critical.0, "critical");
         assert!(!critical.2.is_empty());
