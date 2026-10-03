@@ -333,6 +333,13 @@ pub fn find_director_preset_by_id(app: &AppHandle, preset_id: &str) -> Option<Di
 }
 
 pub fn resolve_director_preset_command(app: &AppHandle, input: &str) -> Option<DirectorPreset> {
+    resolve_director_preset_from_list(load_director_presets(app), input)
+}
+
+fn resolve_director_preset_from_list(
+    presets: Vec<DirectorPreset>,
+    input: &str,
+) -> Option<DirectorPreset> {
     let normalized = normalize_phrase(input);
 
     let target = [
@@ -348,8 +355,6 @@ pub fn resolve_director_preset_command(app: &AppHandle, input: &str) -> Option<D
     .find_map(|prefix| normalized.strip_prefix(prefix))
     .map(str::trim)
     .filter(|value| !value.is_empty());
-
-    let presets = load_director_presets(app);
 
     if let Some(target) = target {
         return presets.into_iter().find(|preset| preset_matches(preset, target));
@@ -697,6 +702,46 @@ mod tests {
 
         assert!(preset_matches(&preset, "prepare   match!"));
         assert!(preset_matches(&preset, "READY THE MATCH"));
+    }
+
+    #[test]
+    fn resolves_bare_alias_and_explicit_preset_command() {
+        let preset = DirectorPreset {
+            id: "prepare".to_string(),
+            name: "Prepare Match".to_string(),
+            description: String::new(),
+            aliases: vec!["ready the match".to_string()],
+            actions: vec![DirectorPresetAction::ProgramScene {
+                scene_name: "Match".to_string(),
+            }],
+            updated_at_ms: 1,
+        };
+
+        let by_alias =
+            resolve_director_preset_from_list(vec![preset.clone()], "Ready the match!");
+        assert_eq!(by_alias.as_ref().map(|item| item.id.as_str()), Some("prepare"));
+
+        let by_command =
+            resolve_director_preset_from_list(vec![preset], "Run preset Prepare Match");
+        assert_eq!(
+            by_command.as_ref().map(|item| item.id.as_str()),
+            Some("prepare")
+        );
+    }
+
+    #[test]
+    fn validates_audio_volume_range() {
+        assert!(validate_action(&DirectorPresetAction::AudioVolume {
+            input_name: "Mic/Aux".to_string(),
+            percent: 100,
+        })
+        .is_ok());
+
+        assert!(validate_action(&DirectorPresetAction::AudioVolume {
+            input_name: "Mic/Aux".to_string(),
+            percent: 101,
+        })
+        .is_err());
     }
 
     #[test]
