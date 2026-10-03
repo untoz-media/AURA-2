@@ -351,6 +351,7 @@ export type CurrentAppInfo = {
   processName: string;
   processId: number;
   knownApp: boolean;
+  windowTitle?: string;
   contextSource: "foreground" | "lastExternal";
   capturedAtMs: number;
 };
