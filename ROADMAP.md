@@ -53,7 +53,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M004.4** — Change scenes
 - [x] **M004.5** — Start / stop recording
 - [x] **M004.6** — Start / stop streaming
-- [ ] **M004.7** — Read stream duration
+- [x] **M004.7** — Read stream duration
 - [ ] **M004.8** — Control source visibility
 - [ ] **M004.9** — Control audio levels
 - [ ] **M004.10** — Production health checks
