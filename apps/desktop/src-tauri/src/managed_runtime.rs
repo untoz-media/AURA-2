@@ -22,7 +22,8 @@ const PYTHON_VERSION: &str = "3.12.10";
 const PYTHON_INSTALLER_NAME: &str = "python-3.12.10-amd64.exe";
 const PYTHON_INSTALLER_URL: &str =
     "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe";
-const PYTHON_INSTALLER_SIZE: u64 = 26_964_224;
+const MIN_PYTHON_INSTALLER_BYTES: u64 = 20_000_000;
+const MIN_RUNTIME_FREE_SPACE_BYTES: u64 = 10_000_000_000;
 const RUNTIME_MARKER: &str = "managed-runtime.json";
 
 const PYTORCH_CUDA_INDEX: &str = "https://download.pytorch.org/whl/cu128";
@@ -210,6 +211,20 @@ impl ManagedRuntimeSetup {
             let root = runtime_root(app)?;
             let python_dir = runtime_python_dir(app)?;
 
+            if let Some(parent) = root.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("Could not create runtime parent directory: {error}"))?;
+                let free = fs2::available_space(parent)
+                    .map_err(|error| format!("Could not read available runtime disk space: {error}"))?;
+
+                if free < MIN_RUNTIME_FREE_SPACE_BYTES {
+                    return Err(format!(
+                        "AURA needs at least {:.0} GB of free space to prepare the managed AI runtime safely.",
+                        MIN_RUNTIME_FREE_SPACE_BYTES as f64 / 1_000_000_000.0
+                    ));
+                }
+            }
+
             if repair && root.exists() {
                 fs::remove_dir_all(&root)
                     .map_err(|error| format!("Could not reset managed runtime: {error}"))?;
@@ -366,7 +381,7 @@ impl ManagedRuntimeSetup {
             let size = fs::metadata(&installer)
                 .map_err(|error| error.to_string())?
                 .len();
-            if size == PYTHON_INSTALLER_SIZE {
+            if size >= MIN_PYTHON_INSTALLER_BYTES && verify_authenticode(&installer).is_ok() {
                 return Ok(installer);
             }
             let _ = fs::remove_file(&installer);
@@ -384,7 +399,7 @@ impl ManagedRuntimeSetup {
             .error_for_status()
             .map_err(|error| format!("Could not download Python runtime: {error}"))?;
 
-        let total = response.content_length().unwrap_or(PYTHON_INSTALLER_SIZE);
+        let total = response.content_length().unwrap_or(0);
         let mut output = fs::File::create(&installer)
             .map_err(|error| format!("Could not create Python installer cache: {error}"))?;
         let mut buffer = [0_u8; 64 * 1024];
@@ -433,10 +448,17 @@ impl ManagedRuntimeSetup {
             .map_err(|error| error.to_string())?
             .len();
 
-        if actual != PYTHON_INSTALLER_SIZE {
+        if actual < MIN_PYTHON_INSTALLER_BYTES {
             let _ = fs::remove_file(&installer);
             return Err(format!(
-                "Python installer size verification failed. Expected {PYTHON_INSTALLER_SIZE} bytes, got {actual}."
+                "Python installer download is unexpectedly small ({actual} bytes)."
+            ));
+        }
+
+        if total > 0 && actual != total {
+            let _ = fs::remove_file(&installer);
+            return Err(format!(
+                "Python installer download is incomplete. Expected {total} bytes, got {actual}."
             ));
         }
 
@@ -744,7 +766,8 @@ mod tests {
     fn pinned_python_installer_matches_expected_release() {
         assert_eq!(PYTHON_VERSION, "3.12.10");
         assert!(PYTHON_INSTALLER_URL.ends_with("python-3.12.10-amd64.exe"));
-        assert_eq!(PYTHON_INSTALLER_SIZE, 26_964_224);
+        assert!(MIN_PYTHON_INSTALLER_BYTES >= 20_000_000);
+        assert!(MIN_RUNTIME_FREE_SPACE_BYTES >= 10_000_000_000);
     }
 
     #[test]
