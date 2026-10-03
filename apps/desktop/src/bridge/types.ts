@@ -547,9 +547,24 @@ export type AudioInputSnapshot = {
   devices: AudioInputDevice[];
   selectedDevice?: string | null;
   testing: boolean;
+  pushToTalk: boolean;
   level: number;
+  capturedSamples: number;
+  captureDurationMs: number;
   sampleRate?: number | null;
   channels?: number | null;
   sampleFormat?: string | null;
   lastError?: string | null;
+};
+
+
+export type VoiceCaptureEvent = {
+  phase: "listening" | "captured" | "error";
+  shortcut: string;
+  sampleCount: number;
+  durationMs: number;
+  sampleRate?: number | null;
+  channels?: number | null;
+  message: string;
+  timestampMs: number;
 };
