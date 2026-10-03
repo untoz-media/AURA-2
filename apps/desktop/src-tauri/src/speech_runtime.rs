@@ -201,7 +201,7 @@ impl SpeechRuntime {
                     let text = envelope.text.unwrap_or_default().trim().to_string();
                     if text.is_empty() {
                         let message = "Speech-to-text returned an empty transcription.".to_string();
-                        self.set_error(&process_guard, message.clone());
+                        self.set_error(process_guard.as_ref(), message.clone());
                         return Err(message);
                     }
 
@@ -230,7 +230,7 @@ impl SpeechRuntime {
                     let message = envelope
                         .message
                         .unwrap_or_else(|| "Local speech runtime failed.".to_string());
-                    self.set_error(&process_guard, message.clone());
+                    self.set_error(process_guard.as_ref(), message.clone());
                     return Err(message);
                 }
                 _ => {}
@@ -331,14 +331,14 @@ impl SpeechRuntime {
 
     fn set_error(
         &self,
-        process: &Option<SpeechProcess>,
+        process: Option<&SpeechProcess>,
         message: String,
     ) {
         self.set_status(SpeechRuntimeStatus {
             state: "error".to_string(),
             model_id: SPEECH_MODEL_ID.to_string(),
-            device: process.as_ref().and_then(|running| running.device.clone()),
-            cuda: process.as_ref().and_then(|running| running.cuda),
+            device: process.and_then(|running| running.device.clone()),
+            cuda: process.and_then(|running| running.cuda),
             last_text: self.status().last_text,
             last_error: Some(message),
             refreshed_at_ms: timestamp_ms(),
