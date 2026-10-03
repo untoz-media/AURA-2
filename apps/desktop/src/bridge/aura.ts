@@ -14,6 +14,7 @@ import type {
   ObsConnectRequest,
   ObsConnectionState,
   ObsRuntimeState,
+  ObsSceneList,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -146,4 +147,9 @@ export async function disconnectObs(): Promise<ObsConnectionState> {
 
 export async function getObsRuntimeState(): Promise<ObsRuntimeState> {
   return invoke<ObsRuntimeState>("get_obs_runtime_state");
+}
+
+
+export async function getObsScenes(): Promise<ObsSceneList> {
+  return invoke<ObsSceneList>("get_obs_scenes");
 }
