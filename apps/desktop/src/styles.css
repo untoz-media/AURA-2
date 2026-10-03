@@ -562,3 +562,529 @@ input:focus-visible {
   padding: 0 9px;
   font-size: 0.58rem;
 }
+
+
+/* AURA-1 evolved desktop shell */
+.aura1-evolved-shell.app-shell {
+  grid-template-columns: 264px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 62% 112%, var(--aura-accent-soft), transparent 32%),
+    var(--aura-bg-0);
+}
+
+.aura1-evolved-shell .sidebar {
+  padding: 26px 20px 18px;
+  border-right: 1px solid var(--aura-border-1);
+  background: var(--aura-bg-1);
+  backdrop-filter: none;
+}
+
+.aura1-evolved-shell .brand-lockup {
+  gap: 13px;
+  padding: 0 7px 22px;
+}
+
+.aura1-evolved-shell .brand-copy strong {
+  color: var(--aura-text-1);
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+}
+
+.aura1-evolved-shell .brand-copy span {
+  margin-top: 2px;
+  color: var(--aura-text-4);
+  font-size: 0.62rem;
+}
+
+.new-conversation-button {
+  width: 100%;
+  min-height: 47px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--aura-border-2);
+  border-radius: 10px;
+  color: var(--aura-text-1);
+  background: var(--aura-surface-2);
+  font-size: var(--text-md);
+  font-weight: 560;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-standard) var(--ease-standard),
+    background var(--motion-standard) var(--ease-standard);
+}
+
+.new-conversation-button:hover {
+  border-color: var(--aura-border-focus);
+  background: var(--aura-surface-3);
+}
+
+.new-conversation-button > span {
+  color: var(--aura-accent);
+  font-size: 1rem;
+}
+
+.aura1-evolved-shell .primary-nav {
+  gap: 3px;
+}
+
+.aura1-evolved-shell .ds-nav-item {
+  min-height: 39px;
+  padding: 0 11px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.aura1-evolved-shell .ds-nav-item.active {
+  border-color: var(--aura-border-1);
+  background:
+    linear-gradient(90deg, var(--aura-accent-soft), transparent),
+    var(--aura-surface-1);
+}
+
+.sidebar-status-card {
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-1);
+}
+
+.sidebar-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-status-line strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.sidebar-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-idle);
+}
+
+.sidebar-status-dot.ready {
+  background: var(--status-success);
+  box-shadow: 0 0 10px rgba(99, 223, 154, 0.35);
+}
+
+.sidebar-status-dot.paused {
+  background: var(--status-waiting);
+}
+
+.sidebar-status-dot.error {
+  background: var(--status-danger);
+}
+
+.sidebar-status-details {
+  margin-top: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-status-details > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--aura-border-1);
+}
+
+.sidebar-status-details span,
+.sidebar-status-details strong {
+  overflow: hidden;
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-status-details span {
+  color: var(--aura-text-4);
+}
+
+.sidebar-status-details strong {
+  max-width: 130px;
+  color: var(--aura-text-3);
+  font-weight: 540;
+  text-align: right;
+}
+
+.sidebar-capabilities {
+  margin-top: 23px;
+}
+
+.sidebar-capabilities > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--aura-text-4);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.sidebar-capabilities > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sidebar-capabilities button {
+  min-height: 27px;
+  padding: 0 8px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 6px;
+  color: var(--aura-text-3);
+  background: var(--aura-surface-1);
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.sidebar-capabilities button:hover {
+  border-color: var(--aura-border-focus);
+  color: var(--aura-text-2);
+}
+
+.aura1-evolved-shell .sidebar-bottom {
+  margin-top: auto;
+}
+
+.sidebar-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 17px 6px 2px;
+  color: var(--aura-text-4);
+  font-size: 0.58rem;
+  line-height: 1.45;
+}
+
+.sidebar-privacy strong {
+  color: var(--aura-text-3);
+  font-weight: 560;
+}
+
+.aura1-evolved-shell .workspace {
+  min-width: 0;
+  height: 100vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--aura-bg-0);
+}
+
+.aura1-evolved-shell .topbar {
+  flex: 0 0 64px;
+  height: 64px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--aura-border-1);
+  background: var(--aura-bg-1);
+}
+
+.topbar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.topbar-brand strong {
+  color: var(--aura-text-1);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+
+.topbar-brand span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.workspace-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 28px 26px;
+  scrollbar-color: var(--aura-border-2) transparent;
+}
+
+.workspace-content.chat-workspace {
+  overflow: hidden;
+  padding: 0;
+}
+
+.chat-view {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.chat-welcome {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  padding: 34px max(24px, calc((100% - 820px) / 2)) 24px;
+  text-align: center;
+}
+
+.chat-welcome .aura-presence {
+  width: 112px;
+  height: 112px;
+  margin: 0 0 22px;
+}
+
+.chat-eyebrow {
+  color: var(--aura-accent);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.chat-welcome h1 {
+  margin: 10px 0 8px;
+  color: var(--aura-text-1);
+  font-size: clamp(2rem, 4vw, 2.85rem);
+  font-weight: 540;
+  letter-spacing: -0.045em;
+}
+
+.chat-welcome > p {
+  margin: 0;
+  color: var(--aura-text-3);
+  font-size: var(--text-md);
+}
+
+.chat-suggestions {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 34px;
+}
+
+.chat-suggestions button {
+  min-height: 72px;
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  color: var(--aura-text-2);
+  background: var(--aura-surface-1);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform var(--motion-standard) var(--ease-standard),
+    border-color var(--motion-standard) var(--ease-standard),
+    background var(--motion-standard) var(--ease-standard);
+}
+
+.chat-suggestions button:hover {
+  transform: translateY(-2px);
+  border-color: var(--aura-border-focus);
+  background: var(--aura-surface-2);
+}
+
+.chat-suggestions strong {
+  font-size: var(--text-xs);
+  font-weight: 620;
+}
+
+.chat-suggestions span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.chat-context-strip {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(260px, 1.8fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-context-strip > div {
+  min-width: 0;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 8px;
+  background: var(--aura-surface-1);
+  text-align: left;
+}
+
+.chat-context-strip span {
+  flex: 0 0 auto;
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.chat-context-strip strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--aura-text-3);
+  font-size: var(--text-2xs);
+  font-weight: 540;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-composer-area {
+  padding: 10px max(24px, calc((100% - 820px) / 2)) 17px;
+  background:
+    linear-gradient(180deg, transparent, var(--aura-bg-0) 28%);
+}
+
+.chat-composer-area .confirmation-card {
+  width: 100%;
+  margin-bottom: 9px;
+}
+
+.aura-composer {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px 8px 16px;
+  border: 1px solid var(--aura-border-2);
+  border-radius: 12px;
+  background: var(--aura-surface-2);
+  box-shadow: var(--shadow-command);
+}
+
+.aura-composer:focus-within {
+  border-color: var(--aura-border-focus);
+}
+
+.aura-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--aura-text-1);
+  background: transparent;
+  font-size: var(--text-md);
+}
+
+.aura-composer input::placeholder {
+  color: var(--aura-text-4);
+}
+
+.aura-composer > button {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--aura-bg-0);
+  background: var(--aura-accent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.aura-composer > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.composer-meta {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--aura-text-4);
+  font-size: 0.54rem;
+  letter-spacing: 0.03em;
+}
+
+.composer-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+}
+
+:root[data-aura-theme="light"] .aura1-evolved-shell .sidebar,
+:root[data-aura-theme="light"] .aura1-evolved-shell .topbar {
+  background: #f7f9fd;
+}
+
+:root[data-aura-theme="light"] .aura-composer > button {
+  color: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .aura1-evolved-shell.app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .aura1-evolved-shell .sidebar {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .chat-suggestions {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-context-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-suggestions button:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .aura1-evolved-shell.app-shell {
+    display: block;
+  }
+
+  .aura1-evolved-shell .sidebar {
+    display: none;
+  }
+
+  .workspace-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .chat-welcome {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .chat-composer-area {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .composer-shortcut {
+    display: none;
+  }
+}
