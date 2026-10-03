@@ -55,6 +55,7 @@ function App() {
     directorLastRun,
     memory,
     currentApp,
+    recentFiles,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -76,6 +77,7 @@ function App() {
     refreshObsHealth,
     refreshDirectorPresets,
     refreshMemories,
+    refreshRecentFiles,
     refreshModels,
     refreshManagedRuntime,
     runManagedRuntimeAction,
@@ -493,6 +495,8 @@ function App() {
               runtimeState={runtimeState}
               obsConnection={obsConnection}
               obsRuntime={obsRuntime}
+              recentFiles={recentFiles}
+              onRecentFilesRefresh={refreshRecentFiles}
               onCommand={runQuickCommand}
             />
           )}
