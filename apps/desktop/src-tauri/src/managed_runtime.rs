@@ -751,6 +751,10 @@ fn runtime_python_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(runtime_root(app)?.join("python"))
 }
 
+pub(crate) fn managed_python_path(app: &AppHandle) -> Result<PathBuf, String> {
+    runtime_python_path(app)
+}
+
 fn runtime_python_path(app: &AppHandle) -> Result<PathBuf, String> {
     #[cfg(windows)]
     {
