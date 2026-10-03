@@ -21,6 +21,7 @@ The stream status also contributes:
 - output congestion
 - output bytes
 - stream output skipped / total frames
+- stream dropped-frame percentage
 
 ## Derived metrics
 
@@ -28,7 +29,8 @@ AURA derives:
 
 - render skipped percentage
 - output skipped percentage
-- stream congestion percentage
+- stream congestion
+- stream dropped-frame percentage percentage
 - live bitrate in kbps from the change in `outputBytes` between health samples
 
 The bitrate value represents what OBS is actually sending. It is not treated as a configured target.
@@ -47,6 +49,7 @@ Current thresholds:
 - available recording disk space < 1 GB
 - render skipped frames >= 5%
 - output skipped frames >= 5%
+- stream dropped frames >= 5%
 
 ### Warning
 
@@ -56,6 +59,7 @@ Current thresholds:
 - average frame render time >= 20 ms
 - render skipped frames >= 1%
 - output skipped frames >= 1%
+- stream dropped frames >= 1%
 
 If no warning or critical condition is active, production health is **GOOD**.
 
