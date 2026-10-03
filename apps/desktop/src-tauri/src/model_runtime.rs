@@ -200,28 +200,44 @@ impl ModelRuntime {
             "messages": messages,
         });
 
-        let running = process_guard
-            .as_mut()
-            .ok_or_else(|| "The model runtime failed to start.".to_string())?;
+        {
+            let running = process_guard
+                .as_ref()
+                .ok_or_else(|| "The model runtime failed to start.".to_string())?;
 
-        self.set_status(ModelRuntimeStatus {
-            state: "generating".to_string(),
-            loaded_model_id: Some(running.model_id.clone()),
-            python_executable: Some(running.python_executable.clone()),
-            device: running.device.clone(),
-            cuda: running.cuda,
-            last_error: None,
-            refreshed_at_ms: timestamp_ms(),
-        });
+            self.set_status(ModelRuntimeStatus {
+                state: "generating".to_string(),
+                loaded_model_id: Some(running.model_id.clone()),
+                python_executable: Some(running.python_executable.clone()),
+                device: running.device.clone(),
+                cuda: running.cuda,
+                last_error: None,
+                refreshed_at_ms: timestamp_ms(),
+            });
+        }
 
-        if let Err(error) = writeln!(running.stdin, "{request}").and_then(|_| running.stdin.flush()) {
+        let send_result = {
+            let running = process_guard
+                .as_mut()
+                .ok_or_else(|| "The model runtime failed to start.".to_string())?;
+            writeln!(running.stdin, "{request}").and_then(|_| running.stdin.flush())
+        };
+
+        if let Err(error) = send_result {
             let message = format!("Could not send the message to the local model runtime: {error}");
             self.mark_process_failed(&mut process_guard, &message);
             return Err(message);
         }
 
         loop {
-            let envelope = match read_envelope(&mut running.stdout) {
+            let envelope_result = {
+                let running = process_guard
+                    .as_mut()
+                    .ok_or_else(|| "The model runtime is no longer available.".to_string())?;
+                read_envelope(&mut running.stdout)
+            };
+
+            let envelope = match envelope_result {
                 Ok(envelope) => envelope,
                 Err(error) => {
                     let message =
@@ -246,7 +262,9 @@ impl ModelRuntime {
                     if response.is_empty() {
                         let message =
                             "The local model returned an empty response.".to_string();
-                        self.set_ready_with_error(running, Some(message.clone()));
+                        if let Some(running) = process_guard.as_ref() {
+                            self.set_ready_with_error(running, Some(message.clone()));
+                        }
                         return Err(message);
                     }
 
@@ -270,7 +288,9 @@ impl ModelRuntime {
                         }
                     }
 
-                    self.set_ready_with_error(running, None);
+                    if let Some(running) = process_guard.as_ref() {
+                        self.set_ready_with_error(running, None);
+                    }
                     return Ok(response);
                 }
                 "error" | "fatal" => {
@@ -280,7 +300,7 @@ impl ModelRuntime {
 
                     if envelope.kind == "fatal" {
                         self.mark_process_failed(&mut process_guard, &message);
-                    } else {
+                    } else if let Some(running) = process_guard.as_ref() {
                         self.set_ready_with_error(running, Some(message.clone()));
                     }
                     return Err(message);
