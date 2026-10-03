@@ -1222,7 +1222,7 @@ impl ObsController {
             match stream_output_bytes {
                 Some(bytes) => {
                     let mut sample = self.health_sample.lock().await;
-                    let bitrate = sample.and_then(|previous| {
+                    let bitrate = sample.as_ref().and_then(|previous| {
                         let elapsed_ms = checked_at_ms.saturating_sub(previous.sampled_at_ms);
                         let byte_delta = bytes.checked_sub(previous.output_bytes)?;
                         (elapsed_ms > 0).then_some(
