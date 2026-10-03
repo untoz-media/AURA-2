@@ -251,6 +251,14 @@ export function useAuraBridge() {
         ),
       }));
 
+      if (progress.state === "installed") {
+        setActivity(`${progress.modelId === "aura-1" ? "AURA-1" : progress.modelId} installed and verified.`);
+      } else if (progress.state === "failed") {
+        setActivity(progress.error ?? "Model download failed.");
+      } else if (progress.state === "notInstalled") {
+        setActivity("Model download cancelled.");
+      }
+
       if (
         progress.state === "installed"
         || progress.state === "notInstalled"
