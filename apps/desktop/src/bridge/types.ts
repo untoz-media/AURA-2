@@ -270,3 +270,54 @@ export type ObsProductionHealth = {
   streamDroppedPercent?: number;
   checkedAtMs: number;
 };
+
+
+export type DirectorRecordingAction = "start" | "stop" | "pause" | "resume";
+export type DirectorStreamingAction = "start" | "stop";
+
+export type DirectorPresetAction =
+  | { type: "programScene"; sceneName: string }
+  | { type: "previewScene"; sceneName: string }
+  | { type: "sourceVisibility"; sourceName: string; enabled: boolean }
+  | { type: "audioMute"; inputName: string; muted: boolean }
+  | { type: "audioVolume"; inputName: string; percent: number }
+  | { type: "recording"; action: DirectorRecordingAction }
+  | { type: "streaming"; action: DirectorStreamingAction }
+  | { type: "wait"; milliseconds: number };
+
+export type DirectorPreset = {
+  id: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  actions: DirectorPresetAction[];
+  updatedAtMs: number;
+};
+
+export type SaveDirectorPresetRequest = {
+  id?: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  actions: DirectorPresetAction[];
+};
+
+export type DirectorPresetStepResult = {
+  index: number;
+  status: "applied" | "skipped" | "failed";
+  label: string;
+  message: string;
+};
+
+export type DirectorPresetRunResult = {
+  success: boolean;
+  presetId: string;
+  presetName: string;
+  completedSteps: number;
+  totalSteps: number;
+  failedStep?: number;
+  error?: string;
+  steps: DirectorPresetStepResult[];
+  startedAtMs: number;
+  completedAtMs: number;
+};
