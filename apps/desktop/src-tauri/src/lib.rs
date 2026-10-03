@@ -142,7 +142,6 @@ impl Default for DesktopPreferences {
 struct LifecycleEvent {
     kind: &'static str,
     message: String,
-    text: Option<String>,
     timestamp_ms: u64,
 }
 
@@ -156,6 +155,7 @@ struct VoiceCaptureEvent {
     sample_rate: Option<u32>,
     channels: Option<u16>,
     message: String,
+    text: Option<String>,
     timestamp_ms: u64,
 }
 
