@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRuntimeState, ObsSceneList};
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1690,6 +1690,22 @@ async fn get_obs_scenes(obs: State<'_, ObsController>) -> ObsSceneList {
     obs.scene_list().await
 }
 
+#[tauri::command]
+async fn set_obs_program_scene(
+    request: ObsSceneSwitchRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsSceneSwitchResult, String> {
+    obs.set_program_scene(request).await
+}
+
+#[tauri::command]
+async fn set_obs_preview_scene(
+    request: ObsSceneSwitchRequest,
+    obs: State<'_, ObsController>,
+) -> Result<ObsSceneSwitchResult, String> {
+    obs.set_preview_scene(request).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1852,7 +1868,9 @@ pub fn run() {
             connect_obs,
             disconnect_obs,
             get_obs_runtime_state,
-            get_obs_scenes
+            get_obs_scenes,
+            set_obs_program_scene,
+            set_obs_preview_scene
         ])
         .run(tauri::generate_context!())
         .expect("error while running AURA-2");
