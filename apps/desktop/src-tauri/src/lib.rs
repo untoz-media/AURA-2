@@ -16,7 +16,7 @@ use core::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController};
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRuntimeState};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1680,6 +1680,11 @@ async fn disconnect_obs(obs: State<'_, ObsController>) -> ObsConnectionState {
     obs.disconnect().await
 }
 
+#[tauri::command]
+async fn get_obs_runtime_state(obs: State<'_, ObsController>) -> ObsRuntimeState {
+    obs.runtime_state().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1840,7 +1845,8 @@ pub fn run() {
             hide_overlay,
             get_obs_connection_state,
             connect_obs,
-            disconnect_obs
+            disconnect_obs,
+            get_obs_runtime_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running AURA-2");
