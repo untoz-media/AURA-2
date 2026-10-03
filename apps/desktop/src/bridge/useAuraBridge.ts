@@ -582,6 +582,11 @@ export function useAuraBridge() {
 
       setModelCatalog(catalog);
 
+      if (operation === "activate" || operation === "remove") {
+        const runtime = await getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME);
+        setModelRuntimeStatus(runtime);
+      }
+
       const model = catalog.models.find((item) => item.id === modelId);
       const name = model?.name ?? modelId;
 
