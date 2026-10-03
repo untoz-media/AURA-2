@@ -1802,18 +1802,41 @@ fn process_user_command(
                             }
                         }
                         ActionIntent::MemoryList => {
-                            let summary = summarize_memories(&worker_app, 8);
-                            emit_core_event(
-                                &worker_app,
-                                CoreEvent {
-                                    id: worker_id,
-                                    kind: "command.completed",
-                                    status: AuraRuntimeStatus::Idle,
-                                    message: summary,
-                                    command: Some(worker_text),
-                                    timestamp_ms: unix_timestamp_ms(),
-                                },
-                            );
+                            match summarize_memories(&worker_app, 8) {
+                                Ok(summary) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summary,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not read local memory: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "memory.read_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
                         }
                         ActionIntent::MemoryForget(content) => {
                             emit_core_event(
@@ -2780,7 +2803,7 @@ fn process_user_command(
 }
 
 #[tauri::command]
-fn get_memories(app: AppHandle) -> MemorySnapshot {
+fn get_memories(app: AppHandle) -> Result<MemorySnapshot, String> {
     memory_snapshot(&app)
 }
 
