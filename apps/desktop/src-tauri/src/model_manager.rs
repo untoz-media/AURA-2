@@ -232,7 +232,12 @@ impl ModelManager {
             .collect::<Result<Vec<_>, _>>()?;
 
         let active_is_valid = config.active_model_id.as_deref().is_some_and(|active_id| {
-            models.iter().any(|model| model.id == active_id && model.installed)
+            definition_for(active_id).is_some_and(|definition| {
+                definition.selectable
+                    && models
+                        .iter()
+                        .any(|model| model.id == active_id && model.installed)
+            })
         });
 
         let active_model_id = if active_is_valid {
@@ -444,6 +449,10 @@ impl ModelManager {
 
         let definition = definition_for(&active_id)
             .ok_or_else(|| format!("Unknown active model: {active_id}."))?;
+
+        if !definition.selectable {
+            return Err("The active model configuration points to a feature-specific model. Choose AURA-1 or another assistant model from Models.".to_string());
+        }
 
         match inspect_installation(app, &definition)? {
             Some(_) => Ok((active_id.clone(), final_model_dir(app, &active_id)?)),
