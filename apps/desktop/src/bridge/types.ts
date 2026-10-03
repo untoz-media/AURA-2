@@ -321,3 +321,26 @@ export type DirectorPresetRunResult = {
   startedAtMs: number;
   completedAtMs: number;
 };
+
+
+export type MemoryRecord = {
+  id: string;
+  content: string;
+  source: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+export type MemorySnapshot = {
+  records: MemoryRecord[];
+  refreshedAtMs: number;
+};
+
+export type CreateMemoryRequest = {
+  content: string;
+};
+
+export type MemoryCreateResult = {
+  record: MemoryRecord;
+  created: boolean;
+};
