@@ -374,6 +374,10 @@ impl ModelManager {
     }
 
     pub fn remove_model(&self, app: &AppHandle, model_id: &str) -> Result<ModelCatalog, String> {
+        let definition = definition_for(model_id)
+            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+        let model_id = definition.id;
+
         {
             let controls = self
                 .controls
