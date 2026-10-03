@@ -19,6 +19,7 @@ import type {
   ObsSceneSwitchResult,
   ObsRecordingActionResult,
   ObsStreamingActionResult,
+  ObsStreamDuration,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -195,4 +196,9 @@ export async function startObsStreaming(): Promise<ObsStreamingActionResult> {
 
 export async function stopObsStreaming(): Promise<ObsStreamingActionResult> {
   return invoke<ObsStreamingActionResult>("stop_obs_streaming");
+}
+
+
+export async function getObsStreamDuration(): Promise<ObsStreamDuration> {
+  return invoke<ObsStreamDuration>("get_obs_stream_duration");
 }
