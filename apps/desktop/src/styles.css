@@ -917,7 +917,7 @@ input:focus-visible {
 .chat-context-strip {
   width: min(760px, 100%);
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(260px, 1.8fr);
+  grid-template-columns: minmax(130px, 0.7fr) minmax(130px, 0.7fr) minmax(240px, 1.6fr);
   gap: 8px;
   margin-top: 12px;
 }
@@ -1086,5 +1086,133 @@ input:focus-visible {
 
   .composer-shortcut {
     display: none;
+  }
+}
+
+
+.chat-thread {
+  min-height: 0;
+  overflow: auto;
+  padding: 26px max(24px, calc((100% - 820px) / 2)) 18px;
+}
+
+.chat-thread-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-message {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.chat-message.user {
+  margin-top: 6px;
+}
+
+.chat-message-author {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-1);
+}
+
+.chat-user-mark {
+  color: var(--aura-text-3);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-message-body {
+  min-width: 0;
+  padding: 9px 12px 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-1);
+}
+
+.chat-message.user .chat-message-body {
+  background: var(--aura-surface-2);
+}
+
+.chat-message-body > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.chat-message-body p {
+  margin: 0;
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+  line-height: 1.62;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-runtime-state {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 2px 0 4px;
+}
+
+.chat-runtime-state > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-runtime-state strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.chat-runtime-state span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.chat-runtime-state .ds-aura-mark {
+  animation: aura-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes aura-breathe {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-runtime-state .ds-aura-mark {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .chat-thread {
+    padding-left: 18px;
+    padding-right: 18px;
   }
 }
