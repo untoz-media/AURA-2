@@ -3896,6 +3896,7 @@ pub fn run() {
                                             sample_rate: None,
                                             channels: None,
                                             message: error,
+                                            text: None,
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     ),
