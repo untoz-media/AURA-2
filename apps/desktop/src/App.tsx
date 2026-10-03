@@ -501,7 +501,16 @@ function App() {
             />
           )}
 
-          {view === "tasks" && <Tasks />}
+          {view === "tasks" && (
+            <Tasks
+              routines={routines}
+              lastRun={routineLastRun}
+              onRefresh={refreshRoutines}
+              onSave={saveRoutineControl}
+              onDelete={deleteRoutineControl}
+              onRun={runRoutineControl}
+            />
+          )}
 
           {view === "director" && (
             <DirectorMode
