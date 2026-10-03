@@ -190,14 +190,32 @@ impl ModelManager {
         let root = models_root(app)?;
         std_fs::create_dir_all(&root).map_err(|error| error.to_string())?;
 
-        let models = model_definitions()
+        let mut models = model_definitions()
             .into_iter()
             .map(|definition| self.model_status(app, &definition, &config))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let active_is_valid = config.active_model_id.as_deref().is_some_and(|active_id| {
+            models.iter().any(|model| model.id == active_id && model.installed)
+        });
+
+        let active_model_id = if active_is_valid {
+            config.active_model_id.clone()
+        } else {
+            if config.active_model_id.is_some() {
+                let mut repaired = config.clone();
+                repaired.active_model_id = None;
+                let _ = write_config(app, &repaired);
+            }
+            for model in &mut models {
+                model.active = false;
+            }
+            None
+        };
+
         Ok(ModelCatalog {
             models,
-            active_model_id: config.active_model_id,
+            active_model_id,
             models_root: root.to_string_lossy().to_string(),
             refreshed_at_ms: timestamp_ms(),
         })
@@ -401,7 +419,6 @@ impl ModelManager {
         definition: &ModelDefinition,
         config: &ModelManagerConfig,
     ) -> Result<ModelStatus, String> {
-        let active = config.active_model_id.as_deref() == Some(definition.id);
         let current_progress = self
             .progress
             .lock()
@@ -415,6 +432,9 @@ impl ModelManager {
             Ok(None) => (false, None, None),
             Err(error) => (false, None, Some(error)),
         };
+
+        let active =
+            installed && config.active_model_id.as_deref() == Some(definition.id);
 
         let state = if let Some(progress) = &current_progress {
             progress.state
@@ -433,7 +453,10 @@ impl ModelManager {
             .map(|progress| progress.bytes_downloaded)
             .or_else(|| marker.as_ref().map(|marker| marker.total_bytes))
             .unwrap_or_else(|| {
-                directory_size(&staging_dir(app, definition.id).unwrap_or_default()).unwrap_or(0)
+                staging_dir(app, definition.id)
+                    .ok()
+                    .and_then(|path| directory_size(&path).ok())
+                    .unwrap_or(0)
             });
 
         let total_bytes = current_progress
@@ -1002,6 +1025,20 @@ fn inspect_installation(
     if marker.model_id != definition.id {
         return Err(format!(
             "{} installation marker belongs to another model.",
+            definition.name
+        ));
+    }
+
+    if definition.source_repo != Some(marker.source_repo.as_str()) {
+        return Err(format!(
+            "{} installation source does not match the current model definition.",
+            definition.name
+        ));
+    }
+
+    if definition.source_revision.unwrap_or("main") != marker.source_revision {
+        return Err(format!(
+            "{} installation revision does not match the current model definition.",
             definition.name
         ));
     }
