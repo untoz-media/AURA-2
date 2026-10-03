@@ -128,6 +128,23 @@ Old turns are removed in user/assistant pairs.
 
 The conversation is session-local and is not automatically written to persistent memory.
 
+## Ephemeral desktop context
+
+M005.3 can attach the current desktop context to each free-form generation without adding it to the visible conversation history.
+
+The runtime receives an optional per-turn context containing:
+
+- current application
+- process image
+- active window title when Windows exposes one
+- whether the snapshot is the real foreground window or the last external window before AURA took focus
+
+The Python worker injects this as an ephemeral system-context message for that generation only.
+
+The user message stored in the local conversation remains unchanged, so switching from one application/window to another does not permanently pollute the conversation history with stale desktop context.
+
+AURA still does not inspect screen pixels or UI contents in this milestone.
+
 ## New conversation
 
 The desktop **New conversation** button now:
@@ -210,7 +227,7 @@ This runtime does not yet add:
 - token streaming
 - persistent conversation history
 - memory retrieval injection into the LLM prompt
-- active-window context injection
+- screenshot / visual UI understanding
 - model-driven autonomous tool selection
 
 Those capabilities can now build on a working selected-model → local-inference path.
