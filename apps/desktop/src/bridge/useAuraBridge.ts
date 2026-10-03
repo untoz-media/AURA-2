@@ -14,11 +14,13 @@ import {
   getCurrentAppContext,
   getModelCatalog,
   getModelRuntimeStatus,
+  getManagedRuntimeStatus,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
   listenToLifecycle,
   listenToModelDownloads,
+  listenToManagedRuntime,
   resetPermissionPolicy,
   resolveConfirmation,
   setAutostartEnabled,
@@ -47,6 +49,9 @@ import {
   cancelModelDownload,
   setActiveModel,
   removeModel,
+  installManagedRuntime,
+  repairManagedRuntime,
+  removeManagedRuntime,
   clearModelConversation,
   submitAuraCommand,
 } from "./aura";
@@ -83,6 +88,7 @@ import type {
   ModelDownloadProgress,
   ModelRuntimeStatus,
   ChatMessage,
+  ManagedRuntimeStatus,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -131,6 +137,13 @@ const DEFAULT_MODEL_RUNTIME: ModelRuntimeStatus = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_MANAGED_RUNTIME: ManagedRuntimeStatus = {
+  state: "notInstalled",
+  progressPercent: 0,
+  message: "Managed AI runtime is not installed.",
+  updatedAtMs: 0,
+};
+
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
@@ -159,6 +172,8 @@ export function useAuraBridge() {
     useState<ModelCatalog>(DEFAULT_MODEL_CATALOG);
   const [modelRuntimeStatus, setModelRuntimeStatus] =
     useState<ModelRuntimeStatus>(DEFAULT_MODEL_RUNTIME);
+  const [managedRuntimeStatus, setManagedRuntimeStatus] =
+    useState<ManagedRuntimeStatus>(DEFAULT_MANAGED_RUNTIME);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
@@ -176,6 +191,7 @@ export function useAuraBridge() {
     let cleanupCore: (() => void) | undefined;
     let cleanupLifecycle: (() => void) | undefined;
     let cleanupModels: (() => void) | undefined;
+    let cleanupManagedRuntime: (() => void) | undefined;
 
     Promise.all([
       getAppStatus(),
@@ -231,6 +247,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Runtime remains stopped until a selected model is used.
+      });
+
+    getManagedRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setManagedRuntimeStatus(runtime);
+      })
+      .catch(() => {
+        // A missing managed runtime is a supported Alpha state.
       });
 
     getModelCatalog()
@@ -302,6 +326,32 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Model download events are supplementary to explicit catalog refreshes.
+      });
+
+    listenToManagedRuntime((runtime: ManagedRuntimeStatus) => {
+      if (cancelled) return;
+      setManagedRuntimeStatus(runtime);
+      setActivity(runtime.message);
+
+      if (runtime.state === "ready") {
+        void getModelRuntimeStatus()
+          .then((modelRuntime) => {
+            if (!cancelled) setModelRuntimeStatus(modelRuntime);
+          })
+          .catch(() => {
+            // Model runtime will refresh again when local inference starts.
+          });
+      }
+    })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          cleanupManagedRuntime = unlisten;
+        }
+      })
+      .catch(() => {
+        // Managed runtime events are supplementary to explicit status reads.
       });
 
     listenToAuraCore(
@@ -423,6 +473,7 @@ export function useAuraBridge() {
       cleanupCore?.();
       cleanupLifecycle?.();
       cleanupModels?.();
+      cleanupManagedRuntime?.();
     };
   }, []);
 
@@ -540,6 +591,47 @@ export function useAuraBridge() {
       const message = String(error);
       setBridgeError({
         code: "models.conversation_reset_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const refreshManagedRuntime = useCallback(async () => {
+    const runtime = await getManagedRuntimeStatus();
+    setManagedRuntimeStatus(runtime);
+    return runtime;
+  }, []);
+
+  const runManagedRuntimeAction = useCallback(async (
+    action: "install" | "repair" | "remove",
+  ): Promise<ManagedRuntimeStatus> => {
+    try {
+      setBridgeError(null);
+
+      const runtime =
+        action === "install"
+          ? await installManagedRuntime()
+          : action === "repair"
+            ? await repairManagedRuntime()
+            : await removeManagedRuntime();
+
+      setManagedRuntimeStatus(runtime);
+      setActivity(runtime.message);
+
+      if (action === "repair" || action === "remove") {
+        const modelRuntime = await getModelRuntimeStatus().catch(
+          () => DEFAULT_MODEL_RUNTIME,
+        );
+        setModelRuntimeStatus(modelRuntime);
+      }
+
+      return runtime;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: `runtime.${action}_failed`,
         message,
       });
       setActivity(message);
@@ -1384,6 +1476,7 @@ export function useAuraBridge() {
     currentApp,
     modelCatalog,
     modelRuntimeStatus,
+    managedRuntimeStatus,
     chatMessages,
     pendingConfirmation,
     bridgeError,
@@ -1405,6 +1498,8 @@ export function useAuraBridge() {
     refreshCurrentApp,
     refreshModels,
     refreshModelRuntime,
+    refreshManagedRuntime,
+    runManagedRuntimeAction,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
