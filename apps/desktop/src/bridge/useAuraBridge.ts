@@ -163,7 +163,10 @@ const DEFAULT_PROJECT_MEMORY: ProjectMemorySnapshot = {
 const DEFAULT_AUDIO_INPUT: AudioInputSnapshot = {
   devices: [],
   testing: false,
+  pushToTalk: false,
   level: 0,
+  capturedSamples: 0,
+  captureDurationMs: 0,
 };
 
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
