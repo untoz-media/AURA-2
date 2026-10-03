@@ -554,6 +554,21 @@ impl AudioInputManager {
         self.snapshot()
     }
 
+    pub fn last_capture_info(&self) -> Option<(usize, u32, u16, u64)> {
+        self.last_capture
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .map(|capture| {
+                (
+                    capture.samples.len(),
+                    capture.sample_rate,
+                    capture.channels,
+                    capture.completed_at_ms.saturating_sub(capture.started_at_ms),
+                )
+            })
+    }
+
     pub fn take_last_capture(&self) -> Option<CapturedAudio> {
         self.last_capture
             .lock()
