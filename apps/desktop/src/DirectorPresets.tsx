@@ -192,6 +192,8 @@ export default function DirectorPresets({
         break;
     }
 
+    if (!action) return;
+
     setActions((current) => [...current, action]);
     setTargetName("");
   }
