@@ -57,6 +57,7 @@ function App() {
     currentApp,
     modelCatalog,
     modelRuntimeStatus,
+    managedRuntimeStatus,
     chatMessages,
     pendingConfirmation,
     bridgeError,
@@ -76,6 +77,8 @@ function App() {
     refreshDirectorPresets,
     refreshMemories,
     refreshModels,
+    refreshManagedRuntime,
+    runManagedRuntimeAction,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
@@ -462,8 +465,11 @@ function App() {
           {view === "models" && (
             <Models
               catalog={modelCatalog}
+              managedRuntime={managedRuntimeStatus}
               onRefresh={refreshModels}
               onOperation={runModelOperation}
+              onRuntimeRefresh={refreshManagedRuntime}
+              onRuntimeAction={runManagedRuntimeAction}
             />
           )}
 
@@ -535,6 +541,7 @@ function App() {
               onThemeChange={changeTheme}
               modelCatalog={modelCatalog}
               modelRuntimeStatus={modelRuntimeStatus}
+              managedRuntimeStatus={managedRuntimeStatus}
             />
           )}
         </div>
