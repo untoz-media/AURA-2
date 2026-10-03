@@ -2013,6 +2013,25 @@ mod tests {
         assert!(!critical.2.is_empty());
     }
 
+
+    #[test]
+    fn production_health_flags_stream_drops() {
+        let health = evaluate_production_health(
+            20.0,
+            50_000.0,
+            4.0,
+            0.0,
+            0.0,
+            true,
+            false,
+            Some(0.0),
+            Some(6.0),
+        );
+
+        assert_eq!(health.0, "critical");
+        assert!(health.2.iter().any(|issue| issue.contains("Stream dropped")));
+    }
+
     #[test]
     fn validates_audio_percent() {
         assert_eq!(validate_audio_percent(0).unwrap(), 0);
