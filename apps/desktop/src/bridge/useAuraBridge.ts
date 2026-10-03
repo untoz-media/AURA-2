@@ -149,16 +149,14 @@ export function useAuraBridge() {
       getPermissionPolicy(),
       getObsConnectionState(),
       getDirectorPresets(),
-      getMemories(),
     ])
-      .then(([app, runtime, permissions, obs, presets, memorySnapshot]) => {
+      .then(([app, runtime, permissions, obs, presets]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
         setObsConnection(obs);
         setDirectorPresets(presets);
-        setMemory(memorySnapshot);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -174,6 +172,21 @@ export function useAuraBridge() {
             code: "bridge.status_failed",
             message: String(error),
           });
+        }
+      });
+
+    getMemories()
+      .then((snapshot) => {
+        if (!cancelled) setMemory(snapshot);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          const message = String(error);
+          setBridgeError({
+            code: "memory.load_failed",
+            message,
+          });
+          setActivity(message);
         }
       });
 
