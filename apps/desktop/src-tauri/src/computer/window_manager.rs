@@ -143,7 +143,7 @@ fn friendly_process_name(process_name: &str) -> String {
         return process_name.to_string();
     }
 
-    stem.replace(['-', '_'], " ")
+    stem.replace('-', " ").replace('_', " ")
 }
 
 pub fn current_app() -> Result<CurrentAppInfo, WindowError> {
