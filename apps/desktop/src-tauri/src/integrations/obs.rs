@@ -770,6 +770,19 @@ impl ObsController {
             .as_ref()
             .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
 
+        let current = client
+            .scenes()
+            .current_program_scene()
+            .await
+            .map_err(|error| format!("Could not validate the current OBS Program scene: {error}"))?;
+
+        if !current.id.name.eq_ignore_ascii_case(&scene_name) {
+            return Err(format!(
+                "Program scene changed to “{}”. Refresh sources before changing visibility.",
+                current.id.name
+            ));
+        }
+
         let items = client
             .scene_items()
             .list(scene_name.as_str().into())
