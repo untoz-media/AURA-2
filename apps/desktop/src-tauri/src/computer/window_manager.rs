@@ -1,4 +1,5 @@
-use std::path::Path;
+use serde::Serialize;
+use std::{path::Path, time::{SystemTime, UNIX_EPOCH}};
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM},
@@ -6,8 +7,9 @@ use windows_sys::Win32::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     },
     UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-        IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow, SW_RESTORE,
+        EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+        GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow,
+        SW_RESTORE,
     },
 };
 
@@ -20,11 +22,24 @@ pub struct WindowInfo {
     pub process_name: Option<String>,
 }
 
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentAppInfo {
+    pub app_name: String,
+    pub process_name: String,
+    pub process_id: u32,
+    pub known_app: bool,
+    pub captured_at_ms: u64,
+}
+
 #[derive(Debug)]
 pub enum WindowError {
     EnumerationFailed,
     TargetNotFound(&'static str),
     ForegroundDenied(&'static str),
+    NoForegroundWindow,
+    ProcessUnavailable,
 }
 
 impl std::fmt::Display for WindowError {
@@ -36,6 +51,8 @@ impl std::fmt::Display for WindowError {
                 formatter,
                 "Windows did not allow AURA to bring {name} to the foreground."
             ),
+            Self::NoForegroundWindow => write!(formatter, "Windows does not currently report a foreground application."),
+            Self::ProcessUnavailable => write!(formatter, "The foreground application's process information is unavailable."),
         }
     }
 }
@@ -72,6 +89,59 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> i
     });
 
     1
+}
+
+fn timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn friendly_process_name(process_name: &str) -> String {
+    let stem = Path::new(process_name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or(process_name)
+        .trim();
+
+    if stem.is_empty() {
+        return process_name.to_string();
+    }
+
+    stem.replace(['-', '_'], " ")
+}
+
+pub fn current_app() -> Result<CurrentAppInfo, WindowError> {
+    let hwnd = unsafe { GetForegroundWindow() };
+
+    if hwnd.is_null() {
+        return Err(WindowError::NoForegroundWindow);
+    }
+
+    let mut process_id = 0_u32;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &mut process_id);
+    }
+
+    if process_id == 0 {
+        return Err(WindowError::ProcessUnavailable);
+    }
+
+    let process_name =
+        unsafe { process_name_for_window(hwnd) }.ok_or(WindowError::ProcessUnavailable)?;
+    let known = AppTarget::from_process_image(&process_name);
+
+    Ok(CurrentAppInfo {
+        app_name: known
+            .map(AppTarget::display_name)
+            .map(str::to_string)
+            .unwrap_or_else(|| friendly_process_name(&process_name)),
+        process_name,
+        process_id,
+        known_app: known.is_some(),
+        captured_at_ms: timestamp_ms(),
+    })
 }
 
 unsafe fn process_name_for_window(hwnd: HWND) -> Option<String> {
@@ -212,6 +282,11 @@ mod tests {
         };
 
         assert!(window_matches_target(&window, AppTarget::ObsStudio));
+    }
+
+    #[test]
+    fn friendly_process_name_removes_exe_and_separators() {
+        assert_eq!(friendly_process_name("Adobe-Premiere_Pro.exe"), "Adobe Premiere Pro");
     }
 
     #[test]
