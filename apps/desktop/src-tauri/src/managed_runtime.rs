@@ -546,7 +546,7 @@ fn status_from_marker(python: &Path, marker: RuntimeMarker) -> ManagedRuntimeSta
 fn verify_authenticode(installer: &Path) -> Result<(), String> {
     let path = installer
         .to_string_lossy()
-        .replace(''', "''");
+        .replace('\'', "''");
     let script = format!(
         "$sig = Get-AuthenticodeSignature -LiteralPath '{}'; if ($sig.Status -ne 'Valid') {{ Write-Error $sig.StatusMessage; exit 2 }}",
         path
@@ -590,26 +590,27 @@ fn install_python(installer: &Path, target: &Path) -> Result<(), String> {
 
     let target_arg = format!("TargetDir={}", target.to_string_lossy());
 
-    let status = Command::new(installer)
-        .args([
-            "/quiet",
-            "InstallAllUsers=0",
-            &target_arg,
-            "Include_launcher=0",
-            "InstallLauncherAllUsers=0",
-            "AssociateFiles=0",
-            "Shortcuts=0",
-            "PrependPath=0",
-            "AppendPath=0",
-            "Include_pip=1",
-            "Include_test=0",
-            "Include_doc=0",
-            "Include_tcltk=0",
-        ])
+    let mut command = Command::new(installer);
+    command
+        .arg("/quiet")
+        .arg("InstallAllUsers=0")
+        .arg(&target_arg)
+        .arg("Include_launcher=0")
+        .arg("InstallLauncherAllUsers=0")
+        .arg("AssociateFiles=0")
+        .arg("Shortcuts=0")
+        .arg("PrependPath=0")
+        .arg("AppendPath=0")
+        .arg("Include_pip=1")
+        .arg("Include_test=0")
+        .arg("Include_doc=0")
+        .arg("Include_tcltk=0")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .creation_flags(CREATE_NO_WINDOW);
+
+    let status = command
         .status()
         .map_err(|error| format!("Could not launch Python installer: {error}"))?;
 
