@@ -980,3 +980,125 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.voice-input-panel {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0 12px;
+}
+
+.voice-device-field {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-device-field > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  font-weight: 620;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.voice-device-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  color: var(--aura-text-2);
+  background: var(--aura-surface-1);
+}
+
+.voice-test-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.voice-meter-card {
+  padding: 13px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-1);
+}
+
+.voice-meter-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.voice-meter-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.voice-meter-heading strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+}
+
+.voice-meter-heading span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.voice-meter-track {
+  height: 9px;
+  overflow: hidden;
+  margin: 13px 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--aura-bg-2);
+}
+
+.voice-meter-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--aura-cyan), var(--aura-blue), var(--aura-violet));
+  box-shadow: 0 0 14px var(--aura-accent-glow);
+  transition: width 90ms linear;
+}
+
+.voice-stream-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.voice-stream-meta span {
+  padding: 4px 7px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: var(--radius-pill);
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.voice-input-error {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 112, 112, 0.24);
+  border-radius: 9px;
+  color: #ff9f9f;
+  background: rgba(255, 112, 112, 0.07);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 760px) {
+  .voice-input-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .voice-test-actions {
+    justify-content: flex-start;
+  }
+}
