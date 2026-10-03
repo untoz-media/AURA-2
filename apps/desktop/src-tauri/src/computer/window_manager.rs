@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::{path::Path, time::{SystemTime, UNIX_EPOCH}};
+use std::{path::Path, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM},
@@ -30,7 +30,41 @@ pub struct CurrentAppInfo {
     pub process_name: String,
     pub process_id: u32,
     pub known_app: bool,
+    pub context_source: String,
     pub captured_at_ms: u64,
+}
+
+#[derive(Default)]
+pub struct CurrentAppAwareness {
+    last_external: Mutex<Option<CurrentAppInfo>>,
+}
+
+impl CurrentAppAwareness {
+    pub fn snapshot(&self) -> Result<CurrentAppInfo, WindowError> {
+        let foreground = current_app()?;
+
+        if foreground.process_id != std::process::id() {
+            let mut last_external = self
+                .last_external
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *last_external = Some(foreground.clone());
+            return Ok(foreground);
+        }
+
+        let last_external = self
+            .last_external
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        if let Some(previous) = last_external.as_ref() {
+            let mut context = previous.clone();
+            context.context_source = "lastExternal".to_string();
+            return Ok(context);
+        }
+
+        Ok(foreground)
+    }
 }
 
 #[derive(Debug)]
@@ -140,6 +174,7 @@ pub fn current_app() -> Result<CurrentAppInfo, WindowError> {
         process_name,
         process_id,
         known_app: known.is_some(),
+        context_source: "foreground".to_string(),
         captured_at_ms: timestamp_ms(),
     })
 }
@@ -282,6 +317,20 @@ mod tests {
         };
 
         assert!(window_matches_target(&window, AppTarget::ObsStudio));
+    }
+
+    #[test]
+    fn current_app_context_source_defaults_to_foreground_shape() {
+        let info = CurrentAppInfo {
+            app_name: "Brave".to_string(),
+            process_name: "brave.exe".to_string(),
+            process_id: 10,
+            known_app: true,
+            context_source: "foreground".to_string(),
+            captured_at_ms: 1,
+        };
+
+        assert_eq!(info.context_source, "foreground");
     }
 
     #[test]
