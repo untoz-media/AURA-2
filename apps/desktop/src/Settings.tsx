@@ -173,7 +173,7 @@ function Badge({
   tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "neutral" | "ready" | "planned" | "warning";
+  tone?: "neutral" | "ready" | "planned" | "warning" | "critical";
 }) {
   return <span className={`settings-badge ${tone}`}>{children}</span>;
 }
@@ -978,7 +978,7 @@ export default function Settings({
                             ? "ready"
                             : obsHealth.status === "warning"
                               ? "warning"
-                              : "warning"
+                              : "critical"
                         }
                       >
                         {obsHealth.status.toUpperCase()}
