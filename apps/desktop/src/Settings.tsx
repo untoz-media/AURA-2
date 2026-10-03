@@ -10,6 +10,7 @@ import type {
   ObsRuntimeState,
   ObsSceneList,
   ObsSceneSwitchResult,
+  ObsRecordingActionResult,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -47,6 +48,9 @@ type Props = {
   onObsScenesRefresh: () => Promise<ObsSceneList>;
   onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
+  onObsRecordingAction: (
+    action: ObsRecordingActionResult["action"],
+  ) => Promise<ObsRecordingActionResult>;
 };
 
 const sections: Array<{
@@ -166,12 +170,16 @@ export default function Settings({
   onObsScenesRefresh,
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
+  onObsRecordingAction,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
   const [obsPassword, setObsPassword] = useState("");
   const [obsConnecting, setObsConnecting] = useState(false);
   const [obsSceneChanging, setObsSceneChanging] = useState<string | null>(null);
+  const [obsRecordingAction, setObsRecordingAction] =
+    useState<ObsRecordingActionResult["action"] | null>(null);
+  const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
 
   useEffect(() => {
     setObsHost(obsConnection.host);
@@ -225,6 +233,23 @@ export default function Settings({
       // Bridge activity/error state already carries the failure details.
     } finally {
       setObsSceneChanging(null);
+    }
+  }
+
+
+  async function handleObsRecordingAction(
+    action: ObsRecordingActionResult["action"],
+  ) {
+    setObsRecordingAction(action);
+    try {
+      const result = await onObsRecordingAction(action);
+      if (result.outputPath) {
+        setLastRecordingOutput(result.outputPath);
+      }
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsRecordingAction(null);
     }
   }
 
@@ -684,6 +709,72 @@ export default function Settings({
                       </strong>
                     </div>
                   </div>
+
+                  <div className="obs-recording-controls">
+                    <div className="obs-recording-copy">
+                      <strong>Recording Control</strong>
+                      <span>
+                        {obsRuntime.recording
+                          ? obsRuntime.recordingPaused
+                            ? "Recording is paused."
+                            : "Recording is active."
+                          : "Recording is stopped."}
+                      </span>
+                    </div>
+
+                    <div className="obs-recording-actions">
+                      {!obsRuntime.recording && (
+                        <button
+                          type="button"
+                          className="settings-action-button"
+                          disabled={obsRecordingAction !== null}
+                          onClick={() => void handleObsRecordingAction("start")}
+                        >
+                          {obsRecordingAction === "start" ? "Starting…" : "Start Recording"}
+                        </button>
+                      )}
+
+                      {obsRuntime.recording && !obsRuntime.recordingPaused && (
+                        <button
+                          type="button"
+                          className="settings-action-button"
+                          disabled={obsRecordingAction !== null}
+                          onClick={() => void handleObsRecordingAction("pause")}
+                        >
+                          {obsRecordingAction === "pause" ? "Pausing…" : "Pause"}
+                        </button>
+                      )}
+
+                      {obsRuntime.recording && obsRuntime.recordingPaused && (
+                        <button
+                          type="button"
+                          className="settings-action-button"
+                          disabled={obsRecordingAction !== null}
+                          onClick={() => void handleObsRecordingAction("resume")}
+                        >
+                          {obsRecordingAction === "resume" ? "Resuming…" : "Resume"}
+                        </button>
+                      )}
+
+                      {obsRuntime.recording && (
+                        <button
+                          type="button"
+                          className="settings-action-button obs-recording-stop"
+                          disabled={obsRecordingAction !== null}
+                          onClick={() => void handleObsRecordingAction("stop")}
+                        >
+                          {obsRecordingAction === "stop" ? "Stopping…" : "Stop Recording"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {lastRecordingOutput && (
+                    <div className="obs-recording-output">
+                      <span>Last recording</span>
+                      <strong title={lastRecordingOutput}>{lastRecordingOutput}</strong>
+                    </div>
+                  )}
 
                   {obsRuntime.lastError && (
                     <p className="obs-connection-error">{obsRuntime.lastError}</p>
