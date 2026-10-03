@@ -14,7 +14,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -168,9 +168,10 @@ impl SpeechRuntime {
             });
         }
 
+        let input_samples_16khz = samples.len();
         let request = json!({
             "type": "transcribe",
-            "id": request_id,
+            "id": request_id.clone(),
             "samples": samples,
         });
 
@@ -221,11 +222,7 @@ impl SpeechRuntime {
                         duration_ms,
                         source_sample_rate,
                         source_channels,
-                        input_samples_16khz: request
-                            .get("samples")
-                            .and_then(|value| value.as_array())
-                            .map(Vec::len)
-                            .unwrap_or(0),
+                        input_samples_16khz,
                         completed_at_ms: timestamp_ms(),
                     });
                 }
