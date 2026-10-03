@@ -4,6 +4,7 @@ import {
   disconnectObs,
   getAppStatus,
   getObsConnectionState,
+  getObsRuntimeState,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -29,10 +30,20 @@ import type {
   RuntimeState,
   ObsConnectRequest,
   ObsConnectionState,
+  ObsRuntimeState,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
   "Desktop foundation online. AURA Core and background runtime are ready.";
+
+const DEFAULT_OBS_RUNTIME: ObsRuntimeState = {
+  available: false,
+  streaming: false,
+  recording: false,
+  recordingPaused: false,
+  studioMode: false,
+  refreshedAtMs: 0,
+};
 
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
@@ -48,6 +59,7 @@ export function useAuraBridge() {
     host: "127.0.0.1",
     port: 4455,
   });
+  const [obsRuntime, setObsRuntime] = useState<ObsRuntimeState>(DEFAULT_OBS_RUNTIME);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -179,6 +191,74 @@ export function useAuraBridge() {
     };
   }, []);
 
+  const refreshObsRuntime = useCallback(async () => {
+    if (!obsConnection.connected) {
+      setObsRuntime(DEFAULT_OBS_RUNTIME);
+      return DEFAULT_OBS_RUNTIME;
+    }
+
+    const state = await getObsRuntimeState();
+    setObsRuntime(state);
+
+    if (!state.available) {
+      setObsConnection((current) => ({
+        ...current,
+        connected: false,
+        lastError: state.lastError,
+      }));
+    }
+
+    return state;
+  }, [obsConnection.connected]);
+
+  useEffect(() => {
+    if (!obsConnection.connected) {
+      setObsRuntime(DEFAULT_OBS_RUNTIME);
+      return;
+    }
+
+    let cancelled = false;
+
+    const update = async () => {
+      try {
+        const state = await getObsRuntimeState();
+        if (cancelled) return;
+
+        setObsRuntime(state);
+
+        if (!state.available) {
+          setObsConnection((current) => ({
+            ...current,
+            connected: false,
+            lastError: state.lastError,
+          }));
+        }
+      } catch (error) {
+        if (cancelled) return;
+
+        const message = String(error);
+        setObsRuntime({
+          ...DEFAULT_OBS_RUNTIME,
+          refreshedAtMs: Date.now(),
+          lastError: message,
+        });
+        setObsConnection((current) => ({
+          ...current,
+          connected: false,
+          lastError: message,
+        }));
+      }
+    };
+
+    void update();
+    const interval = window.setInterval(() => void update(), 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [obsConnection.connected]);
+
   const submitCommand = useCallback(async (
     text: string,
     source: "desktop" | "overlay" | "voice" = "desktop",
@@ -244,6 +324,8 @@ export function useAuraBridge() {
       setBridgeError(null);
       const state = await connectObs(request);
       setObsConnection(state);
+      const runtime = await getObsRuntimeState();
+      setObsRuntime(runtime);
       setActivity(
         `OBS Studio ${state.obsStudioVersion ?? ""} connected at ${state.host}:${state.port}.`,
       );
@@ -269,6 +351,7 @@ export function useAuraBridge() {
   const disconnectObsControl = useCallback(async () => {
     const state = await disconnectObs();
     setObsConnection(state);
+    setObsRuntime(DEFAULT_OBS_RUNTIME);
     setBridgeError(null);
     setActivity("OBS Studio disconnected from AURA.");
     return state;
@@ -320,6 +403,7 @@ export function useAuraBridge() {
     runtimeState,
     permissionPolicy,
     obsConnection,
+    obsRuntime,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -330,6 +414,7 @@ export function useAuraBridge() {
     resetPermissions,
     connectObsControl,
     disconnectObsControl,
+    refreshObsRuntime,
     approveConfirmation,
     cancelConfirmation,
   };
