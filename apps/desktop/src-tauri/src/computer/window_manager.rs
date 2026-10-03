@@ -30,6 +30,7 @@ pub struct CurrentAppInfo {
     pub process_name: String,
     pub process_id: u32,
     pub known_app: bool,
+    pub window_title: Option<String>,
     pub context_source: String,
     pub captured_at_ms: u64,
 }
@@ -132,6 +133,25 @@ fn timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
+fn window_title(hwnd: HWND) -> Option<String> {
+    let length = unsafe { GetWindowTextLengthW(hwnd) };
+    if length <= 0 {
+        return None;
+    }
+
+    let mut buffer = vec![0u16; (length + 1) as usize];
+    let copied = unsafe { GetWindowTextW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32) };
+    if copied <= 0 {
+        return None;
+    }
+
+    let title = String::from_utf16_lossy(&buffer[..copied as usize])
+        .trim()
+        .to_string();
+
+    (!title.is_empty()).then_some(title)
+}
+
 fn friendly_process_name(process_name: &str) -> String {
     let stem = Path::new(process_name)
         .file_stem()
@@ -174,6 +194,7 @@ pub fn current_app() -> Result<CurrentAppInfo, WindowError> {
         process_name,
         process_id,
         known_app: known.is_some(),
+        window_title: window_title(hwnd),
         context_source: "foreground".to_string(),
         captured_at_ms: timestamp_ms(),
     })
@@ -326,11 +347,31 @@ mod tests {
             process_name: "brave.exe".to_string(),
             process_id: 10,
             known_app: true,
+            window_title: Some("GitHub - untoz-media/AURA-2".to_string()),
             context_source: "foreground".to_string(),
             captured_at_ms: 1,
         };
 
         assert_eq!(info.context_source, "foreground");
+        assert_eq!(
+            info.window_title.as_deref(),
+            Some("GitHub - untoz-media/AURA-2")
+        );
+    }
+
+    #[test]
+    fn active_window_title_is_optional_in_context_shape() {
+        let info = CurrentAppInfo {
+            app_name: "Windows Terminal".to_string(),
+            process_name: "WindowsTerminal.exe".to_string(),
+            process_id: 20,
+            known_app: true,
+            window_title: None,
+            context_source: "foreground".to_string(),
+            captured_at_ms: 2,
+        };
+
+        assert!(info.window_title.is_none());
     }
 
     #[test]
