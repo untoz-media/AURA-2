@@ -47,6 +47,7 @@ pub enum ActionIntent {
     MemoryForget(String),
     CurrentApp,
     ActiveWindow,
+    RecentFiles,
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +239,30 @@ fn is_active_window_request(input: &str) -> bool {
             | "em que separador estou"
             | "qual é o separador ativo"
             | "qual e o separador ativo"
+    )
+}
+
+fn is_recent_files_request(input: &str) -> bool {
+    let normalized = normalize_command(input);
+
+    matches!(
+        normalized.as_str(),
+        "recent files"
+            | "recent file"
+            | "recent documents"
+            | "recent items"
+            | "show recent files"
+            | "list recent files"
+            | "what files did i use recently"
+            | "what have i been working on"
+            | "ficheiros recentes"
+            | "ficheiro recente"
+            | "documentos recentes"
+            | "itens recentes"
+            | "mostra os ficheiros recentes"
+            | "lista os ficheiros recentes"
+            | "que ficheiros usei recentemente"
+            | "em que ficheiros estive a trabalhar"
     )
 }
 
@@ -1014,6 +1039,15 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if is_recent_files_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::RecentFiles,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if is_active_window_request(input) {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
@@ -1451,6 +1485,27 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn routes_recent_files_context_as_read() {
+        let policy = PermissionPolicy::default();
+
+        for command in [
+            "Recent files",
+            "What files did I use recently?",
+            "Ficheiros recentes",
+            "Mostra os ficheiros recentes",
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::RecentFiles,
+                    permission: PermissionClass::Read,
+                    decision: PermissionDecision::Allow,
+                })
+            ));
+        }
     }
 
     #[test]
