@@ -173,6 +173,7 @@ function App() {
           type="button"
           className="new-conversation-button"
           onClick={startNewConversation}
+          disabled={status === "Working" || Boolean(pendingConfirmation)}
         >
           <span aria-hidden="true">＋</span>
           New conversation
