@@ -900,7 +900,7 @@ export default function Settings({
                 description={
                   voiceCapture?.phase === "captured"
                     ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for M006.3 STT.`
-                    : "Hold Ctrl + Shift + V anywhere in Windows. AURA listens while held and stops when released."
+                    : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released."
                 }
                 trailing={
                   audioInput.pushToTalk ? (
@@ -909,7 +909,7 @@ export default function Settings({
                     <span className="settings-keys">
                       <ShortcutKey>Ctrl</ShortcutKey><span>+</span>
                       <ShortcutKey>Shift</ShortcutKey><span>+</span>
-                      <ShortcutKey>V</ShortcutKey>
+                      <ShortcutKey>F8</ShortcutKey>
                     </span>
                   )
                 }
