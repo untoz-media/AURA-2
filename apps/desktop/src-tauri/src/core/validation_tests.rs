@@ -1,4 +1,4 @@
-use super::action_router::{route_command, ActionIntent, ObsRecordingAction, RouteResult, RoutedAction};
+use super::action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction};
 use crate::{
     computer::{
         app_launcher::AppTarget,
@@ -367,6 +367,60 @@ fn obs_scene_commands_respect_act_policy_override() {
             PermissionDecision::Ask,
         ),
         ActionIntent::ObsProgramScene(scene) if scene == "Câmara 1"
+    ));
+}
+
+#[test]
+fn obs_streaming_start_is_sensitive_and_stop_is_act() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Go live",
+            &policy,
+            PermissionClass::Sensitive,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsStreaming(ObsStreamingAction::Start)
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Stop the stream",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsStreaming(ObsStreamingAction::Stop)
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Entra em direto",
+            &policy,
+            PermissionClass::Sensitive,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsStreaming(ObsStreamingAction::Start)
+    ));
+}
+
+#[test]
+fn obs_streaming_start_cannot_be_permanently_allowed() {
+    let mut policy = PermissionPolicy::default();
+
+    assert!(policy
+        .set(PermissionClass::Sensitive, PermissionDecision::Allow)
+        .is_err());
+
+    assert!(matches!(
+        assert_action(
+            "Start streaming",
+            &policy,
+            PermissionClass::Sensitive,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsStreaming(ObsStreamingAction::Start)
     ));
 }
 

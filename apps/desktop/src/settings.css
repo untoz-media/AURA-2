@@ -557,3 +557,27 @@
     justify-content: flex-start;
   }
 }
+
+
+.obs-streaming-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-1);
+}
+
+.obs-streaming-start {
+  border-color: rgba(112, 224, 153, 0.28);
+}
+
+@media (max-width: 850px) {
+  .obs-streaming-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -42,6 +42,15 @@ pub struct ObsRecordingActionResult {
     pub changed_at_ms: u64,
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsStreamingActionResult {
+    pub action: String,
+    pub streaming: bool,
+    pub changed_at_ms: u64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsConnectionState {
@@ -652,6 +661,56 @@ impl ObsController {
         })
     }
 
+    pub async fn start_streaming(&self) -> Result<ObsStreamingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        if read_streaming_active(client).await? {
+            return Err("OBS is already streaming.".to_string());
+        }
+
+        client
+            .streaming()
+            .start()
+            .await
+            .map_err(|error| format!("Could not start OBS streaming: {error}"))?;
+
+        let streaming = wait_for_streaming_state(client, true).await?;
+
+        Ok(ObsStreamingActionResult {
+            action: "start".to_string(),
+            streaming,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn stop_streaming(&self) -> Result<ObsStreamingActionResult, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        if !read_streaming_active(client).await? {
+            return Err("OBS is not currently streaming.".to_string());
+        }
+
+        client
+            .streaming()
+            .stop()
+            .await
+            .map_err(|error| format!("Could not stop OBS streaming: {error}"))?;
+
+        let streaming = wait_for_streaming_state(client, false).await?;
+
+        Ok(ObsStreamingActionResult {
+            action: "stop".to_string(),
+            streaming,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn connect(
         &self,
         request: ObsConnectRequest,
@@ -754,6 +813,37 @@ impl ObsController {
         state.connected_at_ms = None;
         state.last_error = Some(message);
     }
+}
+
+async fn read_streaming_active(client: &Client) -> Result<bool, String> {
+    let status = client
+        .streaming()
+        .status()
+        .await
+        .map_err(|error| format!("Could not read OBS streaming state: {error}"))?;
+    let value = serde_json::to_value(status)
+        .map_err(|error| format!("Could not decode OBS streaming state: {error}"))?;
+
+    Ok(json_bool(&value, "outputActive"))
+}
+
+async fn wait_for_streaming_state(
+    client: &Client,
+    expected_active: bool,
+) -> Result<bool, String> {
+    for _ in 0..8 {
+        let active = read_streaming_active(client).await?;
+        if active == expected_active {
+            return Ok(active);
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    Err(format!(
+        "OBS did not confirm streaming state active={}.",
+        expected_active
+    ))
 }
 
 async fn wait_for_recording_state(
@@ -935,5 +1025,20 @@ mod tests {
         assert_eq!(value["recording"], false);
         assert_eq!(value["paused"], false);
         assert_eq!(value["outputPath"], "C:\\Videos\\capture.mkv");
+    }
+
+
+    #[test]
+    fn streaming_action_result_serializes_expected_state() {
+        let result = ObsStreamingActionResult {
+            action: "start".to_string(),
+            streaming: true,
+            changed_at_ms: 42,
+        };
+
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(value["action"], "start");
+        assert_eq!(value["streaming"], true);
+        assert_eq!(value["changedAtMs"], 42);
     }
 }

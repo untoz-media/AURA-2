@@ -158,3 +158,10 @@ export type ObsRecordingActionResult = {
   outputPath?: string;
   changedAtMs: number;
 };
+
+
+export type ObsStreamingActionResult = {
+  action: "start" | "stop";
+  streaming: boolean;
+  changedAtMs: number;
+};

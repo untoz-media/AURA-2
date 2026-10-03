@@ -11,6 +11,7 @@ import type {
   ObsSceneList,
   ObsSceneSwitchResult,
   ObsRecordingActionResult,
+  ObsStreamingActionResult,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -51,6 +52,9 @@ type Props = {
   onObsRecordingAction: (
     action: ObsRecordingActionResult["action"],
   ) => Promise<ObsRecordingActionResult>;
+  onObsStreamingAction: (
+    action: ObsStreamingActionResult["action"],
+  ) => Promise<ObsStreamingActionResult>;
 };
 
 const sections: Array<{
@@ -171,6 +175,7 @@ export default function Settings({
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
   onObsRecordingAction,
+  onObsStreamingAction,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -179,6 +184,8 @@ export default function Settings({
   const [obsSceneChanging, setObsSceneChanging] = useState<string | null>(null);
   const [obsRecordingAction, setObsRecordingAction] =
     useState<ObsRecordingActionResult["action"] | null>(null);
+  const [obsStreamingAction, setObsStreamingAction] =
+    useState<ObsStreamingActionResult["action"] | null>(null);
   const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
 
   useEffect(() => {
@@ -250,6 +257,20 @@ export default function Settings({
       // Bridge activity/error state already carries the failure details.
     } finally {
       setObsRecordingAction(null);
+    }
+  }
+
+
+  async function handleObsStreamingAction(
+    action: ObsStreamingActionResult["action"],
+  ) {
+    setObsStreamingAction(action);
+    try {
+      await onObsStreamingAction(action);
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsStreamingAction(null);
     }
   }
 
@@ -707,6 +728,39 @@ export default function Settings({
                           ? obsRuntime.currentPreviewScene ?? "—"
                           : "Studio Mode off"}
                       </strong>
+                    </div>
+                  </div>
+
+                  <div className="obs-streaming-controls">
+                    <div className="obs-recording-copy">
+                      <strong>Streaming Control</strong>
+                      <span>
+                        {obsRuntime.streaming
+                          ? "The OBS stream is LIVE."
+                          : "The OBS stream is offline."}
+                      </span>
+                    </div>
+
+                    <div className="obs-recording-actions">
+                      {!obsRuntime.streaming ? (
+                        <button
+                          type="button"
+                          className="settings-action-button obs-streaming-start"
+                          disabled={obsStreamingAction !== null}
+                          onClick={() => void handleObsStreamingAction("start")}
+                        >
+                          {obsStreamingAction === "start" ? "Going live…" : "Go Live"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="settings-action-button obs-recording-stop"
+                          disabled={obsStreamingAction !== null}
+                          onClick={() => void handleObsStreamingAction("stop")}
+                        >
+                          {obsStreamingAction === "stop" ? "Stopping…" : "Stop Stream"}
+                        </button>
+                      )}
                     </div>
                   </div>
 
