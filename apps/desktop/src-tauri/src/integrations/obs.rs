@@ -15,6 +15,22 @@ pub struct ObsConnectRequest {
     pub password: Option<String>,
 }
 
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSceneSwitchRequest {
+    pub scene_uuid: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsSceneSwitchResult {
+    pub target: String,
+    pub scene_name: String,
+    pub scene_uuid: String,
+    pub changed_at_ms: u64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsConnectionState {
@@ -281,6 +297,119 @@ impl ObsController {
         }
     }
 
+
+    pub async fn set_program_scene(
+        &self,
+        request: ObsSceneSwitchRequest,
+    ) -> Result<ObsSceneSwitchResult, String> {
+        let scene_uuid = validate_scene_uuid(&request.scene_uuid)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let scene_list = client
+            .scenes()
+            .list()
+            .await
+            .map_err(|error| format!("Could not validate OBS scenes before switching: {error}"))?;
+
+        let scene = scene_list
+            .scenes
+            .into_iter()
+            .find(|scene| scene.id.uuid.to_string() == scene_uuid)
+            .ok_or_else(|| "The requested OBS scene no longer exists.".to_string())?;
+
+        let scene_id = scene.id.clone();
+        let scene_name = scene_id.name.clone();
+        let scene_uuid = scene_id.uuid.to_string();
+
+        client
+            .scenes()
+            .set_current_program_scene(&scene_id)
+            .await
+            .map_err(|error| format!("Could not switch the OBS Program scene: {error}"))?;
+
+        let current = client
+            .scenes()
+            .current_program_scene()
+            .await
+            .map_err(|error| format!("OBS switched scenes, but verification failed: {error}"))?;
+
+        if current.id.uuid != scene_id.uuid {
+            return Err("OBS did not confirm the requested Program scene.".to_string());
+        }
+
+        Ok(ObsSceneSwitchResult {
+            target: "program".to_string(),
+            scene_name,
+            scene_uuid,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
+    pub async fn set_preview_scene(
+        &self,
+        request: ObsSceneSwitchRequest,
+    ) -> Result<ObsSceneSwitchResult, String> {
+        let scene_uuid = validate_scene_uuid(&request.scene_uuid)?;
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let studio_mode = client
+            .ui()
+            .studio_mode_enabled()
+            .await
+            .map_err(|error| format!("Could not read OBS Studio Mode: {error}"))?;
+
+        if !studio_mode {
+            return Err(
+                "Preview scenes are only available while OBS Studio Mode is enabled.".to_string(),
+            );
+        }
+
+        let scene_list = client
+            .scenes()
+            .list()
+            .await
+            .map_err(|error| format!("Could not validate OBS scenes before switching: {error}"))?;
+
+        let scene = scene_list
+            .scenes
+            .into_iter()
+            .find(|scene| scene.id.uuid.to_string() == scene_uuid)
+            .ok_or_else(|| "The requested OBS scene no longer exists.".to_string())?;
+
+        let scene_id = scene.id.clone();
+        let scene_name = scene_id.name.clone();
+        let scene_uuid = scene_id.uuid.to_string();
+
+        client
+            .scenes()
+            .set_current_preview_scene(&scene_id)
+            .await
+            .map_err(|error| format!("Could not switch the OBS Preview scene: {error}"))?;
+
+        let current = client
+            .scenes()
+            .current_preview_scene()
+            .await
+            .map_err(|error| format!("OBS changed Preview, but verification failed: {error}"))?;
+
+        if current.id.uuid != scene_id.uuid {
+            return Err("OBS did not confirm the requested Preview scene.".to_string());
+        }
+
+        Ok(ObsSceneSwitchResult {
+            target: "preview".to_string(),
+            scene_name,
+            scene_uuid,
+            changed_at_ms: timestamp_ms(),
+        })
+    }
+
     pub async fn connect(
         &self,
         request: ObsConnectRequest,
@@ -389,6 +518,20 @@ fn json_bool(value: &serde_json::Value, key: &str) -> bool {
     value.get(key).and_then(serde_json::Value::as_bool).unwrap_or(false)
 }
 
+fn validate_scene_uuid(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() {
+        return Err("OBS scene UUID cannot be empty.".to_string());
+    }
+
+    if trimmed.len() > 64 {
+        return Err("OBS scene UUID is invalid.".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
+
 fn validate_target(host: &str, port: u16) -> Result<(), String> {
     if host.is_empty() {
         return Err("OBS WebSocket host cannot be empty.".to_string());
@@ -468,5 +611,16 @@ mod tests {
         assert!(scenes.current_program_scene.is_none());
         assert!(scenes.current_preview_scene.is_none());
         assert!(scenes.last_error.is_none());
+    }
+
+
+    #[test]
+    fn validates_scene_uuid_input() {
+        assert_eq!(
+            validate_scene_uuid(" 123e4567-e89b-12d3-a456-426614174000 ").unwrap(),
+            "123e4567-e89b-12d3-a456-426614174000"
+        );
+        assert!(validate_scene_uuid("").is_err());
+        assert!(validate_scene_uuid(&"x".repeat(65)).is_err());
     }
 }
