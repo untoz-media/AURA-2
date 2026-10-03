@@ -811,6 +811,7 @@ fn process_user_command(
                 let worker_id = id.clone();
                 let worker_text = text.clone();
                 let worker_source = source.clone();
+                let worker_permission = action.permission;
 
                 thread::spawn(move || {
                     match action.intent {
@@ -1672,6 +1673,34 @@ fn process_user_command(
                                 );
                                 return;
                             };
+
+                            if preset_requires_sensitive_permission(&preset)
+                                && worker_permission != PermissionClass::Sensitive
+                            {
+                                let message = "Preset changed to require Sensitive permission. Run the command again so AURA can request confirmation.".to_string();
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "director.permission_changed",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
 
                             emit_core_event(
                                 &worker_app,
