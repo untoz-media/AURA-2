@@ -465,6 +465,7 @@ function App() {
               onObsAudioVolumeChange={controlObsAudioVolume}
               theme={theme}
               onThemeChange={changeTheme}
+              modelCatalog={modelCatalog}
             />
           )}
         </div>
