@@ -359,7 +359,7 @@ impl AudioInputManager {
             sample_format: None,
             last_error: Some("Could not refresh microphone state.".to_string()),
         })
-
+    }
 
     pub fn start_push_to_talk(&self) -> Result<AudioInputSnapshot, String> {
         {
@@ -532,11 +532,13 @@ impl AudioInputManager {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = false;
 
-        let samples = self
-            .capture_buffer
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
+        let samples = {
+            let mut buffer = self
+                .capture_buffer
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            std::mem::take(&mut *buffer)
+        };
 
         *self
             .last_capture
