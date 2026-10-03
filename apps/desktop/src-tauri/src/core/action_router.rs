@@ -41,6 +41,7 @@ pub enum ActionIntent {
     ObsAudioMute { input_name: String, muted: bool },
     ObsAudioVolume { input_name: String, percent: u8 },
     ObsProductionHealth,
+    DirectorPreset(String),
 }
 
 #[derive(Debug, Clone)]
