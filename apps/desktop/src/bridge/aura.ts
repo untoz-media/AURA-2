@@ -41,6 +41,9 @@ import type {
   ModelDownloadProgress,
   ModelRuntimeStatus,
   ManagedRuntimeStatus,
+  UserRoutine,
+  SaveRoutineRequest,
+  RoutineRunResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -375,4 +378,23 @@ export async function listenToManagedRuntime(
     AURA_EVENTS.managedRuntime,
     ({ payload }) => handler(payload),
   );
+}
+
+
+export async function getUserRoutines(): Promise<UserRoutine[]> {
+  return invoke<UserRoutine[]>("get_user_routines");
+}
+
+export async function saveUserRoutine(
+  request: SaveRoutineRequest,
+): Promise<UserRoutine> {
+  return invoke<UserRoutine>("save_user_routine", { request });
+}
+
+export async function deleteUserRoutine(routineId: string): Promise<void> {
+  return invoke<void>("delete_user_routine", { routineId });
+}
+
+export async function runUserRoutine(routineId: string): Promise<RoutineRunResult> {
+  return invoke<RoutineRunResult>("run_user_routine", { routineId });
 }

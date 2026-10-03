@@ -48,6 +48,7 @@ pub enum ActionIntent {
     CurrentApp,
     ActiveWindow,
     RecentFiles,
+    UserRoutine(String),
 }
 
 #[derive(Debug, Clone)]

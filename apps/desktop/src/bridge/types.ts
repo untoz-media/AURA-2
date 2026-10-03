@@ -465,3 +465,47 @@ export type ManagedRuntimeStatus = {
   lastError?: string;
   updatedAtMs: number;
 };
+
+
+export type RoutineStep =
+  | { type: "launchApp"; app: string }
+  | { type: "switchToApp"; app: string }
+  | { type: "directorPreset"; preset: string }
+  | { type: "wait"; milliseconds: number };
+
+export type UserRoutine = {
+  id: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  steps: RoutineStep[];
+  updatedAtMs: number;
+};
+
+export type SaveRoutineRequest = {
+  id?: string;
+  name: string;
+  description?: string;
+  aliases?: string[];
+  steps: RoutineStep[];
+};
+
+export type RoutineStepResult = {
+  index: number;
+  status: string;
+  label: string;
+  message: string;
+};
+
+export type RoutineRunResult = {
+  success: boolean;
+  routineId: string;
+  routineName: string;
+  completedSteps: number;
+  totalSteps: number;
+  failedStep?: number | null;
+  error?: string | null;
+  steps: RoutineStepResult[];
+  startedAtMs: number;
+  completedAtMs: number;
+};

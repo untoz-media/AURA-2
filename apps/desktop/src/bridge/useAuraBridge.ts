@@ -44,6 +44,10 @@ import {
   runDirectorPreset,
   createMemory,
   deleteMemory,
+  getUserRoutines,
+  saveUserRoutine,
+  deleteUserRoutine,
+  runUserRoutine,
   startModelDownload,
   pauseModelDownload,
   resumeModelDownload,
@@ -91,6 +95,9 @@ import type {
   ModelRuntimeStatus,
   ChatMessage,
   ManagedRuntimeStatus,
+  UserRoutine,
+  SaveRoutineRequest,
+  RoutineRunResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -185,6 +192,9 @@ export function useAuraBridge() {
   const [managedRuntimeStatus, setManagedRuntimeStatus] =
     useState<ManagedRuntimeStatus>(DEFAULT_MANAGED_RUNTIME);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [routines, setRoutines] = useState<UserRoutine[]>([]);
+  const [routineLastRun, setRoutineLastRun] =
+    useState<RoutineRunResult | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -258,6 +268,14 @@ export function useAuraBridge() {
         }
       });
 
+
+    getUserRoutines()
+      .then((items) => {
+        if (!cancelled) setRoutines(items);
+      })
+      .catch(() => {
+        // Empty/unavailable routines are a supported state.
+      });
 
     getModelRuntimeStatus()
       .then((runtime) => {
@@ -736,6 +754,62 @@ export function useAuraBridge() {
     const snapshot = await getRecentFilesContext();
     setRecentFiles(snapshot);
     return snapshot;
+  }, []);
+
+  const refreshRoutines = useCallback(async () => {
+    const items = await getUserRoutines();
+    setRoutines(items);
+    return items;
+  }, []);
+
+  const saveRoutineControl = useCallback(async (request: SaveRoutineRequest) => {
+    try {
+      setBridgeError(null);
+      const routine = await saveUserRoutine(request);
+      const items = await getUserRoutines();
+      setRoutines(items);
+      setActivity(`Saved routine ${routine.name}.`);
+      return routine;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "routine.save_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const deleteRoutineControl = useCallback(async (routineId: string) => {
+    try {
+      setBridgeError(null);
+      await deleteUserRoutine(routineId);
+      const items = await getUserRoutines();
+      setRoutines(items);
+      setActivity("Routine deleted.");
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "routine.delete_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const runRoutineControl = useCallback(async (routineId: string) => {
+    try {
+      setBridgeError(null);
+      const result = await runUserRoutine(routineId);
+      setRoutineLastRun(result);
+      setActivity(
+        result.success
+          ? `Routine ${result.routineName} completed.`
+          : result.error ?? `Routine ${result.routineName} failed.`,
+      );
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "routine.run_failed", message });
+      setActivity(message);
+      throw error;
+    }
   }, []);
 
   const refreshMemories = useCallback(async () => {
@@ -1499,6 +1573,8 @@ export function useAuraBridge() {
     memory,
     currentApp,
     recentFiles,
+    routines,
+    routineLastRun,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1522,6 +1598,10 @@ export function useAuraBridge() {
     refreshMemories,
     refreshCurrentApp,
     refreshRecentFiles,
+    refreshRoutines,
+    saveRoutineControl,
+    deleteRoutineControl,
+    runRoutineControl,
     refreshModels,
     refreshModelRuntime,
     refreshManagedRuntime,
