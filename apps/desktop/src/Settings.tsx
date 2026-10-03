@@ -14,6 +14,8 @@ import type {
   ObsStreamingActionResult,
   ObsSourceItemList,
   ObsSourceVisibilityResult,
+  ObsAudioInputList,
+  ObsAudioControlResult,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -46,11 +48,13 @@ type Props = {
   obsRuntime: ObsRuntimeState;
   obsScenes: ObsSceneList;
   obsSources: ObsSourceItemList;
+  obsAudio: ObsAudioInputList;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
   onObsScenesRefresh: () => Promise<ObsSceneList>;
   onObsSourcesRefresh: () => Promise<ObsSourceItemList>;
+  onObsAudioRefresh: () => Promise<ObsAudioInputList>;
   onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsRecordingAction: (
@@ -64,6 +68,14 @@ type Props = {
     itemId: number,
     enabled: boolean,
   ) => Promise<ObsSourceVisibilityResult>;
+  onObsAudioMuteChange: (
+    inputUuid: string,
+    muted: boolean,
+  ) => Promise<ObsAudioControlResult>;
+  onObsAudioVolumeChange: (
+    inputUuid: string,
+    percent: number,
+  ) => Promise<ObsAudioControlResult>;
 };
 
 const sections: Array<{
@@ -190,16 +202,20 @@ export default function Settings({
   obsRuntime,
   obsScenes,
   obsSources,
+  obsAudio,
   onObsConnect,
   onObsDisconnect,
   onObsRefresh,
   onObsScenesRefresh,
   onObsSourcesRefresh,
+  onObsAudioRefresh,
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
   onObsRecordingAction,
   onObsStreamingAction,
   onObsSourceVisibilityChange,
+  onObsAudioMuteChange,
+  onObsAudioVolumeChange,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -207,6 +223,8 @@ export default function Settings({
   const [obsConnecting, setObsConnecting] = useState(false);
   const [obsSceneChanging, setObsSceneChanging] = useState<string | null>(null);
   const [obsSourceChanging, setObsSourceChanging] = useState<number | null>(null);
+  const [obsAudioChanging, setObsAudioChanging] = useState<string | null>(null);
+  const [obsAudioDrafts, setObsAudioDrafts] = useState<Record<string, number>>({});
   const [obsRecordingAction, setObsRecordingAction] =
     useState<ObsRecordingActionResult["action"] | null>(null);
   const [obsStreamingAction, setObsStreamingAction] =
@@ -307,6 +325,39 @@ export default function Settings({
       // Bridge activity/error state already carries the failure details.
     } finally {
       setObsSourceChanging(null);
+    }
+  }
+
+
+  async function handleObsAudioMute(inputUuid: string, muted: boolean) {
+    setObsAudioChanging(`mute:${inputUuid}`);
+    try {
+      await onObsAudioMuteChange(inputUuid, muted);
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsAudioChanging(null);
+    }
+  }
+
+  async function handleObsAudioVolume(inputUuid: string, fallbackPercent: number) {
+    const percent = obsAudioDrafts[inputUuid] ?? fallbackPercent;
+    if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+      return;
+    }
+
+    setObsAudioChanging(`volume:${inputUuid}`);
+    try {
+      await onObsAudioVolumeChange(inputUuid, percent);
+      setObsAudioDrafts((current) => {
+        const next = { ...current };
+        delete next[inputUuid];
+        return next;
+      });
+    } catch {
+      // Bridge activity/error state already carries the failure details.
+    } finally {
+      setObsAudioChanging(null);
     }
   }
 
@@ -1069,6 +1120,119 @@ export default function Settings({
 
                   {obsSources.lastError && (
                     <p className="obs-connection-error">{obsSources.lastError}</p>
+                  )}
+                </div>
+              )}
+
+              {obsConnection.connected && (
+                <div className="obs-audio-panel">
+                  <div className="obs-runtime-heading">
+                    <div>
+                      <strong>Audio Inputs</strong>
+                      <span>
+                        {obsAudio.inputs.length} controllable audio input{obsAudio.inputs.length === 1 ? "" : "s"} · refreshed every 5 seconds.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      onClick={() => void onObsAudioRefresh()}
+                    >
+                      Refresh audio
+                    </button>
+                  </div>
+
+                  {obsAudio.inputs.length > 0 ? (
+                    <div className="obs-audio-list">
+                      {obsAudio.inputs.map((input) => {
+                        const draft =
+                          obsAudioDrafts[input.inputUuid] ?? input.volumePercent;
+                        const volumeChanged = draft !== input.volumePercent;
+
+                        return (
+                          <div className="obs-audio-row" key={input.inputUuid}>
+                            <div className="obs-audio-copy">
+                              <strong>{input.inputName}</strong>
+                              <span>
+                                {input.inputKind} · {Number.isFinite(input.volumeDb)
+                                  ? `${input.volumeDb.toFixed(1)} dB`
+                                  : "dB unavailable"}
+                              </span>
+                            </div>
+
+                            <div className="obs-audio-level">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={draft}
+                                aria-label={`${input.inputName} volume`}
+                                disabled={obsAudioChanging !== null}
+                                onChange={(event) => {
+                                  const percent = Number(event.target.value);
+                                  setObsAudioDrafts((current) => ({
+                                    ...current,
+                                    [input.inputUuid]: percent,
+                                  }));
+                                }}
+                              />
+                              <span>{draft}%</span>
+                            </div>
+
+                            <div className="obs-audio-actions">
+                              <Badge tone={input.muted ? "warning" : "ready"}>
+                                {input.muted ? "Muted" : "Live"}
+                              </Badge>
+                              <button
+                                type="button"
+                                className="settings-action-button obs-audio-set"
+                                disabled={
+                                  obsAudioChanging !== null || !volumeChanged
+                                }
+                                onClick={() =>
+                                  void handleObsAudioVolume(
+                                    input.inputUuid,
+                                    input.volumePercent,
+                                  )
+                                }
+                              >
+                                {obsAudioChanging === `volume:${input.inputUuid}`
+                                  ? "Setting…"
+                                  : "Set"}
+                              </button>
+                              <button
+                                type="button"
+                                className="settings-action-button obs-audio-mute"
+                                disabled={obsAudioChanging !== null}
+                                onClick={() =>
+                                  void handleObsAudioMute(
+                                    input.inputUuid,
+                                    !input.muted,
+                                  )
+                                }
+                              >
+                                {obsAudioChanging === `mute:${input.inputUuid}`
+                                  ? "Updating…"
+                                  : input.muted
+                                    ? "Unmute"
+                                    : "Mute"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="obs-scenes-empty">
+                      {obsAudio.lastError
+                        ? "Could not load OBS audio inputs."
+                        : "No controllable OBS audio inputs were found."}
+                    </div>
+                  )}
+
+                  {obsAudio.lastError && (
+                    <p className="obs-connection-error">{obsAudio.lastError}</p>
                   )}
                 </div>
               )}

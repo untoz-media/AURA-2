@@ -7,6 +7,7 @@ import {
   getObsRuntimeState,
   getObsScenes,
   getObsSourceItems,
+  getObsAudioInputs,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -26,6 +27,8 @@ import {
   startObsStreaming,
   stopObsStreaming,
   setObsSourceVisibility,
+  setObsAudioMuted,
+  setObsAudioVolume,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -48,6 +51,8 @@ import type {
   ObsStreamingActionResult,
   ObsSourceItemList,
   ObsSourceVisibilityResult,
+  ObsAudioInputList,
+  ObsAudioControlResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -75,6 +80,11 @@ const DEFAULT_OBS_SOURCES: ObsSourceItemList = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_OBS_AUDIO: ObsAudioInputList = {
+  inputs: [],
+  refreshedAtMs: 0,
+};
+
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
@@ -92,6 +102,7 @@ export function useAuraBridge() {
   const [obsRuntime, setObsRuntime] = useState<ObsRuntimeState>(DEFAULT_OBS_RUNTIME);
   const [obsScenes, setObsScenes] = useState<ObsSceneList>(DEFAULT_OBS_SCENES);
   const [obsSources, setObsSources] = useState<ObsSourceItemList>(DEFAULT_OBS_SOURCES);
+  const [obsAudio, setObsAudio] = useState<ObsAudioInputList>(DEFAULT_OBS_AUDIO);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -268,20 +279,34 @@ export function useAuraBridge() {
   }, [obsConnection.connected]);
 
 
+  const refreshObsAudio = useCallback(async () => {
+    if (!obsConnection.connected) {
+      setObsAudio(DEFAULT_OBS_AUDIO);
+      return DEFAULT_OBS_AUDIO;
+    }
+
+    const audio = await getObsAudioInputs();
+    setObsAudio(audio);
+    return audio;
+  }, [obsConnection.connected]);
+
+
   const switchObsProgramScene = useCallback(async (
     sceneUuid: string,
   ): Promise<ObsSceneSwitchResult> => {
     try {
       setBridgeError(null);
       const result = await setObsProgramScene({ sceneUuid });
-      const [runtime, scenes, sources] = await Promise.all([
+      const [runtime, scenes, sources, audio] = await Promise.all([
         getObsRuntimeState(),
         getObsScenes(),
         getObsSourceItems(),
+        getObsAudioInputs(),
       ]);
       setObsRuntime(runtime);
       setObsScenes(scenes);
       setObsSources(sources);
+      setObsAudio(audio);
       setActivity(`OBS Program switched to ${result.sceneName}.`);
       return result;
     } catch (error) {
@@ -432,6 +457,59 @@ export function useAuraBridge() {
     }
   }, []);
 
+
+  const controlObsAudioMute = useCallback(async (
+    inputUuid: string,
+    muted: boolean,
+  ): Promise<ObsAudioControlResult> => {
+    try {
+      setBridgeError(null);
+
+      const result = await setObsAudioMuted({ inputUuid, muted });
+      const audio = await getObsAudioInputs();
+      setObsAudio(audio);
+      setActivity(
+        `OBS input ${result.inputName} is now ${result.muted ? "muted" : "unmuted"}.`,
+      );
+
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.audio_mute_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const controlObsAudioVolume = useCallback(async (
+    inputUuid: string,
+    percent: number,
+  ): Promise<ObsAudioControlResult> => {
+    try {
+      setBridgeError(null);
+
+      const result = await setObsAudioVolume({ inputUuid, percent });
+      const audio = await getObsAudioInputs();
+      setObsAudio(audio);
+      setActivity(
+        `OBS input ${result.inputName} volume set to ${result.volumePercent}%.`,
+      );
+
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.audio_volume_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
@@ -549,6 +627,40 @@ export function useAuraBridge() {
     };
   }, [obsConnection.connected, obsRuntime.currentProgramScene]);
 
+  useEffect(() => {
+    if (!obsConnection.connected) {
+      setObsAudio(DEFAULT_OBS_AUDIO);
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateAudio = async () => {
+      try {
+        const audio = await getObsAudioInputs();
+        if (!cancelled) {
+          setObsAudio(audio);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setObsAudio({
+            ...DEFAULT_OBS_AUDIO,
+            refreshedAtMs: Date.now(),
+            lastError: String(error),
+          });
+        }
+      }
+    };
+
+    void updateAudio();
+    const interval = window.setInterval(() => void updateAudio(), 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [obsConnection.connected]);
+
   const submitCommand = useCallback(async (
     text: string,
     source: "desktop" | "overlay" | "voice" = "desktop",
@@ -648,6 +760,7 @@ export function useAuraBridge() {
     setObsRuntime(DEFAULT_OBS_RUNTIME);
     setObsScenes(DEFAULT_OBS_SCENES);
     setObsSources(DEFAULT_OBS_SOURCES);
+    setObsAudio(DEFAULT_OBS_AUDIO);
     setBridgeError(null);
     setActivity("OBS Studio disconnected from AURA.");
     return state;
@@ -702,6 +815,7 @@ export function useAuraBridge() {
     obsRuntime,
     obsScenes,
     obsSources,
+    obsAudio,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -715,11 +829,14 @@ export function useAuraBridge() {
     refreshObsRuntime,
     refreshObsScenes,
     refreshObsSources,
+    refreshObsAudio,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
     controlObsStreaming,
     controlObsSourceVisibility,
+    controlObsAudioMute,
+    controlObsAudioVolume,
     approveConfirmation,
     cancelConfirmation,
   };

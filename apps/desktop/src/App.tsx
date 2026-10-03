@@ -37,6 +37,7 @@ function App() {
     obsRuntime,
     obsScenes,
     obsSources,
+    obsAudio,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -50,11 +51,14 @@ function App() {
     refreshObsRuntime,
     refreshObsScenes,
     refreshObsSources,
+    refreshObsAudio,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
     controlObsStreaming,
     controlObsSourceVisibility,
+    controlObsAudioMute,
+    controlObsAudioVolume,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -240,16 +244,20 @@ function App() {
             obsRuntime={obsRuntime}
             obsScenes={obsScenes}
             obsSources={obsSources}
+            obsAudio={obsAudio}
             onObsConnect={connectObsControl}
             onObsDisconnect={disconnectObsControl}
             onObsRefresh={refreshObsRuntime}
             onObsScenesRefresh={refreshObsScenes}
             onObsSourcesRefresh={refreshObsSources}
+            onObsAudioRefresh={refreshObsAudio}
             onObsProgramSceneChange={switchObsProgramScene}
             onObsPreviewSceneChange={switchObsPreviewScene}
             onObsRecordingAction={controlObsRecording}
             onObsStreamingAction={controlObsStreaming}
             onObsSourceVisibilityChange={controlObsSourceVisibility}
+            onObsAudioMuteChange={controlObsAudioMute}
+            onObsAudioVolumeChange={controlObsAudioVolume}
           />
         )}
       </section>

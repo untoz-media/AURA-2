@@ -371,6 +371,99 @@ fn obs_scene_commands_respect_act_policy_override() {
 }
 
 #[test]
+fn obs_audio_commands_route_through_act_permission() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Mute Mic/Aux",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsAudioMute {
+            input_name,
+            muted: true,
+        } if input_name == "Mic/Aux"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Unmute Desktop Audio",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsAudioMute {
+            input_name,
+            muted: false,
+        } if input_name == "Desktop Audio"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Set Mic/Aux to 70%",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsAudioVolume {
+            input_name,
+            percent: 70,
+        } if input_name == "Mic/Aux"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Define Desktop Audio para 45%",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsAudioVolume {
+            input_name,
+            percent: 45,
+        } if input_name == "Desktop Audio"
+    ));
+}
+
+#[test]
+fn obs_audio_commands_respect_act_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Act, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Mute Commentary",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsAudioMute {
+            input_name,
+            muted: true,
+        } if input_name == "Commentary"
+    ));
+}
+
+#[test]
+fn plain_mute_still_routes_to_system_media() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Mute",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::Media(MediaAction::Mute)
+    ));
+}
+
+#[test]
 fn obs_source_visibility_commands_route_through_act_permission() {
     let policy = PermissionPolicy::default();
 

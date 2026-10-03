@@ -207,3 +207,40 @@ export type ObsSourceVisibilityResult = {
   enabled: boolean;
   changedAtMs: number;
 };
+
+
+export type ObsAudioInputSummary = {
+  inputName: string;
+  inputUuid: string;
+  inputKind: string;
+  muted: boolean;
+  volumePercent: number;
+  volumeMul: number;
+  volumeDb: number;
+};
+
+export type ObsAudioInputList = {
+  inputs: ObsAudioInputSummary[];
+  refreshedAtMs: number;
+  lastError?: string;
+};
+
+export type ObsAudioMuteRequest = {
+  inputUuid: string;
+  muted: boolean;
+};
+
+export type ObsAudioVolumeRequest = {
+  inputUuid: string;
+  percent: number;
+};
+
+export type ObsAudioControlResult = {
+  inputName: string;
+  inputUuid: string;
+  muted: boolean;
+  volumePercent: number;
+  volumeMul: number;
+  volumeDb: number;
+  changedAtMs: number;
+};
