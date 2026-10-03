@@ -220,4 +220,23 @@ Current behavior:
 - selected-model state is persisted locally
 - AURA-2 remains unavailable until a real checkpoint is defined
 
-The currently selectable model is not yet connected to free-form chat generation; that is the next Model Runtime step. Deterministic computer and OBS controls continue to work without an LLM.
+The selected verified model is now connected to free-form local chat through a persistent Python/Transformers runtime. Deterministic computer and OBS controls still route directly and do not depend on the LLM.
+
+
+### Local Model Runtime
+
+Free-form Chat now falls back to the selected verified local model when no deterministic AURA action matches.
+
+Current runtime behavior:
+
+- selected model loads on the first free-form prompt
+- the Python/Transformers worker remains resident between prompts
+- model loading uses `local_files_only=True`
+- AURA-1 keeps its existing 4-bit BitsAndBytes profile when CUDA is available
+- conversation context remains in RAM for the current conversation
+- **New conversation** clears model context without unloading the model
+- changing/removing the active model stops the old worker
+- Settings exposes loading / ready / generating / error runtime state
+- Chat now renders real user/AURA message history
+
+The current Alpha expects a compatible Python environment containing the AURA-1 runtime dependencies. Automatic managed Python/PyTorch installation remains a future runtime-packaging step.
