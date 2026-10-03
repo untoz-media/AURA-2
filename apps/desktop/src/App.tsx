@@ -51,6 +51,7 @@ function App() {
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
+    controlObsStreaming,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -242,6 +243,7 @@ function App() {
             onObsProgramSceneChange={switchObsProgramScene}
             onObsPreviewSceneChange={switchObsPreviewScene}
             onObsRecordingAction={controlObsRecording}
+            onObsStreamingAction={controlObsStreaming}
           />
         )}
       </section>
