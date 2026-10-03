@@ -529,6 +529,45 @@ fn obs_source_visibility_respects_act_policy_override() {
 }
 
 #[test]
+fn obs_production_health_queries_are_read_only() {
+    let policy = PermissionPolicy::default();
+
+    for command in [
+        "Check production health",
+        "OBS health",
+        "Verifica a saúde da produção",
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Read,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::ObsProductionHealth
+        ));
+    }
+}
+
+#[test]
+fn obs_production_health_respects_read_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Check OBS health",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsProductionHealth
+    ));
+}
+
+#[test]
 fn obs_stream_duration_queries_are_read_only() {
     let policy = PermissionPolicy::default();
 

@@ -40,6 +40,7 @@ pub enum ActionIntent {
     ObsSourceVisibility { source_name: String, enabled: bool },
     ObsAudioMute { input_name: String, muted: bool },
     ObsAudioVolume { input_name: String, percent: u8 },
+    ObsProductionHealth,
 }
 
 #[derive(Debug, Clone)]
@@ -636,6 +637,30 @@ fn obs_source_visibility_request(input: &str) -> Option<ActionIntent> {
     })
 }
 
+fn is_obs_production_health_request(input: &str) -> bool {
+    let normalized = normalize_command(input);
+
+    matches!(
+        normalized.as_str(),
+        "check production health"
+            | "production health"
+            | "check obs health"
+            | "obs health"
+            | "how is the production"
+            | "how is production health"
+            | "is the production healthy"
+            | "verifica a saúde da produção"
+            | "verifica a saude da producao"
+            | "saúde da produção"
+            | "saude da producao"
+            | "estado da produção"
+            | "estado da producao"
+            | "como está a produção"
+            | "como esta a producao"
+            | "verifica o obs"
+    )
+}
+
 fn is_obs_stream_duration_request(input: &str) -> bool {
     let normalized = normalize_command(input);
 
@@ -914,6 +939,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             }
             Err(message) => RouteResult::InvalidKeyboard(message),
         };
+    }
+
+    if is_obs_production_health_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsProductionHealth,
+            permission,
+            decision: policy.decision_for(permission),
+        });
     }
 
     if is_obs_stream_duration_request(input) {
@@ -1288,6 +1322,26 @@ mod tests {
                 ..
             }) if source_name == "Marcador"
         ));
+    }
+
+    #[test]
+    fn routes_obs_production_health_as_read() {
+        let policy = PermissionPolicy::default();
+
+        for command in [
+            "Check production health",
+            "OBS health",
+            "Verifica a saúde da produção",
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::ObsProductionHealth,
+                    permission: PermissionClass::Read,
+                    decision: PermissionDecision::Allow,
+                })
+            ));
+        }
     }
 
     #[test]

@@ -27,6 +27,7 @@ import type {
   ObsAudioMuteRequest,
   ObsAudioVolumeRequest,
   ObsAudioControlResult,
+  ObsProductionHealth,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -236,4 +237,9 @@ export async function setObsAudioVolume(
   request: ObsAudioVolumeRequest,
 ): Promise<ObsAudioControlResult> {
   return invoke<ObsAudioControlResult>("set_obs_audio_volume", { request });
+}
+
+
+export async function getObsProductionHealth(): Promise<ObsProductionHealth> {
+  return invoke<ObsProductionHealth>("get_obs_production_health");
 }

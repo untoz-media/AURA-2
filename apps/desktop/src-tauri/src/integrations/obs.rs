@@ -148,6 +148,40 @@ pub struct ObsAudioControlResult {
     pub changed_at_ms: u64,
 }
 
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObsProductionHealth {
+    pub status: String,
+    pub summary: String,
+    pub issues: Vec<String>,
+    pub cpu_usage_percent: f64,
+    pub memory_usage_mb: f64,
+    pub available_disk_space_mb: f64,
+    pub active_fps: f64,
+    pub average_frame_render_time_ms: f64,
+    pub render_skipped_frames: u32,
+    pub render_total_frames: u32,
+    pub render_skipped_percent: f64,
+    pub output_skipped_frames: u32,
+    pub output_total_frames: u32,
+    pub output_skipped_percent: f64,
+    pub streaming: bool,
+    pub stream_reconnecting: bool,
+    pub stream_congestion_percent: Option<f64>,
+    pub stream_bitrate_kbps: Option<f64>,
+    pub stream_output_skipped_frames: Option<u64>,
+    pub stream_output_total_frames: Option<u64>,
+    pub stream_dropped_percent: Option<f64>,
+    pub checked_at_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ObsHealthSample {
+    output_bytes: u64,
+    sampled_at_ms: u64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsConnectionState {
@@ -247,6 +281,7 @@ impl Default for ObsConnectionState {
 pub struct ObsController {
     client: Mutex<Option<Client>>,
     state: Mutex<ObsConnectionState>,
+    health_sample: Mutex<Option<ObsHealthSample>>,
 }
 
 impl Default for ObsController {
@@ -254,6 +289,7 @@ impl Default for ObsController {
         Self {
             client: Mutex::new(None),
             state: Mutex::new(ObsConnectionState::default()),
+            health_sample: Mutex::new(None),
         }
     }
 }
@@ -1155,6 +1191,108 @@ impl ObsController {
         })
     }
 
+    pub async fn production_health(&self) -> Result<ObsProductionHealth, String> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
+
+        let stats = client
+            .general()
+            .stats()
+            .await
+            .map_err(|error| format!("Could not read OBS production stats: {error}"))?;
+
+        let stream_status = client
+            .streaming()
+            .status()
+            .await
+            .map_err(|error| format!("Could not read OBS stream health: {error}"))?;
+        let stream_json = serde_json::to_value(stream_status)
+            .map_err(|error| format!("Could not decode OBS stream health: {error}"))?;
+
+        let streaming = json_bool(&stream_json, "outputActive");
+        let stream_reconnecting = json_bool(&stream_json, "outputReconnecting");
+        let stream_congestion = json_f64(&stream_json, "outputCongestion");
+        let stream_output_bytes = json_u64(&stream_json, "outputBytes");
+        let stream_output_skipped_frames = json_u64(&stream_json, "outputSkippedFrames");
+        let stream_output_total_frames = json_u64(&stream_json, "outputTotalFrames");
+        let checked_at_ms = timestamp_ms();
+
+        let stream_bitrate_kbps = if streaming {
+            match stream_output_bytes {
+                Some(bytes) => {
+                    let mut sample = self.health_sample.lock().await;
+                    let bitrate = sample.as_ref().and_then(|previous| {
+                        let elapsed_ms = checked_at_ms.saturating_sub(previous.sampled_at_ms);
+                        let byte_delta = bytes.checked_sub(previous.output_bytes)?;
+                        (elapsed_ms > 0).then_some(
+                            (byte_delta as f64 * 8.0) / elapsed_ms as f64
+                        )
+                    });
+                    *sample = Some(ObsHealthSample {
+                        output_bytes: bytes,
+                        sampled_at_ms: checked_at_ms,
+                    });
+                    bitrate
+                }
+                None => None,
+            }
+        } else {
+            *self.health_sample.lock().await = None;
+            None
+        };
+
+        let render_skipped_percent =
+            frame_loss_percent(stats.render_skipped_frames as u64, stats.render_total_frames as u64);
+        let output_skipped_percent =
+            frame_loss_percent(stats.output_skipped_frames as u64, stats.output_total_frames as u64);
+        let stream_dropped_percent = match (
+            stream_output_skipped_frames,
+            stream_output_total_frames,
+        ) {
+            (Some(skipped), Some(total)) => Some(frame_loss_percent(skipped, total)),
+            _ => None,
+        };
+
+        let (status, summary, issues) = evaluate_production_health(
+            stats.cpu_usage,
+            stats.available_disk_space,
+            stats.average_frame_render_time,
+            render_skipped_percent,
+            output_skipped_percent,
+            streaming,
+            stream_reconnecting,
+            stream_congestion,
+            stream_dropped_percent,
+        );
+
+        Ok(ObsProductionHealth {
+            status,
+            summary,
+            issues,
+            cpu_usage_percent: stats.cpu_usage,
+            memory_usage_mb: stats.memory_usage,
+            available_disk_space_mb: stats.available_disk_space,
+            active_fps: stats.active_fps,
+            average_frame_render_time_ms: stats.average_frame_render_time,
+            render_skipped_frames: stats.render_skipped_frames,
+            render_total_frames: stats.render_total_frames,
+            render_skipped_percent,
+            output_skipped_frames: stats.output_skipped_frames,
+            output_total_frames: stats.output_total_frames,
+            output_skipped_percent,
+            streaming,
+            stream_reconnecting,
+            stream_congestion_percent: stream_congestion.map(|value| value * 100.0),
+            stream_bitrate_kbps,
+            stream_output_skipped_frames,
+            stream_output_total_frames,
+            stream_dropped_percent,
+            checked_at_ms,
+        })
+    }
+
     pub async fn connect(
         &self,
         request: ObsConnectRequest,
@@ -1174,6 +1312,7 @@ impl ObsController {
             .filter(|value| !value.is_empty());
 
         self.disconnect_client_only().await;
+        *self.health_sample.lock().await = None;
 
         let connect_result = tokio::time::timeout(
             CONNECT_TIMEOUT,
@@ -1225,6 +1364,7 @@ impl ObsController {
 
     pub async fn disconnect(&self) -> ObsConnectionState {
         self.disconnect_client_only().await;
+        *self.health_sample.lock().await = None;
 
         let mut state = self.state.lock().await;
         state.connected = false;
@@ -1246,6 +1386,7 @@ impl ObsController {
 
     async fn record_failure(&self, host: String, port: u16, message: String) {
         *self.client.lock().await = None;
+        *self.health_sample.lock().await = None;
 
         let mut state = self.state.lock().await;
         state.connected = false;
@@ -1256,6 +1397,132 @@ impl ObsController {
         state.rpc_version = None;
         state.connected_at_ms = None;
         state.last_error = Some(message);
+    }
+}
+
+fn frame_loss_percent(skipped: u64, total: u64) -> f64 {
+    if total == 0 {
+        return 0.0;
+    }
+
+    skipped as f64 * 100.0 / total as f64
+}
+
+fn evaluate_production_health(
+    cpu_usage_percent: f64,
+    available_disk_space_mb: f64,
+    average_frame_render_time_ms: f64,
+    render_skipped_percent: f64,
+    output_skipped_percent: f64,
+    streaming: bool,
+    stream_reconnecting: bool,
+    stream_congestion: Option<f64>,
+    stream_dropped_percent: Option<f64>,
+) -> (String, String, Vec<String>) {
+    let mut critical = Vec::new();
+    let mut warnings = Vec::new();
+
+    if stream_reconnecting {
+        critical.push("Stream output is reconnecting.".to_string());
+    }
+
+    if streaming {
+        if let Some(congestion) = stream_congestion {
+            if congestion >= 0.95 {
+                critical.push(format!(
+                    "Stream congestion is critically high ({:.0}%).",
+                    congestion * 100.0
+                ));
+            } else if congestion >= 0.75 {
+                warnings.push(format!(
+                    "Stream congestion is elevated ({:.0}%).",
+                    congestion * 100.0
+                ));
+            }
+        }
+
+        if let Some(dropped_percent) = stream_dropped_percent {
+            if dropped_percent >= 5.0 {
+                critical.push(format!(
+                    "Stream dropped {:.2}% of output frames.",
+                    dropped_percent
+                ));
+            } else if dropped_percent >= 1.0 {
+                warnings.push(format!(
+                    "Stream dropped {:.2}% of output frames.",
+                    dropped_percent
+                ));
+            }
+        }
+    }
+
+    if cpu_usage_percent >= 95.0 {
+        critical.push(format!("OBS CPU usage is very high ({cpu_usage_percent:.1}%)."));
+    } else if cpu_usage_percent >= 80.0 {
+        warnings.push(format!("OBS CPU usage is high ({cpu_usage_percent:.1}%)."));
+    }
+
+    if available_disk_space_mb < 1024.0 {
+        critical.push(format!(
+            "Recording disk space is critically low ({:.1} GB free).",
+            available_disk_space_mb / 1024.0
+        ));
+    } else if available_disk_space_mb < 5120.0 {
+        warnings.push(format!(
+            "Recording disk space is low ({:.1} GB free).",
+            available_disk_space_mb / 1024.0
+        ));
+    }
+
+    if average_frame_render_time_ms >= 20.0 {
+        warnings.push(format!(
+            "Average frame render time is high ({average_frame_render_time_ms:.1} ms)."
+        ));
+    }
+
+    if render_skipped_percent >= 5.0 {
+        critical.push(format!(
+            "Renderer skipped {:.2}% of frames.",
+            render_skipped_percent
+        ));
+    } else if render_skipped_percent >= 1.0 {
+        warnings.push(format!(
+            "Renderer skipped {:.2}% of frames.",
+            render_skipped_percent
+        ));
+    }
+
+    if output_skipped_percent >= 5.0 {
+        critical.push(format!(
+            "Output skipped {:.2}% of frames.",
+            output_skipped_percent
+        ));
+    } else if output_skipped_percent >= 1.0 {
+        warnings.push(format!(
+            "Output skipped {:.2}% of frames.",
+            output_skipped_percent
+        ));
+    }
+
+    if !critical.is_empty() {
+        critical.extend(warnings);
+        (
+            "critical".to_string(),
+            "Production health needs immediate attention.".to_string(),
+            critical,
+        )
+    } else if !warnings.is_empty() {
+        (
+            "warning".to_string(),
+            "Production is running, but one or more metrics need attention.".to_string(),
+            warnings,
+        )
+    } else {
+        (
+            "good".to_string(),
+            "Production health is good.".to_string(),
+            Vec::new(),
+        )
     }
 }
 
@@ -1511,6 +1778,10 @@ fn json_u64(value: &serde_json::Value, key: &str) -> Option<u64> {
     value.get(key).and_then(serde_json::Value::as_u64)
 }
 
+fn json_f64(value: &serde_json::Value, key: &str) -> Option<f64> {
+    value.get(key).and_then(serde_json::Value::as_f64)
+}
+
 fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -1712,6 +1983,53 @@ mod tests {
         assert_eq!(volume_mul_to_percent(0.5), 50);
         assert_eq!(volume_mul_to_percent(1.0), 100);
         assert_eq!(volume_mul_to_percent(1.5), 100);
+    }
+
+    #[test]
+    fn calculates_frame_loss_percent() {
+        assert_eq!(frame_loss_percent(0, 0), 0.0);
+        assert_eq!(frame_loss_percent(1, 100), 1.0);
+        assert_eq!(frame_loss_percent(5, 100), 5.0);
+    }
+
+    #[test]
+    fn production_health_grades_good_warning_and_critical() {
+        let good = evaluate_production_health(
+            20.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+        );
+        assert_eq!(good.0, "good");
+        assert!(good.2.is_empty());
+
+        let warning = evaluate_production_health(
+            85.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+        );
+        assert_eq!(warning.0, "warning");
+        assert!(!warning.2.is_empty());
+
+        let critical = evaluate_production_health(
+            20.0, 500.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+        );
+        assert_eq!(critical.0, "critical");
+        assert!(!critical.2.is_empty());
+    }
+
+
+    #[test]
+    fn production_health_flags_stream_drops() {
+        let health = evaluate_production_health(
+            20.0,
+            50_000.0,
+            4.0,
+            0.0,
+            0.0,
+            true,
+            false,
+            Some(0.0),
+            Some(6.0),
+        );
+
+        assert_eq!(health.0, "critical");
+        assert!(health.2.iter().any(|issue| issue.contains("Stream dropped")));
     }
 
     #[test]

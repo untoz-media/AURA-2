@@ -125,7 +125,7 @@ Native Windows app, Core bridge, tray, Overlay, Settings, background mode, autos
 Deterministic Windows control for applications, windows, keyboard, mouse, audio/media and system actions, with persistent permissions and one-shot confirmations.
 
 ### M004 — OBS Integration 🚧
-OBS WebSocket v5 connection, live state detection, scene/source control, recording/streaming controls, live duration and per-input audio control are implemented; production health checks are next.
+OBS WebSocket v5 connection, live state detection, scene/source/audio control, recording/streaming controls, live duration and production health monitoring are implemented; Director Mode presets are next.
 
 ### M005 — Memory & Context
 Persistent local memory, app context and system awareness.

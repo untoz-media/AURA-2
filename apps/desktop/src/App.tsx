@@ -38,6 +38,7 @@ function App() {
     obsScenes,
     obsSources,
     obsAudio,
+    obsHealth,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -52,6 +53,7 @@ function App() {
     refreshObsScenes,
     refreshObsSources,
     refreshObsAudio,
+    refreshObsHealth,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
@@ -245,12 +247,14 @@ function App() {
             obsScenes={obsScenes}
             obsSources={obsSources}
             obsAudio={obsAudio}
+            obsHealth={obsHealth}
             onObsConnect={connectObsControl}
             onObsDisconnect={disconnectObsControl}
             onObsRefresh={refreshObsRuntime}
             onObsScenesRefresh={refreshObsScenes}
             onObsSourcesRefresh={refreshObsSources}
             onObsAudioRefresh={refreshObsAudio}
+            onObsHealthRefresh={refreshObsHealth}
             onObsProgramSceneChange={switchObsProgramScene}
             onObsPreviewSceneChange={switchObsPreviewScene}
             onObsRecordingAction={controlObsRecording}
