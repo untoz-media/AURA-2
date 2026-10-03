@@ -1616,11 +1616,81 @@ fn process_user_command(
                                 }
                             }
                         }
-                    ActionIntent::ObsProductionHealth => {
-                        "Reading OBS production health requires confirmation under the current permission policy."
-                            .to_string()
-                    }
-                    ActionIntent::ObsStreamDuration => {
+                        ActionIntent::ObsProductionHealth => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Checking OBS production health…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                obs.production_health().await
+                            });
+
+                            match result {
+                                Ok(health) => {
+                                    let message = if health.issues.is_empty() {
+                                        format!(
+                                            "Production health: {}. {:.1} FPS, OBS CPU {:.1}%, no frame-loss warnings detected.",
+                                            health.status.to_uppercase(),
+                                            health.active_fps,
+                                            health.cpu_usage_percent
+                                        )
+                                    } else {
+                                        format!(
+                                            "Production health: {}. {}",
+                                            health.status.to_uppercase(),
+                                            health.issues.join(" ")
+                                        )
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message =
+                                        format!("Could not check OBS production health: {error}");
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.production_health_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ObsStreamDuration => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -2087,6 +2157,10 @@ fn process_user_command(
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
                     ),
+                    ActionIntent::ObsProductionHealth => {
+                        "Reading OBS production health requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::ObsStreamDuration => {
                         "Reading OBS stream duration requires confirmation under the current permission policy."
                             .to_string()
