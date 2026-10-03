@@ -43,6 +43,7 @@ function App() {
     directorPresets,
     directorLastRun,
     memory,
+    currentApp,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -232,6 +233,24 @@ function App() {
                   Current activity
                 </SectionLabel>
                 <p>{activity}</p>
+                <div className="current-app-context">
+                  <div>
+                    <span>Current app</span>
+                    <strong>{currentApp?.appName ?? "Detecting…"}</strong>
+                  </div>
+                  <div className="current-app-meta">
+                    <span>{currentApp?.processName ?? "—"}</span>
+                    <small>
+                      {runtimeState.paused
+                        ? "Awareness paused"
+                        : currentApp?.contextSource === "lastExternal"
+                          ? "Last external context"
+                          : currentApp
+                            ? "Foreground"
+                            : "Waiting for Windows"}
+                    </small>
+                  </div>
+                </div>
               </Surface>
 
               <Surface className="modules-card">
