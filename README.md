@@ -264,3 +264,21 @@ The intended local setup is now:
 `Install runtime → Download AURA-1 → Use model → Chat`
 
 Model weights and the managed runtime are stored separately, so repairing/removing Python does not delete downloaded models.
+
+
+### Managed AI Runtime
+
+AURA can now prepare its own private Windows AI runtime from the Models workspace.
+
+The managed setup:
+
+- installs private Python 3.12 under AURA Local Data
+- does not modify the user's PATH or system Python
+- verifies the official Python installer with Windows Authenticode
+- checks for at least 10 GB of free runtime space
+- selects CUDA or CPU PyTorch based on NVIDIA detection
+- installs Transformers, Accelerate, BitsAndBytes and Safetensors
+- verifies the final Python/AI stack before marking it Ready
+- exposes install, repair, reinstall and removal controls in the desktop UI
+
+This moves the normal user flow toward **Install AURA → Install Runtime → Download model → Chat**, without manual Python setup.
