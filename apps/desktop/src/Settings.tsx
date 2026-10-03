@@ -7,6 +7,7 @@ import type {
   RuntimeState,
   ObsConnectRequest,
   ObsConnectionState,
+  ObsRuntimeState,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 
@@ -36,8 +37,10 @@ type Props = {
   ) => Promise<PermissionPolicy>;
   onResetPermissions: () => Promise<PermissionPolicy>;
   obsConnection: ObsConnectionState;
+  obsRuntime: ObsRuntimeState;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
+  onObsRefresh: () => Promise<ObsRuntimeState>;
 };
 
 const sections: Array<{
@@ -149,8 +152,10 @@ export default function Settings({
   onPermissionChange,
   onResetPermissions,
   obsConnection,
+  obsRuntime,
   onObsConnect,
   onObsDisconnect,
+  onObsRefresh,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -595,6 +600,65 @@ export default function Settings({
 
               {obsConnection.lastError && (
                 <p className="obs-connection-error">{obsConnection.lastError}</p>
+              )}
+
+              {obsConnection.connected && (
+                <div className="obs-runtime-panel">
+                  <div className="obs-runtime-heading">
+                    <div>
+                      <strong>Live OBS state</strong>
+                      <span>Automatically refreshed every 2 seconds.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      onClick={() => void onObsRefresh()}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  <div className="obs-runtime-grid">
+                    <div className="obs-runtime-item">
+                      <span>Streaming</span>
+                      <strong className={obsRuntime.streaming ? "active" : ""}>
+                        {obsRuntime.streaming ? "LIVE" : "Off"}
+                      </strong>
+                    </div>
+                    <div className="obs-runtime-item">
+                      <span>Recording</span>
+                      <strong className={obsRuntime.recording ? "active" : ""}>
+                        {obsRuntime.recording
+                          ? obsRuntime.recordingPaused
+                            ? "Paused"
+                            : "Recording"
+                          : "Off"}
+                      </strong>
+                    </div>
+                    <div className="obs-runtime-item">
+                      <span>Studio Mode</span>
+                      <strong className={obsRuntime.studioMode ? "active" : ""}>
+                        {obsRuntime.studioMode ? "On" : "Off"}
+                      </strong>
+                    </div>
+                    <div className="obs-runtime-item wide">
+                      <span>Program Scene</span>
+                      <strong>{obsRuntime.currentProgramScene ?? "—"}</strong>
+                    </div>
+                    <div className="obs-runtime-item wide">
+                      <span>Preview Scene</span>
+                      <strong>
+                        {obsRuntime.studioMode
+                          ? obsRuntime.currentPreviewScene ?? "—"
+                          : "Studio Mode off"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {obsRuntime.lastError && (
+                    <p className="obs-connection-error">{obsRuntime.lastError}</p>
+                  )}
+                </div>
               )}
             </Surface>
 
