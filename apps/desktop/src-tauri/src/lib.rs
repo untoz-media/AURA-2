@@ -9,6 +9,7 @@ mod model_runtime;
 mod permissions;
 mod project_memory;
 mod routines;
+mod speech_runtime;
 
 use audio_input::{AudioInputManager, AudioInputSnapshot};
 use computer::app_launcher::launch_app;
@@ -50,6 +51,7 @@ use routines::{
     routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
     SaveRoutineRequest, UserRoutine,
 };
+use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -153,6 +155,7 @@ struct VoiceCaptureEvent {
     sample_rate: Option<u32>,
     channels: Option<u16>,
     message: String,
+    text: Option<String>,
     timestamp_ms: u64,
 }
 
@@ -3418,10 +3421,21 @@ fn remove_model(
     model_id: String,
     manager: State<'_, ModelManager>,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
 ) -> Result<ModelCatalog, String> {
+    if model_id == "voice-whisper-base" {
+        speech.stop();
+    }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
     Ok(catalog)
+}
+
+#[tauri::command]
+fn get_speech_runtime_status(
+    runtime: State<'_, SpeechRuntime>,
+) -> SpeechRuntimeStatus {
+    runtime.status()
 }
 
 #[tauri::command]
@@ -3735,6 +3749,7 @@ pub fn run() {
         .manage(ManagedRuntimeSetup::default())
         .manage(ModelManager::default())
         .manage(ModelRuntime::default())
+        .manage(SpeechRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -3782,6 +3797,7 @@ pub fn run() {
                                             sample_rate: snapshot.sample_rate,
                                             channels: snapshot.channels,
                                             message: "Push-to-talk listening…".to_string(),
+                                            text: None,
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     ),
@@ -3795,6 +3811,7 @@ pub fn run() {
                                             sample_rate: None,
                                             channels: None,
                                             message: error,
+                                            text: None,
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     ),
@@ -3814,9 +3831,64 @@ pub fn run() {
                                                 sample_rate: info.map(|value| value.1),
                                                 channels: info.map(|value| value.2),
                                                 message: "Voice capture ready for local speech-to-text.".to_string(),
+                                                text: None,
                                                 timestamp_ms: unix_timestamp_ms(),
                                             },
                                         );
+
+                                        if let Some(capture) = audio.take_last_capture() {
+                                            let app_for_speech = app.clone();
+                                            std::thread::spawn(move || {
+                                                emit_voice_capture_event(
+                                                    &app_for_speech,
+                                                    VoiceCaptureEvent {
+                                                        phase: "transcribing",
+                                                        shortcut: "Ctrl+Shift+F8",
+                                                        sample_count: info.map(|value| value.0).unwrap_or(0),
+                                                        duration_ms: info.map(|value| value.3).unwrap_or(0),
+                                                        sample_rate: info.map(|value| value.1),
+                                                        channels: info.map(|value| value.2),
+                                                        message: "Transcribing locally with AURA Voice STT…".to_string(),
+                                                        text: None,
+                                                        timestamp_ms: unix_timestamp_ms(),
+                                                    },
+                                                );
+
+                                                let manager = app_for_speech.state::<ModelManager>();
+                                                let speech = app_for_speech.state::<SpeechRuntime>();
+
+                                                match speech.transcribe(&app_for_speech, &manager, capture) {
+                                                    Ok(result) => emit_voice_capture_event(
+                                                        &app_for_speech,
+                                                        VoiceCaptureEvent {
+                                                            phase: "transcribed",
+                                                            shortcut: "Ctrl+Shift+F8",
+                                                            sample_count: result.input_samples_16khz,
+                                                            duration_ms: result.duration_ms,
+                                                            sample_rate: Some(16_000),
+                                                            channels: Some(1),
+                                                            message: "Local transcription complete.".to_string(),
+                                                            text: Some(result.text),
+                                                            timestamp_ms: unix_timestamp_ms(),
+                                                        },
+                                                    ),
+                                                    Err(error) => emit_voice_capture_event(
+                                                        &app_for_speech,
+                                                        VoiceCaptureEvent {
+                                                            phase: "error",
+                                                            shortcut: "Ctrl+Shift+F8",
+                                                            sample_count: 0,
+                                                            duration_ms: 0,
+                                                            sample_rate: None,
+                                                            channels: None,
+                                                            message: error,
+                                                            text: None,
+                                                            timestamp_ms: unix_timestamp_ms(),
+                                                        },
+                                                    ),
+                                                }
+                                            });
+                                        }
                                     }
                                     Err(error) => emit_voice_capture_event(
                                         app,
@@ -3828,6 +3900,7 @@ pub fn run() {
                                             sample_rate: None,
                                             channels: None,
                                             message: error,
+                                            text: None,
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     ),
@@ -3912,6 +3985,7 @@ pub fn run() {
                     }
                     "quit" => {
                         app.state::<ModelRuntime>().stop();
+                        app.state::<SpeechRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -3947,6 +4021,7 @@ pub fn run() {
                             );
                         } else {
                             app_for_close.state::<ModelRuntime>().stop();
+                            app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -3999,6 +4074,7 @@ pub fn run() {
             cancel_model_download,
             set_active_model,
             remove_model,
+            get_speech_runtime_status,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,

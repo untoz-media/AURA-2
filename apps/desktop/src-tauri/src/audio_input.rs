@@ -29,6 +29,48 @@ pub struct CapturedAudio {
     pub completed_at_ms: u64,
 }
 
+impl CapturedAudio {
+    pub fn mono_16khz(&self) -> Vec<f32> {
+        if self.samples.is_empty() || self.sample_rate == 0 || self.channels == 0 {
+            return Vec::new();
+        }
+
+        let channels = self.channels as usize;
+        let frame_count = self.samples.len() / channels;
+        if frame_count == 0 {
+            return Vec::new();
+        }
+
+        let mut mono = Vec::with_capacity(frame_count);
+        for frame in self.samples.chunks_exact(channels) {
+            let sum = frame.iter().copied().sum::<f32>();
+            mono.push(sum / channels as f32);
+        }
+
+        if self.sample_rate == 16_000 {
+            return mono;
+        }
+
+        let source_rate = self.sample_rate as f64;
+        let target_rate = 16_000.0_f64;
+        let target_len = ((mono.len() as f64) * target_rate / source_rate)
+            .round()
+            .max(1.0) as usize;
+
+        let mut resampled = Vec::with_capacity(target_len);
+        for index in 0..target_len {
+            let source_position = index as f64 * source_rate / target_rate;
+            let left = source_position.floor() as usize;
+            let right = (left + 1).min(mono.len() - 1);
+            let fraction = (source_position - left as f64) as f32;
+            let sample = mono[left] * (1.0 - fraction) + mono[right] * fraction;
+            resampled.push(sample.clamp(-1.0, 1.0));
+        }
+
+        resampled
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioInputSnapshot {
@@ -575,5 +617,37 @@ impl AudioInputManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take()
     }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn downmixes_stereo_capture_to_mono_16khz() {
+        let capture = CapturedAudio {
+            samples: vec![1.0, -1.0, 0.5, 0.5],
+            sample_rate: 16_000,
+            channels: 2,
+            started_at_ms: 1,
+            completed_at_ms: 2,
+        };
+
+        assert_eq!(capture.mono_16khz(), vec![0.0, 0.5]);
+    }
+
+    #[test]
+    fn resamples_capture_to_16khz() {
+        let capture = CapturedAudio {
+            samples: vec![0.0, 1.0, 0.0, -1.0],
+            sample_rate: 8_000,
+            channels: 1,
+            started_at_ms: 1,
+            completed_at_ms: 2,
+        };
+
+        assert_eq!(capture.mono_16khz().len(), 8);
     }
 }

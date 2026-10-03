@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and is progressing through **M005 — Memory & Context** with explicit local persistent memory, current-app awareness, active-window context, Windows Recent Items context and persistent user-defined routines, project-scoped memory with an explicit active project, and the first local microphone/audio-input foundation and global hold-to-talk capture path for M006 Voice.
+AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and is progressing through **M005 — Memory & Context** with explicit local persistent memory, current-app awareness, active-window context, Windows Recent Items context and persistent user-defined routines, project-scoped memory with an explicit active project, and the local microphone foundation, global hold-to-talk capture path and on-device Whisper speech-to-text runtime for M006 Voice.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 

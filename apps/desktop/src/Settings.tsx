@@ -25,6 +25,7 @@ import type {
   ManagedRuntimeStatus,
   AudioInputSnapshot,
   VoiceCaptureEvent,
+  SpeechRuntimeStatus,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -106,6 +107,11 @@ type Props = {
   managedRuntimeStatus: ManagedRuntimeStatus;
   audioInput: AudioInputSnapshot;
   voiceCapture: VoiceCaptureEvent | null;
+  speechRuntime: SpeechRuntimeStatus;
+  onVoiceModelOperation: (
+    operation: "download" | "pause" | "resume" | "cancel" | "remove",
+    modelId: string,
+  ) => Promise<ModelCatalog>;
   onAudioRefresh: () => Promise<AudioInputSnapshot>;
   onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
   onAudioTestStart: () => Promise<AudioInputSnapshot>;
@@ -265,6 +271,8 @@ export default function Settings({
   managedRuntimeStatus,
   audioInput,
   voiceCapture,
+  speechRuntime,
+  onVoiceModelOperation,
   onAudioRefresh,
   onAudioSelect,
   onAudioTestStart,
@@ -284,6 +292,29 @@ export default function Settings({
     useState<ObsStreamingActionResult["action"] | null>(null);
   const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
   const [obsStreamClockMs, setObsStreamClockMs] = useState(0);
+  const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
+  const voiceModel = modelCatalog.models.find(
+    (model) => model.id === "voice-whisper-base",
+  );
+
+  async function runVoiceModel(
+    operation: "download" | "pause" | "resume" | "cancel" | "remove",
+  ) {
+    if (!voiceModel) return;
+    if (
+      operation === "remove" &&
+      !window.confirm("Remove AURA Voice STT from this computer?")
+    ) {
+      return;
+    }
+
+    setVoiceModelBusy(operation);
+    try {
+      await onVoiceModelOperation(operation, voiceModel.id);
+    } finally {
+      setVoiceModelBusy(null);
+    }
+  }
 
   useEffect(() => {
     setObsHost(obsConnection.host);
@@ -914,7 +945,135 @@ export default function Settings({
                   )
                 }
               />
-              <SettingRow title="Local speech-to-text" description="Convert microphone audio to text with an on-device open-source model." trailing={<Badge tone="planned">M006.3</Badge>} />
+              <div className="voice-stt-panel">
+                <div className="voice-stt-heading">
+                  <div>
+                    <strong>AURA Voice STT</strong>
+                    <span>Whisper Base · multilingual · local · Apache-2.0</span>
+                  </div>
+                  <Badge
+                    tone={
+                      voiceModel?.state === "installed"
+                        ? "ready"
+                        : voiceModel?.state === "failed"
+                          ? "critical"
+                          : "neutral"
+                    }
+                  >
+                    {voiceModel?.state === "installed"
+                      ? "Ready"
+                      : voiceModel?.state === "downloading"
+                        ? "Downloading"
+                        : voiceModel?.state === "paused"
+                          ? "Paused"
+                          : voiceModel?.state === "failed"
+                            ? "Error"
+                            : "Not installed"}
+                  </Badge>
+                </div>
+
+                {voiceModel &&
+                  (voiceModel.state === "downloading" ||
+                    voiceModel.state === "paused") && (
+                    <div className="voice-stt-progress">
+                      <div className="voice-meter-track">
+                        <span
+                          style={{
+                            width: `${Math.max(
+                              0,
+                              Math.min(100, voiceModel.progressPercent),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <span>{voiceModel.progressPercent.toFixed(1)}%</span>
+                    </div>
+                  )}
+
+                <div className="voice-stt-actions">
+                  {voiceModel?.state === "notInstalled" && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      disabled={voiceModelBusy !== null}
+                      onClick={() => void runVoiceModel("download")}
+                    >
+                      Install STT model
+                    </button>
+                  )}
+                  {voiceModel?.state === "downloading" && (
+                    <>
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        onClick={() => void runVoiceModel("pause")}
+                      >
+                        Pause
+                      </button>
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        onClick={() => void runVoiceModel("cancel")}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {voiceModel?.state === "paused" && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      onClick={() => void runVoiceModel("resume")}
+                    >
+                      Resume
+                    </button>
+                  )}
+                  {voiceModel?.state === "installed" && (
+                    <button
+                      type="button"
+                      className="feature-secondary-button"
+                      disabled={voiceModelBusy !== null}
+                      onClick={() => void runVoiceModel("remove")}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                <div className="voice-stream-meta">
+                  <span>
+                    {speechRuntime.cuda
+                      ? speechRuntime.device ?? "CUDA"
+                      : speechRuntime.device ?? "CPU / not loaded"}
+                  </span>
+                  <span>{speechRuntime.state}</span>
+                  <span>~295 MB</span>
+                </div>
+
+                {(voiceCapture?.phase === "transcribing" ||
+                  voiceCapture?.phase === "transcribed") && (
+                  <div className="voice-transcript-card">
+                    <span>
+                      {voiceCapture.phase === "transcribing"
+                        ? "TRANSCRIBING"
+                        : "LAST TRANSCRIPTION"}
+                    </span>
+                    <strong>
+                      {voiceCapture.phase === "transcribing"
+                        ? "Whisper is processing locally…"
+                        : voiceCapture.text || "No speech detected."}
+                    </strong>
+                  </div>
+                )}
+
+                {(speechRuntime.lastError ||
+                  (voiceCapture?.phase === "error" ? voiceCapture.message : null)) && (
+                  <p className="voice-input-error">
+                    {speechRuntime.lastError ||
+                      (voiceCapture?.phase === "error" ? voiceCapture.message : "")}
+                  </p>
+                )}
+              </div>
               <SettingRow title="Voice output" description="Natural local spoken responses for actions and status." trailing={<Badge tone="planned">M006.5</Badge>} />
               <SettingRow title="Wake word" description="Optional hands-free activation after the core voice path is stable." trailing={<Badge tone="planned">M006.9</Badge>} />
             </Surface>

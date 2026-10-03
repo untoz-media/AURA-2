@@ -24,6 +24,20 @@ const MODEL_CONFIG_FILENAME: &str = "model-manager.json";
 const INSTALL_MARKER_FILENAME: &str = "install.json";
 const MODEL_HEADROOM_BYTES: u64 = 1_000_000_000;
 
+const WHISPER_BASE_FILES: &[&str] = &[
+    "added_tokens.json",
+    "config.json",
+    "generation_config.json",
+    "merges.txt",
+    "model.safetensors",
+    "normalizer.json",
+    "preprocessor_config.json",
+    "special_tokens_map.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+];
+
 const AURA_1_FILES: &[&str] = &[
     "LICENSE",
     "README.md",
@@ -46,6 +60,8 @@ struct ModelDefinition {
     subtitle: &'static str,
     description: &'static str,
     generation: &'static str,
+    role: &'static str,
+    selectable: bool,
     source_repo: Option<&'static str>,
     source_revision: Option<&'static str>,
     license: Option<&'static str>,
@@ -62,6 +78,8 @@ fn model_definitions() -> Vec<ModelDefinition> {
             subtitle: "Fast · Lightweight · Local",
             description: "The original AURA runtime profile, backed by Qwen3-4B-Instruct-2507.",
             generation: "1st generation",
+            role: "assistant",
+            selectable: true,
             source_repo: Some("Qwen/Qwen3-4B-Instruct-2507"),
             source_revision: Some("main"),
             license: Some("Apache-2.0"),
@@ -75,6 +93,8 @@ fn model_definitions() -> Vec<ModelDefinition> {
             subtitle: "Personal Computer Assistant",
             description: "The next AURA model line for context, tool use and deeper computer assistance.",
             generation: "2nd generation",
+            role: "assistant",
+            selectable: true,
             source_repo: None,
             source_revision: None,
             license: None,
@@ -83,6 +103,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             availability_message: Some(
                 "The AURA-2 checkpoint has not been defined yet. The Model Manager is ready for it.",
             ),
+        },
+        ModelDefinition {
+            id: "voice-whisper-base",
+            name: "AURA Voice STT",
+            subtitle: "Whisper Base · Multilingual · Local",
+            description: "Local speech-to-text for AURA Voice, backed by openai/whisper-base.",
+            generation: "Voice",
+            role: "speechToText",
+            selectable: false,
+            source_repo: Some("openai/whisper-base"),
+            source_revision: Some("main"),
+            license: Some("Apache-2.0"),
+            estimated_size_bytes: Some(295_000_000),
+            files: WHISPER_BASE_FILES,
+            availability_message: None,
         },
     ]
 }
@@ -106,6 +141,7 @@ pub struct ModelStatus {
     pub subtitle: String,
     pub description: String,
     pub generation: String,
+    pub role: String,
     pub state: ModelInstallState,
     pub download_available: bool,
     pub installed: bool,
@@ -196,7 +232,12 @@ impl ModelManager {
             .collect::<Result<Vec<_>, _>>()?;
 
         let active_is_valid = config.active_model_id.as_deref().is_some_and(|active_id| {
-            models.iter().any(|model| model.id == active_id && model.installed)
+            definition_for(active_id).is_some_and(|definition| {
+                definition.selectable
+                    && models
+                        .iter()
+                        .any(|model| model.id == active_id && model.installed)
+            })
         });
 
         let active_model_id = if active_is_valid {
@@ -363,6 +404,10 @@ impl ModelManager {
         let definition = definition_for(model_id)
             .ok_or_else(|| format!("Unknown model: {model_id}."))?;
 
+        if !definition.selectable {
+            return Err(format!("{} is managed by its feature and cannot be selected as the assistant model.", definition.name));
+        }
+
         match inspect_installation(app, &definition) {
             Ok(Some(_)) => {}
             Ok(None) => {
@@ -380,6 +425,19 @@ impl ModelManager {
         self.catalog(app)
     }
 
+    pub fn installation_path(
+        &self,
+        app: &AppHandle,
+        model_id: &str,
+    ) -> Result<PathBuf, String> {
+        let definition = definition_for(model_id)
+            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+        match inspect_installation(app, &definition)? {
+            Some(_) => final_model_dir(app, model_id),
+            None => Err(format!("{} is not installed.", definition.name)),
+        }
+    }
+
     pub fn active_installation(
         &self,
         app: &AppHandle,
@@ -391,6 +449,10 @@ impl ModelManager {
 
         let definition = definition_for(&active_id)
             .ok_or_else(|| format!("Unknown active model: {active_id}."))?;
+
+        if !definition.selectable {
+            return Err("The active model configuration points to a feature-specific model. Choose AURA-1 or another assistant model from Models.".to_string());
+        }
 
         match inspect_installation(app, &definition)? {
             Some(_) => Ok((active_id.clone(), final_model_dir(app, &active_id)?)),
@@ -503,6 +565,7 @@ impl ModelManager {
             subtitle: definition.subtitle.to_string(),
             description: definition.description.to_string(),
             generation: definition.generation.to_string(),
+            role: definition.role.to_string(),
             state,
             download_available: definition.source_repo.is_some(),
             installed,
@@ -597,7 +660,7 @@ impl ModelManager {
         match result {
             Ok(marker) => {
                 let mut config = read_config(app).unwrap_or_default();
-                if config.active_model_id.is_none() {
+                if definition.selectable && config.active_model_id.is_none() {
                     config.active_model_id = Some(definition.id.to_string());
                     let _ = write_config(app, &config);
                 }

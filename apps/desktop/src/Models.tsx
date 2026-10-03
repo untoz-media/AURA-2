@@ -71,6 +71,7 @@ export default function Models({
   onRuntimeAction,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
+  const assistantModels = catalog.models.filter((model) => model.role !== "speechToText");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const runtimeBusy = [
@@ -288,9 +289,9 @@ export default function Models({
         </button>
       </div>
 
-      {catalog.models.length > 0 ? (
+      {assistantModels.length > 0 ? (
         <div className="model-grid">
-          {catalog.models.map((model) => {
+          {assistantModels.map((model) => {
             const isTransferring =
               model.state === "downloading" || model.state === "paused";
             const busyForModel = busy?.startsWith(`${model.id}:`) ?? false;

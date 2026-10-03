@@ -382,6 +382,7 @@ export type ModelStatus = {
   subtitle: string;
   description: string;
   generation: string;
+  role: "assistant" | "speechToText" | string;
   state: ModelInstallState;
   downloadAvailable: boolean;
   installed: boolean;
@@ -559,12 +560,24 @@ export type AudioInputSnapshot = {
 
 
 export type VoiceCaptureEvent = {
-  phase: "listening" | "captured" | "error";
+  phase: "listening" | "captured" | "transcribing" | "transcribed" | "error";
   shortcut: string;
   sampleCount: number;
   durationMs: number;
   sampleRate?: number | null;
   channels?: number | null;
   message: string;
+  text?: string | null;
   timestampMs: number;
+};
+
+
+export type SpeechRuntimeStatus = {
+  state: "stopped" | "loading" | "ready" | "transcribing" | "error" | string;
+  modelId: string;
+  device?: string | null;
+  cuda?: boolean | null;
+  lastText?: string | null;
+  lastError?: string | null;
+  refreshedAtMs: number;
 };
