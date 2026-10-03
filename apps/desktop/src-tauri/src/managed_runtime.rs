@@ -216,10 +216,16 @@ impl ManagedRuntimeSetup {
                     .map_err(|error| format!("Could not create runtime parent directory: {error}"))?;
                 let free = fs2::available_space(parent)
                     .map_err(|error| format!("Could not read available runtime disk space: {error}"))?;
+                let reclaimable = if repair && root.exists() {
+                    directory_size(&root).unwrap_or(0)
+                } else {
+                    0
+                };
+                let effective_free = free.saturating_add(reclaimable);
 
-                if free < MIN_RUNTIME_FREE_SPACE_BYTES {
+                if effective_free < MIN_RUNTIME_FREE_SPACE_BYTES {
                     return Err(format!(
-                        "AURA needs at least {:.0} GB of free space to prepare the managed AI runtime safely.",
+                        "AURA needs at least {:.0} GB of effective free space to prepare the managed AI runtime safely.",
                         MIN_RUNTIME_FREE_SPACE_BYTES as f64 / 1_000_000_000.0
                     ));
                 }
@@ -431,11 +437,18 @@ impl ManagedRuntimeSetup {
                     app,
                     "downloadingPython",
                     8.0 + transfer * 15.0,
-                    &format!(
-                        "Downloading Python 3.12… {:.1} MB / {:.1} MB",
-                        downloaded as f64 / 1_000_000.0,
-                        total as f64 / 1_000_000.0
-                    ),
+                    &if total > 0 {
+                        format!(
+                            "Downloading Python 3.12… {:.1} MB / {:.1} MB",
+                            downloaded as f64 / 1_000_000.0,
+                            total as f64 / 1_000_000.0
+                        )
+                    } else {
+                        format!(
+                            "Downloading Python 3.12… {:.1} MB",
+                            downloaded as f64 / 1_000_000.0
+                        )
+                    },
                 );
             }
         }
@@ -704,6 +717,26 @@ print(json.dumps(payload))"#;
     let output = run_python(python, &["-c", script])?;
     serde_json::from_str(&output)
         .map_err(|error| format!("Managed runtime verification returned invalid data: {error}"))
+}
+
+fn directory_size(path: &Path) -> Result<u64, String> {
+    if !path.exists() {
+        return Ok(0);
+    }
+
+    let mut total = 0_u64;
+    for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let metadata = entry.metadata().map_err(|error| error.to_string())?;
+
+        if metadata.is_dir() {
+            total = total.saturating_add(directory_size(&entry.path())?);
+        } else {
+            total = total.saturating_add(metadata.len());
+        }
+    }
+
+    Ok(total)
 }
 
 fn runtime_root(app: &AppHandle) -> Result<PathBuf, String> {
