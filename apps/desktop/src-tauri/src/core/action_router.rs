@@ -42,6 +42,9 @@ pub enum ActionIntent {
     ObsAudioVolume { input_name: String, percent: u8 },
     ObsProductionHealth,
     DirectorPreset(String),
+    MemoryRemember(String),
+    MemoryList,
+    MemoryForget(String),
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +205,69 @@ fn parse_percent(value: &str) -> Result<u8, String> {
     }
 
     Ok(percent as u8)
+}
+
+fn memory_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    if matches!(
+        normalized.as_str(),
+        "what do you remember"
+            | "what do you remember about me"
+            | "list memories"
+            | "show memories"
+            | "show memory"
+            | "memory"
+            | "o que te lembras"
+            | "o que te lembras de mim"
+            | "lista as memórias"
+            | "lista as memorias"
+            | "mostra as memórias"
+            | "mostra as memorias"
+            | "memórias"
+            | "memorias"
+    ) {
+        return Some(ActionIntent::MemoryList);
+    }
+
+    const REMEMBER_PREFIXES: &[&str] = &[
+        "remember that ",
+        "remember ",
+        "remember this: ",
+        "lembra-te que ",
+        "lembra te que ",
+        "lembra que ",
+        "guarda na memória ",
+        "guarda na memoria ",
+        "memoriza ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, REMEMBER_PREFIXES) {
+        let content = unwrap_text_quotes(value).trim();
+        if !content.is_empty() {
+            return Some(ActionIntent::MemoryRemember(content.to_string()));
+        }
+    }
+
+    const FORGET_PREFIXES: &[&str] = &[
+        "forget that ",
+        "forget ",
+        "esquece que ",
+        "esquece ",
+        "apaga da memória ",
+        "apaga da memoria ",
+        "remove da memória ",
+        "remove da memoria ",
+    ];
+
+    if let Some(value) = value_after_prefix(input, FORGET_PREFIXES) {
+        let content = unwrap_text_quotes(value).trim();
+        if !content.is_empty() {
+            return Some(ActionIntent::MemoryForget(content.to_string()));
+        }
+    }
+
+    None
 }
 
 fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
@@ -887,6 +953,21 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if let Some(intent) = memory_request(input) {
+        let permission = match &intent {
+            ActionIntent::MemoryList => PermissionClass::Read,
+            ActionIntent::MemoryRemember(_) => PermissionClass::Modify,
+            ActionIntent::MemoryForget(_) => PermissionClass::Destructive,
+            _ => unreachable!(),
+        };
+
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(action) = system_request(input) {
         let permission = permission_for_system(action);
         return RouteResult::Action(RoutedAction {
@@ -1290,6 +1371,38 @@ mod tests {
                 intent: ActionIntent::Media(MediaAction::Mute),
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn routes_explicit_memory_commands() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Remember that I prefer Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::MemoryRemember(content),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            }) if content == "I prefer Brave"
+        ));
+
+        assert!(matches!(
+            route_command("What do you remember?", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::MemoryList,
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Forget that I prefer Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::MemoryForget(content),
+                permission: PermissionClass::Destructive,
+                decision: PermissionDecision::Ask,
+            }) if content == "I prefer Brave"
         ));
     }
 

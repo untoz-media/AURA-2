@@ -1,6 +1,7 @@
 mod computer;
 mod core;
 mod integrations;
+mod memory;
 mod permissions;
 
 use computer::app_launcher::launch_app;
@@ -22,6 +23,10 @@ use integrations::director::{
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
+use memory::{
+    create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
+    CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
+};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -547,7 +552,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M004 Complete · OBS Control / Director Mode",
+        stage: "M005 In Progress · Memory & Context",
         local_first: true,
     }
 }
@@ -1732,7 +1737,159 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::DirectorPreset(preset_id) => {
+                        ActionIntent::MemoryRemember(content) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Saving explicit local memory…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match create_memory(
+                                &worker_app,
+                                CreateMemoryRequest {
+                                    content: content.clone(),
+                                },
+                                "command",
+                            ) {
+                                Ok(result) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: if result.created {
+                                                format!("Remembered: {}.", result.record.content)
+                                            } else {
+                                                format!(
+                                                    "I already remembered that. Refreshed: {}.",
+                                                    result.record.content
+                                                )
+                                            },
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!("Could not save memory: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "memory.create_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::MemoryList => {
+                            match summarize_memories(&worker_app, 8) {
+                                Ok(summary) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summary,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not read local memory: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "memory.read_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::MemoryForget(content) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Removing explicit local memory…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match delete_memory_by_content(&worker_app, &content) {
+                                Ok(record) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!("Forgot: {}.", record.content),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!("Could not forget memory: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "memory.delete_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    ActionIntent::DirectorPreset(preset_id) => {
                             let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id) else {
                                 let message = "Director Mode preset no longer exists.".to_string();
 
@@ -2395,6 +2552,18 @@ fn process_user_command(
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
                     ),
+                    ActionIntent::MemoryRemember(content) => format!(
+                        "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
+                        content
+                    ),
+                    ActionIntent::MemoryList => {
+                        "Reading AURA's local memory requires confirmation under the current permission policy."
+                            .to_string()
+                    }
+                    ActionIntent::MemoryForget(content) => format!(
+                        "Deleting the saved memory “{}” is destructive and requires confirmation.",
+                        content
+                    ),
                     ActionIntent::DirectorPreset(preset_id) => {
                         let preset_name = find_director_preset_by_id(&app, preset_id)
                             .map(|preset| preset.name)
@@ -2617,7 +2786,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic action matched yet. AURA currently supports Windows computer control, OBS production control and saved Director Mode presets."
+                        "No deterministic action matched yet. AURA currently supports Windows computer control, OBS production control, Director Mode presets and explicit local memory."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
@@ -2631,6 +2800,27 @@ fn process_user_command(
         accepted: true,
         status: AuraRuntimeStatus::Thinking,
     })
+}
+
+#[tauri::command]
+fn get_memories(app: AppHandle) -> Result<MemorySnapshot, String> {
+    memory_snapshot(&app)
+}
+
+#[tauri::command]
+fn create_memory_command(
+    app: AppHandle,
+    request: CreateMemoryRequest,
+) -> Result<MemoryCreateResult, String> {
+    create_memory(&app, request, "ui")
+}
+
+#[tauri::command]
+fn delete_memory_command(
+    app: AppHandle,
+    memory_id: String,
+) -> Result<MemoryRecord, String> {
+    delete_memory(&app, &memory_id)
 }
 
 #[tauri::command]
@@ -2960,6 +3150,9 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_memories,
+            create_memory_command,
+            delete_memory_command,
             get_director_presets,
             save_director_preset_command,
             delete_director_preset_command,

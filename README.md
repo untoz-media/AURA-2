@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M004 OBS Control / Director Mode complete · AURA-2 0.4.0-alpha.1 · pre-Beta
+> **Current stage:** M005 Memory & Context in progress · AURA-2 0.4.0-alpha.1 · pre-Beta
 
 ---
 
@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1**. The next major development block is **M005 — Memory & Context**.
+AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and has started **M005 — Memory & Context** with explicit local persistent memory.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 

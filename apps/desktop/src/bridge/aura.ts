@@ -31,6 +31,10 @@ import type {
   DirectorPreset,
   SaveDirectorPresetRequest,
   DirectorPresetRunResult,
+  MemorySnapshot,
+  CreateMemoryRequest,
+  MemoryCreateResult,
+  MemoryRecord,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -266,4 +270,19 @@ export async function runDirectorPreset(
   presetId: string,
 ): Promise<DirectorPresetRunResult> {
   return invoke<DirectorPresetRunResult>("run_director_preset_command", { presetId });
+}
+
+
+export async function getMemories(): Promise<MemorySnapshot> {
+  return invoke<MemorySnapshot>("get_memories");
+}
+
+export async function createMemory(
+  request: CreateMemoryRequest,
+): Promise<MemoryCreateResult> {
+  return invoke<MemoryCreateResult>("create_memory_command", { request });
+}
+
+export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {
+  return invoke<MemoryRecord>("delete_memory_command", { memoryId });
 }

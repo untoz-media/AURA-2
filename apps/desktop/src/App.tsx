@@ -11,8 +11,9 @@ import {
 } from "./design-system/components";
 import ConfirmationCard from "./ConfirmationCard";
 import Settings, { type SettingsSection } from "./Settings";
+import Memory from "./Memory";
 
-type AppView = "home" | "settings";
+type AppView = "home" | "memory" | "settings";
 
 const modules = [
   { name: "Computer", description: "Windows control", milestone: "M003", glyph: "⌁" },
@@ -41,6 +42,7 @@ function App() {
     obsHealth,
     directorPresets,
     directorLastRun,
+    memory,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -57,6 +59,9 @@ function App() {
     refreshObsAudio,
     refreshObsHealth,
     refreshDirectorPresets,
+    refreshMemories,
+    createMemoryControl,
+    deleteMemoryControl,
     saveDirectorPresetControl,
     deleteDirectorPresetControl,
     runDirectorPresetControl,
@@ -122,7 +127,13 @@ function App() {
           </NavItem>
           <NavItem icon="✦">Actions</NavItem>
           <NavItem icon="↻">Automations</NavItem>
-          <NavItem icon="◇">Memory</NavItem>
+          <NavItem
+            active={view === "memory"}
+            icon="◇"
+            onClick={() => setView("memory")}
+          >
+            Memory
+          </NavItem>
         </nav>
 
         <div className="sidebar-bottom">
@@ -152,7 +163,13 @@ function App() {
             <span className="eyebrow">
               {appStatus ? `${appStatus.name} · ${appStatus.stage}` : "AURA-2 DESKTOP"}
             </span>
-            <h1>{view === "settings" ? "Control AURA." : "Good evening."}</h1>
+            <h1>
+              {view === "settings"
+                ? "Control AURA."
+                : view === "memory"
+                  ? "What AURA remembers."
+                  : "Good evening."}
+            </h1>
           </div>
           <StatusPill status={status} />
         </header>
@@ -236,6 +253,13 @@ function App() {
               </Surface>
             </section>
           </>
+        ) : view === "memory" ? (
+          <Memory
+            memory={memory}
+            onRefresh={refreshMemories}
+            onCreate={createMemoryControl}
+            onDelete={deleteMemoryControl}
+          />
         ) : (
           <Settings
             activeSection={settingsSection}
