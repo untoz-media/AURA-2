@@ -619,3 +619,35 @@ impl AudioInputManager {
     }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn downmixes_stereo_capture_to_mono_16khz() {
+        let capture = CapturedAudio {
+            samples: vec![1.0, -1.0, 0.5, 0.5],
+            sample_rate: 16_000,
+            channels: 2,
+            started_at_ms: 1,
+            completed_at_ms: 2,
+        };
+
+        assert_eq!(capture.mono_16khz(), vec![0.0, 0.5]);
+    }
+
+    #[test]
+    fn resamples_capture_to_16khz() {
+        let capture = CapturedAudio {
+            samples: vec![0.0, 1.0, 0.0, -1.0],
+            sample_rate: 8_000,
+            channels: 1,
+            started_at_ms: 1,
+            completed_at_ms: 2,
+        };
+
+        assert_eq!(capture.mono_16khz().len(), 8);
+    }
+}
