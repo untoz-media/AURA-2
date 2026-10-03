@@ -143,6 +143,19 @@ struct LifecycleEvent {
     timestamp_ms: u64,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VoiceCaptureEvent {
+    phase: &'static str,
+    shortcut: &'static str,
+    sample_count: usize,
+    duration_ms: u64,
+    sample_rate: Option<u32>,
+    channels: Option<u16>,
+    message: String,
+    timestamp_ms: u64,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CommandRequest {
@@ -538,6 +551,10 @@ fn set_autostart_state(
     );
 
     Ok(snapshot)
+}
+
+fn emit_voice_capture_event(app: &tauri::AppHandle, event: VoiceCaptureEvent) {
+    let _ = app.emit("aura:voice-capture", event);
 }
 
 fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
@@ -3725,9 +3742,98 @@ pub fn run() {
         ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        toggle_overlay(app);
+                .with_handler(|app, shortcut, event| {
+                    if shortcut.matches(
+                        Modifiers::CONTROL | Modifiers::SHIFT,
+                        Code::Space,
+                    ) {
+                        if event.state() == ShortcutState::Pressed {
+                            toggle_overlay(app);
+                        }
+                        return;
+                    }
+
+                    if shortcut.matches(
+                        Modifiers::CONTROL | Modifiers::SHIFT,
+                        Code::KeyV,
+                    ) {
+                        let runtime = app.state::<RuntimeState>();
+                        let paused = *runtime
+                            .paused
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+                        if paused {
+                            return;
+                        }
+
+                        let audio = app.state::<AudioInputManager>();
+
+                        match event.state() {
+                            ShortcutState::Pressed => {
+                                match audio.start_push_to_talk() {
+                                    Ok(snapshot) => emit_voice_capture_event(
+                                        app,
+                                        VoiceCaptureEvent {
+                                            phase: "listening",
+                                            shortcut: "Ctrl+Shift+V",
+                                            sample_count: 0,
+                                            duration_ms: 0,
+                                            sample_rate: snapshot.sample_rate,
+                                            channels: snapshot.channels,
+                                            message: "Push-to-talk listening…".to_string(),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    ),
+                                    Err(error) => emit_voice_capture_event(
+                                        app,
+                                        VoiceCaptureEvent {
+                                            phase: "error",
+                                            shortcut: "Ctrl+Shift+V",
+                                            sample_count: 0,
+                                            duration_ms: 0,
+                                            sample_rate: None,
+                                            channels: None,
+                                            message: error,
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    ),
+                                }
+                            }
+                            ShortcutState::Released => {
+                                match audio.stop_push_to_talk() {
+                                    Ok(_) => {
+                                        let info = audio.last_capture_info();
+                                        emit_voice_capture_event(
+                                            app,
+                                            VoiceCaptureEvent {
+                                                phase: "captured",
+                                                shortcut: "Ctrl+Shift+V",
+                                                sample_count: info.map(|value| value.0).unwrap_or(0),
+                                                duration_ms: info.map(|value| value.3).unwrap_or(0),
+                                                sample_rate: info.map(|value| value.1),
+                                                channels: info.map(|value| value.2),
+                                                message: "Voice capture ready for local speech-to-text.".to_string(),
+                                                timestamp_ms: unix_timestamp_ms(),
+                                            },
+                                        );
+                                    }
+                                    Err(error) => emit_voice_capture_event(
+                                        app,
+                                        VoiceCaptureEvent {
+                                            phase: "error",
+                                            shortcut: "Ctrl+Shift+V",
+                                            sample_count: 0,
+                                            duration_ms: 0,
+                                            sample_rate: None,
+                                            channels: None,
+                                            message: error,
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    ),
+                                }
+                            }
+                        }
                     }
                 })
                 .build(),
@@ -3764,6 +3870,12 @@ pub fn run() {
                 Code::Space,
             );
             app.global_shortcut().register(shortcut)?;
+
+            let push_to_talk_shortcut = Shortcut::new(
+                Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                Code::KeyV,
+            );
+            app.global_shortcut().register(push_to_talk_shortcut)?;
 
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
