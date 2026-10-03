@@ -168,3 +168,38 @@ APIs, architecture, features, compatibility and product behaviour may change sig
 ## About Untoz
 
 AURA is developed by **Untoz** as part of its technology and AI projects.
+
+
+## AURA-1 → AURA-2 desktop evolution
+
+The AURA-2 desktop app deliberately keeps the product identity and primary interaction model established by AURA-1 while moving the implementation to the newer Tauri + React architecture.
+
+The evolved desktop shell keeps:
+
+- the left navigation rail
+- the AURA Core / orb identity
+- a central `How can I help?` assistant surface
+- a bottom composer
+- local-computer status
+- local capability shortcuts
+- local-first / private-by-design messaging
+
+AURA-2 extends that shell with permanent workspaces for:
+
+- Memory
+- Models
+- Create
+- Computer
+- Tasks
+- Director Mode
+- Settings
+
+The desktop also supports persistent visual themes:
+
+- AURA
+- Midnight
+- OLED
+- Aurora
+- Light
+
+Model downloads and media-generation engines are intentionally not simulated by the UI foundation. Their buttons remain disabled until the real backend engines are implemented.
