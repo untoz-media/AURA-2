@@ -2928,8 +2928,10 @@ fn get_managed_runtime_status(
 #[tauri::command]
 fn install_managed_runtime(
     app: AppHandle,
+    runtime: State<'_, ModelRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
+    runtime.stop();
     setup.start_install(app, false)
 }
 
