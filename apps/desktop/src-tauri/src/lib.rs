@@ -1801,6 +1801,70 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ActiveWindow => {
+                            let result = {
+                                let awareness = worker_app.state::<CurrentAppAwareness>();
+                                awareness.snapshot()
+                            };
+
+                            match result {
+                                Ok(context) => {
+                                    let qualifier = if context.context_source == "lastExternal" {
+                                        " (last external window before AURA took focus)"
+                                    } else {
+                                        ""
+                                    };
+
+                                    let message = match context.window_title.as_deref() {
+                                        Some(title) => format!(
+                                            "Active window: {} · {}{}.",
+                                            title, context.app_name, qualifier
+                                        ),
+                                        None => format!(
+                                            "Current app: {}. Windows did not expose a title for its active window{}.",
+                                            context.app_name, qualifier
+                                        ),
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message =
+                                        format!("Could not detect the active window: {error}");
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "context.active_window_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::MemoryRemember(content) => {
                             emit_core_event(
                                 &worker_app,
@@ -2620,6 +2684,10 @@ fn process_user_command(
                         "Reading the current application requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ActiveWindow => {
+                        "Reading the active window title requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::MemoryRemember(content) => format!(
                         "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
                         content
@@ -2866,8 +2934,36 @@ fn process_user_command(
 
                 let manager = worker_app.state::<ModelManager>();
                 let runtime = worker_app.state::<ModelRuntime>();
+                let desktop_context = {
+                    let awareness = worker_app.state::<CurrentAppAwareness>();
+                    awareness.snapshot().ok().map(|context| {
+                        let mut summary = format!(
+                            "Current app: {}\nProcess: {}",
+                            context.app_name, context.process_name
+                        );
 
-                match runtime.generate(&worker_app, &manager, &worker_text) {
+                        if let Some(title) = context.window_title.as_deref() {
+                            summary.push_str(&format!("\nActive window title: {title}"));
+                        }
+
+                        if context.context_source == "lastExternal" {
+                            summary.push_str(
+                                "\nContext source: last external window before AURA took focus",
+                            );
+                        } else {
+                            summary.push_str("\nContext source: foreground");
+                        }
+
+                        summary
+                    })
+                };
+
+                match runtime.generate(
+                    &worker_app,
+                    &manager,
+                    &worker_text,
+                    desktop_context.as_deref(),
+                ) {
                     Ok(response) => {
                         emit_core_event(
                             &worker_app,
