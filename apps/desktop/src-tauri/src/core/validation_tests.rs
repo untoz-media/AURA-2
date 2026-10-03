@@ -318,6 +318,45 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn current_app_awareness_is_read_only() {
+    let policy = PermissionPolicy::default();
+
+    for command in [
+        "What app am I using?",
+        "Current app",
+        "Que aplicação estou a usar?",
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Read,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::CurrentApp
+        ));
+    }
+}
+
+#[test]
+fn current_app_awareness_respects_read_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "What application am I using?",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::CurrentApp
+    ));
+}
+
+#[test]
 fn memory_commands_preserve_read_modify_and_destructive_boundaries() {
     let policy = PermissionPolicy::default();
 
