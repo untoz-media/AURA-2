@@ -120,3 +120,20 @@ export type ObsRuntimeState = {
   refreshedAtMs: number;
   lastError?: string;
 };
+
+
+export type ObsSceneSummary = {
+  name: string;
+  uuid: string;
+  index: number;
+  isProgram: boolean;
+  isPreview: boolean;
+};
+
+export type ObsSceneList = {
+  scenes: ObsSceneSummary[];
+  currentProgramScene?: string;
+  currentPreviewScene?: string;
+  refreshedAtMs: number;
+  lastError?: string;
+};
