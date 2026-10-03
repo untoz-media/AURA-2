@@ -18,6 +18,10 @@ import {
   setRuntimePaused,
   setObsProgramScene,
   setObsPreviewScene,
+  startObsRecording,
+  stopObsRecording,
+  pauseObsRecording,
+  resumeObsRecording,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -36,6 +40,7 @@ import type {
   ObsRuntimeState,
   ObsSceneList,
   ObsSceneSwitchResult,
+  ObsRecordingActionResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -278,6 +283,49 @@ export function useAuraBridge() {
       const message = String(error);
       setBridgeError({
         code: "obs.preview_switch_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+
+  const controlObsRecording = useCallback(async (
+    action: ObsRecordingActionResult["action"],
+  ): Promise<ObsRecordingActionResult> => {
+    try {
+      setBridgeError(null);
+
+      const result = await (
+        action === "start"
+          ? startObsRecording()
+          : action === "stop"
+            ? stopObsRecording()
+            : action === "pause"
+              ? pauseObsRecording()
+              : resumeObsRecording()
+      );
+
+      const runtime = await getObsRuntimeState();
+      setObsRuntime(runtime);
+
+      const message = action === "start"
+        ? "OBS recording started."
+        : action === "pause"
+          ? "OBS recording paused."
+          : action === "resume"
+            ? "OBS recording resumed."
+            : result.outputPath
+              ? `OBS recording stopped. Saved to ${result.outputPath}.`
+              : "OBS recording stopped.";
+
+      setActivity(message);
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "obs.recording_control_failed",
         message,
       });
       setActivity(message);
@@ -532,6 +580,7 @@ export function useAuraBridge() {
     refreshObsScenes,
     switchObsProgramScene,
     switchObsPreviewScene,
+    controlObsRecording,
     approveConfirmation,
     cancelConfirmation,
   };
