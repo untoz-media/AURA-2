@@ -35,6 +35,7 @@ import type {
   CreateMemoryRequest,
   MemoryCreateResult,
   MemoryRecord,
+  CurrentAppInfo,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -285,4 +286,9 @@ export async function createMemory(
 
 export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {
   return invoke<MemoryRecord>("delete_memory_command", { memoryId });
+}
+
+
+export async function getCurrentAppContext(): Promise<CurrentAppInfo> {
+  return invoke<CurrentAppInfo>("get_current_app_context");
 }

@@ -10,7 +10,7 @@ use computer::audio::{execute_media_action, MediaAction};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
-use computer::window_manager::{summarize_windows, switch_to_app};
+use computer::window_manager::{summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo};
 use core::{
     action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
     confirmation::{
@@ -1737,6 +1737,64 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::CurrentApp => {
+                            let result = {
+                                let awareness = worker_app.state::<CurrentAppAwareness>();
+                                awareness.snapshot()
+                            };
+
+                            match result {
+                                Ok(context) => {
+                                    let qualifier = if context.context_source == "lastExternal" {
+                                        " (last external app before AURA took focus)"
+                                    } else {
+                                        ""
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!(
+                                                "Current app: {} · {}{}.",
+                                                context.app_name,
+                                                context.process_name,
+                                                qualifier
+                                            ),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message =
+                                        format!("Could not detect the current app: {error}");
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "context.current_app_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::MemoryRemember(content) => {
                             emit_core_event(
                                 &worker_app,
@@ -2552,6 +2610,10 @@ fn process_user_command(
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
                     ),
+                    ActionIntent::CurrentApp => {
+                        "Reading the current application requires confirmation under the current permission policy."
+                            .to_string()
+                    }
                     ActionIntent::MemoryRemember(content) => format!(
                         "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
                         content
@@ -2803,6 +2865,13 @@ fn process_user_command(
 }
 
 #[tauri::command]
+fn get_current_app_context(
+    awareness: State<'_, CurrentAppAwareness>,
+) -> Result<CurrentAppInfo, String> {
+    awareness.snapshot().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn get_memories(app: AppHandle) -> Result<MemorySnapshot, String> {
     memory_snapshot(&app)
 }
@@ -2998,6 +3067,7 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(CurrentAppAwareness::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -3150,6 +3220,7 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_current_app_context,
             get_memories,
             create_memory_command,
             delete_memory_command,

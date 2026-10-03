@@ -16,6 +16,27 @@ pub enum AppTarget {
 }
 
 impl AppTarget {
+    pub fn from_process_image(value: &str) -> Option<Self> {
+        let normalized = value.trim().to_lowercase();
+
+        [
+            Self::ObsStudio,
+            Self::Brave,
+            Self::Chrome,
+            Self::FileExplorer,
+            Self::WindowsTerminal,
+            Self::Notepad,
+            Self::Calculator,
+        ]
+        .into_iter()
+        .find(|target| {
+            target
+                .process_images()
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(&normalized))
+        })
+    }
+
     pub fn from_alias(value: &str) -> Option<Self> {
         match value.trim() {
             "obs" | "obs studio" | "obsstudio" => Some(Self::ObsStudio),
@@ -184,5 +205,24 @@ pub fn launch_app(target: AppTarget) -> Result<(), LaunchError> {
         AppTarget::WindowsTerminal => spawn_system("wt.exe"),
         AppTarget::Notepad => spawn_system("notepad.exe"),
         AppTarget::Calculator => spawn_system("calc.exe"),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn process_image_matching_is_case_insensitive() {
+        assert_eq!(
+            AppTarget::from_process_image("BRAVE.EXE"),
+            Some(AppTarget::Brave)
+        );
+        assert_eq!(
+            AppTarget::from_process_image("obs64.exe"),
+            Some(AppTarget::ObsStudio)
+        );
+        assert_eq!(AppTarget::from_process_image("unknown.exe"), None);
     }
 }

@@ -45,6 +45,7 @@ pub enum ActionIntent {
     MemoryRemember(String),
     MemoryList,
     MemoryForget(String),
+    CurrentApp,
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +206,33 @@ fn parse_percent(value: &str) -> Result<u8, String> {
     }
 
     Ok(percent as u8)
+}
+
+fn is_current_app_request(input: &str) -> bool {
+    let normalized = normalize_command(input);
+
+    matches!(
+        normalized.as_str(),
+        "current app"
+            | "current application"
+            | "active app"
+            | "active application"
+            | "what app am i using"
+            | "what application am i using"
+            | "which app am i using"
+            | "which application is active"
+            | "what app is active"
+            | "qual é a app atual"
+            | "qual e a app atual"
+            | "qual é a aplicação atual"
+            | "qual e a aplicacao atual"
+            | "que app estou a usar"
+            | "que aplicação estou a usar"
+            | "que aplicacao estou a usar"
+            | "em que app estou"
+            | "em que aplicação estou"
+            | "em que aplicacao estou"
+    )
 }
 
 fn memory_request(input: &str) -> Option<ActionIntent> {
@@ -953,6 +981,15 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
+    if is_current_app_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::CurrentApp,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = memory_request(input) {
         let permission = match &intent {
             ActionIntent::MemoryList => PermissionClass::Read,
@@ -1372,6 +1409,26 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn routes_current_app_awareness_as_read() {
+        let policy = PermissionPolicy::default();
+
+        for command in [
+            "What app am I using?",
+            "Current app",
+            "Que aplicação estou a usar?",
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::CurrentApp,
+                    permission: PermissionClass::Read,
+                    decision: PermissionDecision::Allow,
+                })
+            ));
+        }
     }
 
     #[test]

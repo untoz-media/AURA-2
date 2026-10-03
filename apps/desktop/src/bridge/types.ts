@@ -344,3 +344,13 @@ export type MemoryCreateResult = {
   record: MemoryRecord;
   created: boolean;
 };
+
+
+export type CurrentAppInfo = {
+  appName: string;
+  processName: string;
+  processId: number;
+  knownApp: boolean;
+  contextSource: "foreground" | "lastExternal";
+  capturedAtMs: number;
+};
