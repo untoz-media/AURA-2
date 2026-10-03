@@ -1718,6 +1718,7 @@ mod tests {
     fn validates_audio_percent() {
         assert_eq!(validate_audio_percent(0).unwrap(), 0);
         assert_eq!(validate_audio_percent(100).unwrap(), 100);
+        assert!(validate_audio_percent(101).is_err());
     }
 
     #[test]
