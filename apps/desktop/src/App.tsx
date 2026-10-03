@@ -48,6 +48,8 @@ function App() {
     disconnectObsControl,
     refreshObsRuntime,
     refreshObsScenes,
+    switchObsProgramScene,
+    switchObsPreviewScene,
     approveConfirmation,
     cancelConfirmation,
   } = useAuraBridge();
@@ -236,6 +238,8 @@ function App() {
             onObsDisconnect={disconnectObsControl}
             onObsRefresh={refreshObsRuntime}
             onObsScenesRefresh={refreshObsScenes}
+            onObsProgramSceneChange={switchObsProgramScene}
+            onObsPreviewSceneChange={switchObsPreviewScene}
           />
         )}
       </section>
