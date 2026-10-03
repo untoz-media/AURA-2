@@ -557,6 +557,27 @@ export function useAuraBridge() {
   }, []);
 
   useEffect(() => {
+    if (!audioInput.testing) return;
+
+    let cancelled = false;
+
+    const updateAudioLevel = async () => {
+      try {
+        const snapshot = await getAudioInputState();
+        if (!cancelled) setAudioInput(snapshot);
+      } catch {
+        // Keep the most recent microphone state; stream errors are reflected in the snapshot.
+      }
+    };
+
+    const interval = window.setInterval(() => void updateAudioLevel(), 120);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [audioInput.testing]);
+
+  useEffect(() => {
     if (runtimeState.paused) {
       return;
     }
