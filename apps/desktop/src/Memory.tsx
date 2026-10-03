@@ -4,6 +4,8 @@ import type {
   MemoryRecord,
   MemorySnapshot,
 } from "./bridge/types";
+import ProjectMemoryPanel from "./ProjectMemoryPanel";
+import type { ProjectMemory, ProjectMemorySnapshot, SaveProjectRequest, UserRoutine } from "./bridge/types";
 import "./memory.css";
 
 type Props = {
@@ -11,6 +13,12 @@ type Props = {
   onRefresh: () => Promise<MemorySnapshot>;
   onCreate: (content: string) => Promise<MemoryCreateResult>;
   onDelete: (memoryId: string) => Promise<MemoryRecord>;
+  projectMemory: ProjectMemorySnapshot;
+  routines: UserRoutine[];
+  onProjectRefresh: () => Promise<ProjectMemorySnapshot>;
+  onProjectSave: (request: SaveProjectRequest) => Promise<ProjectMemory>;
+  onProjectDelete: (projectId: string) => Promise<void>;
+  onProjectSetActive: (projectId?: string) => Promise<ProjectMemorySnapshot>;
 };
 
 function formatMemoryDate(timestampMs: number) {
@@ -27,6 +35,12 @@ export default function Memory({
   onRefresh,
   onCreate,
   onDelete,
+  projectMemory,
+  routines,
+  onProjectRefresh,
+  onProjectSave,
+  onProjectDelete,
+  onProjectSetActive,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
@@ -175,6 +189,15 @@ export default function Memory({
             : "No saved memories match this search."}
         </div>
       )}
+
+      <ProjectMemoryPanel
+        snapshot={projectMemory}
+        routines={routines}
+        onRefresh={onProjectRefresh}
+        onSave={onProjectSave}
+        onDelete={onProjectDelete}
+        onSetActive={onProjectSetActive}
+      />
 
       <div className="memory-privacy-note">
         <strong>Local-first</strong>
