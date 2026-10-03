@@ -11,12 +11,12 @@ use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::{
-    action_router::{route_command, ActionIntent, ObsRecordingAction, RouteResult},
+    action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult},
     confirmation::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
 };
-use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult};
+use integrations::obs::{ObsConnectRequest, ObsConnectionState, ObsController, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1398,6 +1398,84 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ObsStreaming(action) => {
+                            let action_label = match action {
+                                ObsStreamingAction::Start => "Starting OBS stream…",
+                                ObsStreamingAction::Stop => "Stopping OBS stream…",
+                            };
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: action_label.to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                match action {
+                                    ObsStreamingAction::Start => obs.start_streaming().await,
+                                    ObsStreamingAction::Stop => obs.stop_streaming().await,
+                                }
+                            });
+
+                            match result {
+                                Ok(_) => {
+                                    let message = match action {
+                                        ObsStreamingAction::Start => {
+                                            "OBS stream is live.".to_string()
+                                        }
+                                        ObsStreamingAction::Stop => {
+                                            "OBS stream stopped.".to_string()
+                                        }
+                                    };
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message,
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not control OBS streaming: {}",
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "obs.streaming_control_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::ObsRecording(action) => {
                             let action_label = match action {
                                 ObsRecordingAction::Start => "Starting OBS recording…",
@@ -1693,6 +1771,16 @@ fn process_user_command(
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ObsStreaming(action) => match action {
+                        ObsStreamingAction::Start => {
+                            "Going live can publish audio/video externally. Confirm before starting the OBS stream."
+                                .to_string()
+                        }
+                        ObsStreamingAction::Stop => {
+                            "Stopping the OBS stream requires confirmation under the current permission policy."
+                                .to_string()
+                        }
+                    },
                     ActionIntent::ObsRecording(action) => match action {
                         ObsRecordingAction::Start => {
                             "Starting OBS recording requires confirmation under the current permission policy."
@@ -1976,6 +2064,20 @@ async fn resume_obs_recording(
     obs.resume_recording().await
 }
 
+#[tauri::command]
+async fn start_obs_streaming(
+    obs: State<'_, ObsController>,
+) -> Result<ObsStreamingActionResult, String> {
+    obs.start_streaming().await
+}
+
+#[tauri::command]
+async fn stop_obs_streaming(
+    obs: State<'_, ObsController>,
+) -> Result<ObsStreamingActionResult, String> {
+    obs.stop_streaming().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2144,7 +2246,9 @@ pub fn run() {
             start_obs_recording,
             stop_obs_recording,
             pause_obs_recording,
-            resume_obs_recording
+            resume_obs_recording,
+            start_obs_streaming,
+            stop_obs_streaming
         ])
         .run(tauri::generate_context!())
         .expect("error while running AURA-2");
