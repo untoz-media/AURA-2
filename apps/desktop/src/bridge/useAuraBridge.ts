@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  connectObs,
+  disconnectObs,
   getAppStatus,
+  getObsConnectionState,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -24,6 +27,8 @@ import type {
   PermissionPolicy,
   PendingConfirmation,
   RuntimeState,
+  ObsConnectRequest,
+  ObsConnectionState,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -37,6 +42,11 @@ export function useAuraBridge() {
     paused: false,
     backgroundEnabled: true,
     autostartEnabled: false,
+  });
+  const [obsConnection, setObsConnection] = useState<ObsConnectionState>({
+    connected: false,
+    host: "127.0.0.1",
+    port: 4455,
   });
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
@@ -54,12 +64,13 @@ export function useAuraBridge() {
     let cleanupCore: (() => void) | undefined;
     let cleanupLifecycle: (() => void) | undefined;
 
-    Promise.all([getAppStatus(), getRuntimeState(), getPermissionPolicy()])
-      .then(([app, runtime, permissions]) => {
+    Promise.all([getAppStatus(), getRuntimeState(), getPermissionPolicy(), getObsConnectionState()])
+      .then(([app, runtime, permissions, obs]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
+        setObsConnection(obs);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -228,6 +239,41 @@ export function useAuraBridge() {
     return policy;
   }, []);
 
+  const connectObsControl = useCallback(async (request: ObsConnectRequest) => {
+    try {
+      setBridgeError(null);
+      const state = await connectObs(request);
+      setObsConnection(state);
+      setActivity(
+        `OBS Studio ${state.obsStudioVersion ?? ""} connected at ${state.host}:${state.port}.`,
+      );
+      return state;
+    } catch (error) {
+      const refreshed = await getObsConnectionState().catch(() => ({
+        connected: false,
+        host: request.host || "127.0.0.1",
+        port: request.port || 4455,
+        lastError: String(error),
+      } satisfies ObsConnectionState));
+
+      setObsConnection(refreshed);
+      setBridgeError({
+        code: "obs.connection_failed",
+        message: String(error),
+      });
+      setActivity(String(error));
+      throw error;
+    }
+  }, []);
+
+  const disconnectObsControl = useCallback(async () => {
+    const state = await disconnectObs();
+    setObsConnection(state);
+    setBridgeError(null);
+    setActivity("OBS Studio disconnected from AURA.");
+    return state;
+  }, []);
+
   const approveConfirmation = useCallback(async (id: string) => {
     try {
       setBridgeError(null);
@@ -273,6 +319,7 @@ export function useAuraBridge() {
     appStatus,
     runtimeState,
     permissionPolicy,
+    obsConnection,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -281,6 +328,8 @@ export function useAuraBridge() {
     setAutostart,
     setPermission,
     resetPermissions,
+    connectObsControl,
+    disconnectObsControl,
     approveConfirmation,
     cancelConfirmation,
   };
