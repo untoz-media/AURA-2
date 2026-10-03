@@ -44,8 +44,26 @@ def chat_template(tokenizer, messages: list[dict[str, str]]) -> str:
         )
 
 
-def trim_messages(tokenizer, system_prompt: str, conversation: list[dict[str, str]]) -> list[dict[str, str]]:
-    messages = [{"role": "system", "content": system_prompt}, *conversation]
+def trim_messages(
+    tokenizer,
+    system_prompt: str,
+    conversation: list[dict[str, str]],
+    desktop_context: str | None = None,
+) -> list[dict[str, str]]:
+    messages = [{"role": "system", "content": system_prompt}]
+    if desktop_context:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Current desktop context supplied by the AURA application. "
+                    "Treat it as ephemeral context for this turn only and do not claim "
+                    "to have inspected anything beyond these fields:\n"
+                    f"{desktop_context}"
+                ),
+            }
+        )
+    messages.extend(conversation)
     budget = 2816
 
     while len(messages) > 2:
@@ -180,7 +198,16 @@ def main() -> int:
             if not isinstance(conversation, list):
                 raise ValueError("messages must be a list")
 
-            messages = trim_messages(tokenizer, system_prompt, conversation)
+            desktop_context = request.get("context")
+            if desktop_context is not None and not isinstance(desktop_context, str):
+                raise ValueError("context must be a string or null")
+
+            messages = trim_messages(
+                tokenizer,
+                system_prompt,
+                conversation,
+                desktop_context=desktop_context,
+            )
             text = chat_template(tokenizer, messages)
             inputs = tokenizer(text, return_tensors="pt")
             inputs = {

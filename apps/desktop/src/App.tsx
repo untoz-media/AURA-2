@@ -247,6 +247,12 @@ function App() {
               <strong>{currentApp?.appName ?? "Detecting…"}</strong>
             </div>
             <div>
+              <span>Active window</span>
+              <strong title={currentApp?.windowTitle}>
+                {currentApp?.windowTitle ?? "Unavailable"}
+              </strong>
+            </div>
+            <div>
               <span>Mode</span>
               <strong>
                 {appStatus?.localFirst === false ? "Hybrid" : "Local-first"}
@@ -336,6 +342,12 @@ function App() {
                     <div>
                       <span>Current app</span>
                       <strong>{currentApp?.appName ?? "Detecting…"}</strong>
+                    </div>
+                    <div>
+                      <span>Active window</span>
+                      <strong title={currentApp?.windowTitle}>
+                        {currentApp?.windowTitle ?? "Unavailable"}
+                      </strong>
                     </div>
                     <div>
                       <span>Local model</span>

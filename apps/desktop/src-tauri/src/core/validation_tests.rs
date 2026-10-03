@@ -318,6 +318,45 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn active_window_context_is_read_only() {
+    let policy = PermissionPolicy::default();
+
+    for command in [
+        "What window am I in?",
+        "Active window",
+        "Em que janela estou?",
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Read,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::ActiveWindow
+        ));
+    }
+}
+
+#[test]
+fn active_window_context_respects_read_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "What window is active?",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ActiveWindow
+    ));
+}
+
+#[test]
 fn current_app_awareness_is_read_only() {
     let policy = PermissionPolicy::default();
 

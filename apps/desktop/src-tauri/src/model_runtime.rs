@@ -145,6 +145,7 @@ impl ModelRuntime {
         app: &AppHandle,
         manager: &ModelManager,
         user_text: &str,
+        desktop_context: Option<&str>,
     ) -> Result<String, String> {
         let user_text = user_text.trim();
         if user_text.is_empty() {
@@ -198,6 +199,7 @@ impl ModelRuntime {
             "type": "generate",
             "id": request_id.clone(),
             "messages": messages,
+            "context": desktop_context,
         });
 
         {
