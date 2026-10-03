@@ -36,6 +36,7 @@ pub enum ActionIntent {
     ObsPreviewScene(String),
     ObsRecording(ObsRecordingAction),
     ObsStreaming(ObsStreamingAction),
+    ObsStreamDuration,
 }
 
 #[derive(Debug, Clone)]
@@ -464,6 +465,33 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn is_obs_stream_duration_request(input: &str) -> bool {
+    let normalized = normalize_command(input);
+
+    matches!(
+        normalized.as_str(),
+        "stream duration"
+            | "live duration"
+            | "how long have we been live"
+            | "how long are we live"
+            | "how long has the stream been live"
+            | "how long has the stream been running"
+            | "how long have we been streaming"
+            | "what is the stream duration"
+            | "what's the stream duration"
+            | "há quanto tempo estamos em direto"
+            | "ha quanto tempo estamos em direto"
+            | "há quanto tempo estamos ao vivo"
+            | "ha quanto tempo estamos ao vivo"
+            | "há quanto tempo estamos a transmitir"
+            | "ha quanto tempo estamos a transmitir"
+            | "qual é a duração da transmissão"
+            | "qual e a duracao da transmissao"
+            | "qual é a duração do direto"
+            | "qual e a duracao do direto"
+    )
+}
+
 fn obs_streaming_request(input: &str) -> Option<ObsStreamingAction> {
     let normalized = normalize_command(input);
 
@@ -717,6 +745,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         };
     }
 
+    if is_obs_stream_duration_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsStreamDuration,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(action) = obs_streaming_request(input) {
         let permission = permission_for_obs_streaming(action);
         return RouteResult::Action(RoutedAction {
@@ -958,6 +995,26 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn routes_obs_stream_duration_as_read() {
+        let policy = PermissionPolicy::default();
+
+        for command in [
+            "How long have we been live?",
+            "Stream duration",
+            "Há quanto tempo estamos em direto?",
+        ] {
+            assert!(matches!(
+                route_command(command, &policy),
+                RouteResult::Action(RoutedAction {
+                    intent: ActionIntent::ObsStreamDuration,
+                    permission: PermissionClass::Read,
+                    decision: PermissionDecision::Allow,
+                })
+            ));
+        }
+    }
 
     #[test]
     fn routes_obs_streaming_controls_with_safe_permissions() {
