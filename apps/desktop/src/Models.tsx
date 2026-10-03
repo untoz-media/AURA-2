@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ModelCatalog, ModelStatus } from "./bridge/types";
+import type { ManagedRuntimeStatus, ModelCatalog, ModelStatus } from "./bridge/types";
 import { AuraMark } from "./design-system/components";
 import "./feature-pages.css";
 
@@ -13,11 +13,16 @@ type ModelOperation =
 
 type Props = {
   catalog: ModelCatalog;
+  managedRuntime: ManagedRuntimeStatus;
   onRefresh: () => Promise<ModelCatalog>;
   onOperation: (
     operation: ModelOperation,
     modelId: string,
   ) => Promise<ModelCatalog>;
+  onRuntimeRefresh: () => Promise<ManagedRuntimeStatus>;
+  onRuntimeAction: (
+    action: "install" | "repair" | "remove",
+  ) => Promise<ManagedRuntimeStatus>;
 };
 
 function formatBytes(bytes?: number) {
@@ -59,11 +64,46 @@ function progressDetail(model: ModelStatus) {
 
 export default function Models({
   catalog,
+  managedRuntime,
   onRefresh,
   onOperation,
+  onRuntimeRefresh,
+  onRuntimeAction,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const runtimeBusy = [
+    "preparing",
+    "downloadingPython",
+    "verifyingInstaller",
+    "installingPython",
+    "preparingPackages",
+    "installingPackages",
+    "verifying",
+  ].includes(managedRuntime.state);
+
+  async function runRuntime(action: "install" | "repair" | "remove") {
+    if (
+      action === "remove" &&
+      !window.confirm(
+        "Remove AURA's managed Python/AI runtime? Installed model files will be kept.",
+      )
+    ) {
+      return;
+    }
+
+    setBusy(`runtime:${action}`);
+    setLocalError(null);
+
+    try {
+      await onRuntimeAction(action);
+    } catch (error) {
+      setLocalError(String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function run(operation: ModelOperation, model: ModelStatus) {
     if (
@@ -102,6 +142,137 @@ export default function Models({
           <AuraMark />
         </div>
       </header>
+
+      <article className={`managed-runtime-card ${managedRuntime.state}`}>
+        <div className="managed-runtime-heading">
+          <div>
+            <span className="feature-kicker">AURA RUNTIME</span>
+            <h3>Managed local AI environment</h3>
+            <p>
+              AURA can install and maintain its own private Python, PyTorch,
+              Transformers and quantization runtime without changing your
+              system Python or Windows PATH.
+            </p>
+          </div>
+          <span className={`feature-badge runtime-state ${managedRuntime.state}`}>
+            {managedRuntime.state === "ready"
+              ? "Ready"
+              : managedRuntime.state === "notInstalled"
+                ? "Not installed"
+                : managedRuntime.state === "needsRepair"
+                  ? "Needs repair"
+                  : managedRuntime.state === "error"
+                    ? "Error"
+                    : "Setting up"}
+          </span>
+        </div>
+
+        {runtimeBusy && (
+          <div className="managed-runtime-progress">
+            <div>
+              <strong>{managedRuntime.message}</strong>
+              <span>{managedRuntime.progressPercent.toFixed(0)}%</span>
+            </div>
+            <div
+              className="model-progress-track"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(managedRuntime.progressPercent)}
+            >
+              <span
+                style={{
+                  width: `${Math.max(0, Math.min(100, managedRuntime.progressPercent))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {managedRuntime.state === "ready" && (
+          <div className="managed-runtime-facts">
+            <div>
+              <span>Python</span>
+              <strong>{managedRuntime.pythonVersion ?? "Installed"}</strong>
+            </div>
+            <div>
+              <span>PyTorch</span>
+              <strong>{managedRuntime.torchVersion ?? "Installed"}</strong>
+            </div>
+            <div>
+              <span>Transformers</span>
+              <strong>{managedRuntime.transformersVersion ?? "Installed"}</strong>
+            </div>
+            <div>
+              <span>Acceleration</span>
+              <strong>
+                {managedRuntime.cudaAvailable
+                  ? managedRuntime.cudaDeviceName ?? "CUDA"
+                  : "CPU / Auto"}
+              </strong>
+            </div>
+          </div>
+        )}
+
+        {managedRuntime.lastError && (
+          <p className="model-error">{managedRuntime.lastError}</p>
+        )}
+
+        <div className="managed-runtime-actions">
+          {managedRuntime.state === "notInstalled" && (
+            <button
+              type="button"
+              className="feature-primary-button"
+              disabled={busy !== null}
+              onClick={() => void runRuntime("install")}
+            >
+              Install runtime
+            </button>
+          )}
+
+          {(managedRuntime.state === "needsRepair" ||
+            managedRuntime.state === "error") && (
+            <button
+              type="button"
+              className="feature-primary-button"
+              disabled={busy !== null}
+              onClick={() => void runRuntime("repair")}
+            >
+              Repair runtime
+            </button>
+          )}
+
+          {managedRuntime.state === "ready" && (
+            <>
+              <button
+                type="button"
+                className="feature-secondary-button"
+                disabled={busy !== null}
+                onClick={() => void runRuntime("repair")}
+              >
+                Reinstall runtime
+              </button>
+              <button
+                type="button"
+                className="feature-secondary-button danger"
+                disabled={busy !== null}
+                onClick={() => void runRuntime("remove")}
+              >
+                Remove runtime
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="feature-secondary-button"
+            disabled={runtimeBusy}
+            onClick={() => void onRuntimeRefresh()}
+          >
+            Refresh runtime
+          </button>
+        </div>
+      </article>
 
       <div className="model-manager-toolbar">
         <div>

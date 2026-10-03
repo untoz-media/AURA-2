@@ -39,6 +39,7 @@ import type {
   ModelCatalog,
   ModelDownloadProgress,
   ModelRuntimeStatus,
+  ManagedRuntimeStatus,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -47,6 +48,7 @@ export const AURA_EVENTS = {
   runtime: "aura:runtime-state",
   lifecycle: "aura:lifecycle-event",
   modelDownload: "aura:model-download",
+  managedRuntime: "aura:managed-runtime",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -342,4 +344,30 @@ export async function getModelRuntimeStatus(): Promise<ModelRuntimeStatus> {
 
 export async function clearModelConversation(): Promise<ModelRuntimeStatus> {
   return invoke<ModelRuntimeStatus>("clear_model_conversation");
+}
+
+
+export async function getManagedRuntimeStatus(): Promise<ManagedRuntimeStatus> {
+  return invoke<ManagedRuntimeStatus>("get_managed_runtime_status");
+}
+
+export async function installManagedRuntime(): Promise<ManagedRuntimeStatus> {
+  return invoke<ManagedRuntimeStatus>("install_managed_runtime");
+}
+
+export async function repairManagedRuntime(): Promise<ManagedRuntimeStatus> {
+  return invoke<ManagedRuntimeStatus>("repair_managed_runtime");
+}
+
+export async function removeManagedRuntime(): Promise<ManagedRuntimeStatus> {
+  return invoke<ManagedRuntimeStatus>("remove_managed_runtime");
+}
+
+export async function listenToManagedRuntime(
+  handler: (status: ManagedRuntimeStatus) => void,
+): Promise<UnlistenFn> {
+  return listen<ManagedRuntimeStatus>(
+    AURA_EVENTS.managedRuntime,
+    ({ payload }) => handler(payload),
+  );
 }

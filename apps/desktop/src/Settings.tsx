@@ -22,6 +22,7 @@ import type {
   SaveDirectorPresetRequest,
   ModelCatalog,
   ModelRuntimeStatus,
+  ManagedRuntimeStatus,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -100,6 +101,7 @@ type Props = {
   onThemeChange: (theme: AuraTheme) => void;
   modelCatalog: ModelCatalog;
   modelRuntimeStatus: ModelRuntimeStatus;
+  managedRuntimeStatus: ManagedRuntimeStatus;
 };
 
 const sections: Array<{
@@ -252,6 +254,7 @@ export default function Settings({
   onThemeChange,
   modelCatalog,
   modelRuntimeStatus,
+  managedRuntimeStatus,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -700,6 +703,40 @@ export default function Settings({
                 }
               />
               <SettingRow
+                title="Managed AI runtime"
+                description={
+                  managedRuntimeStatus.state === "ready"
+                    ? `Private Python ${managedRuntimeStatus.pythonVersion ?? ""} runtime is installed and verified.`
+                    : managedRuntimeStatus.state === "notInstalled"
+                      ? "AURA can install its own private Python and AI dependencies from the Models workspace."
+                      : managedRuntimeStatus.message
+                }
+                trailing={
+                  <Badge tone={managedRuntimeStatus.state === "ready" ? "ready" : "planned"}>
+                    {managedRuntimeStatus.state === "ready"
+                      ? "Ready"
+                      : managedRuntimeStatus.state === "notInstalled"
+                        ? "Not installed"
+                        : managedRuntimeStatus.state === "error"
+                          ? "Error"
+                          : "Setup"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Managed PyTorch"
+                description={
+                  managedRuntimeStatus.torchVersion
+                    ? `PyTorch ${managedRuntimeStatus.torchVersion} · Transformers ${managedRuntimeStatus.transformersVersion ?? "installed"}`
+                    : "Installed together with the managed runtime when requested."
+                }
+                trailing={
+                  <Badge tone={managedRuntimeStatus.torchVersion ? "ready" : "planned"}>
+                    {managedRuntimeStatus.torchVersion ? "Installed" : "Pending"}
+                  </Badge>
+                }
+              />
+              <SettingRow
                 title="Conversation inference"
                 description={
                   modelRuntimeStatus.state === "ready"
@@ -719,15 +756,17 @@ export default function Settings({
                 }
               />
               <SettingRow
-                title="Python runtime"
+                title="Inference Python"
                 description={
                   modelRuntimeStatus.pythonExecutable
                     ? modelRuntimeStatus.pythonExecutable
-                    : "AURA will look for AURA_PYTHON, a managed runtime, python, py -3 or python3."
+                    : managedRuntimeStatus.pythonPath
+                      ? `Managed runtime ready at ${managedRuntimeStatus.pythonPath}. It will be used on the next free-form prompt.`
+                      : "AURA will prefer its managed runtime, then fall back to AURA_PYTHON or a compatible system Python."
                 }
                 trailing={
-                  <Badge tone={modelRuntimeStatus.pythonExecutable ? "ready" : "planned"}>
-                    {modelRuntimeStatus.pythonExecutable ? "Detected" : "On demand"}
+                  <Badge tone={modelRuntimeStatus.pythonExecutable || managedRuntimeStatus.pythonPath ? "ready" : "planned"}>
+                    {modelRuntimeStatus.pythonExecutable ? "Active" : managedRuntimeStatus.pythonPath ? "Ready" : "Unavailable"}
                   </Badge>
                 }
               />

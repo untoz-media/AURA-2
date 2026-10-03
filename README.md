@@ -239,4 +239,46 @@ Current runtime behavior:
 - Settings exposes loading / ready / generating / error runtime state
 - Chat now renders real user/AURA message history
 
-The current Alpha expects a compatible Python environment containing the AURA-1 runtime dependencies. Automatic managed Python/PyTorch installation remains a future runtime-packaging step.
+The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
+
+
+### Managed Runtime
+
+Local model users no longer need to configure Python manually.
+
+From **Models**, AURA can install its own private Windows AI environment:
+
+- Python 3.12.10 x64 from python.org
+- Authenticode verification before installer execution
+- private per-user TargetDir
+- no PATH changes, launcher, file associations or shortcuts
+- GPU-aware PyTorch installation
+- CUDA 12.8 wheels when NVIDIA is detected
+- CPU wheels otherwise
+- Transformers / Accelerate / BitsAndBytes / Safetensors
+- final import/version/CUDA verification
+- repair and removal controls
+
+The intended local setup is now:
+
+`Install runtime → Download AURA-1 → Use model → Chat`
+
+Model weights and the managed runtime are stored separately, so repairing/removing Python does not delete downloaded models.
+
+
+### Managed AI Runtime
+
+AURA can now prepare its own private Windows AI runtime from the Models workspace.
+
+The managed setup:
+
+- installs private Python 3.12 under AURA Local Data
+- does not modify the user's PATH or system Python
+- verifies the official Python installer with Windows Authenticode
+- checks for at least 10 GB of free runtime space
+- selects CUDA or CPU PyTorch based on NVIDIA detection
+- installs Transformers, Accelerate, BitsAndBytes and Safetensors
+- verifies the final Python/AI stack before marking it Ready
+- exposes install, repair, reinstall and removal controls in the desktop UI
+
+This moves the normal user flow toward **Install AURA → Install Runtime → Download model → Chat**, without manual Python setup.

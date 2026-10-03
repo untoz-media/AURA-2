@@ -425,3 +425,31 @@ export type ChatMessage = {
   content: string;
   timestampMs: number;
 };
+
+
+export type ManagedRuntimeStatus = {
+  state:
+    | "notInstalled"
+    | "preparing"
+    | "downloadingPython"
+    | "verifyingInstaller"
+    | "installingPython"
+    | "preparingPackages"
+    | "installingPackages"
+    | "verifying"
+    | "ready"
+    | "needsRepair"
+    | "error";
+  progressPercent: number;
+  message: string;
+  pythonPath?: string;
+  pythonVersion?: string;
+  torchVersion?: string;
+  transformersVersion?: string;
+  accelerateVersion?: string;
+  bitsandbytesVersion?: string;
+  cudaAvailable?: boolean;
+  cudaDeviceName?: string;
+  lastError?: string;
+  updatedAtMs: number;
+};

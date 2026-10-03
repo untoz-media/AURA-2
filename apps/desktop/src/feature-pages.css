@@ -696,3 +696,153 @@
     max-width: 100%;
   }
 }
+
+
+.managed-runtime-card {
+  padding: 17px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 90% 10%, var(--aura-accent-soft), transparent 34%),
+    var(--aura-surface-1);
+}
+
+.managed-runtime-card.ready {
+  border-color: color-mix(in srgb, var(--status-success) 30%, var(--aura-border-1));
+}
+
+.managed-runtime-card.error,
+.managed-runtime-card.needsRepair {
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--aura-border-1));
+}
+
+.managed-runtime-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.managed-runtime-heading > div {
+  min-width: 0;
+}
+
+.managed-runtime-heading h3 {
+  margin: 6px 0 6px;
+  color: var(--aura-text-1);
+  font-size: var(--text-lg);
+  font-weight: 640;
+}
+
+.managed-runtime-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.feature-badge.runtime-state.ready {
+  color: var(--status-success);
+}
+
+.feature-badge.runtime-state.error,
+.feature-badge.runtime-state.needsRepair {
+  color: var(--status-danger);
+}
+
+.feature-badge.runtime-state.preparing,
+.feature-badge.runtime-state.downloadingPython,
+.feature-badge.runtime-state.verifyingInstaller,
+.feature-badge.runtime-state.installingPython,
+.feature-badge.runtime-state.preparingPackages,
+.feature-badge.runtime-state.installingPackages,
+.feature-badge.runtime-state.verifying {
+  color: var(--status-listening);
+}
+
+.managed-runtime-progress {
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-2);
+}
+
+.managed-runtime-progress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.managed-runtime-progress strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+  font-weight: 580;
+}
+
+.managed-runtime-progress span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.managed-runtime-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.managed-runtime-facts > div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-2);
+}
+
+.managed-runtime-facts span,
+.managed-runtime-facts strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managed-runtime-facts span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.managed-runtime-facts strong {
+  margin-top: 4px;
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+  font-weight: 570;
+}
+
+.managed-runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 950px) {
+  .managed-runtime-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .managed-runtime-heading {
+    flex-direction: column;
+  }
+
+  .managed-runtime-facts {
+    grid-template-columns: 1fr;
+  }
+}
