@@ -239,4 +239,28 @@ Current runtime behavior:
 - Settings exposes loading / ready / generating / error runtime state
 - Chat now renders real user/AURA message history
 
-The current Alpha expects a compatible Python environment containing the AURA-1 runtime dependencies. Automatic managed Python/PyTorch installation remains a future runtime-packaging step.
+The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
+
+
+### Managed Runtime
+
+Local model users no longer need to configure Python manually.
+
+From **Models**, AURA can install its own private Windows AI environment:
+
+- Python 3.12.10 x64 from python.org
+- Authenticode verification before installer execution
+- private per-user TargetDir
+- no PATH changes, launcher, file associations or shortcuts
+- GPU-aware PyTorch installation
+- CUDA 12.8 wheels when NVIDIA is detected
+- CPU wheels otherwise
+- Transformers / Accelerate / BitsAndBytes / Safetensors
+- final import/version/CUDA verification
+- repair and removal controls
+
+The intended local setup is now:
+
+`Install runtime → Download AURA-1 → Use model → Chat`
+
+Model weights and the managed runtime are stored separately, so repairing/removing Python does not delete downloaded models.
