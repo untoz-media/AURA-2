@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and is progressing through **M005 — Memory & Context** with explicit local persistent memory and current-app awareness.
+AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and is progressing through **M005 — Memory & Context** with explicit local persistent memory, current-app awareness and active-window context.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 
