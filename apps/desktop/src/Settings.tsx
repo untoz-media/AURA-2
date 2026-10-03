@@ -206,6 +206,31 @@ export default function Settings({
     setObsPort(String(obsConnection.port));
   }, [obsConnection.host, obsConnection.port]);
 
+
+  useEffect(() => {
+    if (!obsRuntime.streaming) {
+      setObsStreamClockMs(0);
+      return;
+    }
+
+    const updateClock = () => {
+      const elapsedSinceRefresh = Math.max(
+        0,
+        Date.now() - obsRuntime.refreshedAtMs,
+      );
+      setObsStreamClockMs(obsRuntime.streamDurationMs + elapsedSinceRefresh);
+    };
+
+    updateClock();
+    const interval = window.setInterval(updateClock, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [
+    obsRuntime.streaming,
+    obsRuntime.streamDurationMs,
+    obsRuntime.refreshedAtMs,
+  ]);
+
   async function handleObsConnect() {
     const port = Number(obsPort);
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
