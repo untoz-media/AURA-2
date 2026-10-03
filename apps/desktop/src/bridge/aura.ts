@@ -17,6 +17,7 @@ import type {
   ObsSceneList,
   ObsSceneSwitchRequest,
   ObsSceneSwitchResult,
+  ObsRecordingActionResult,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -167,4 +168,21 @@ export async function setObsPreviewScene(
   request: ObsSceneSwitchRequest,
 ): Promise<ObsSceneSwitchResult> {
   return invoke<ObsSceneSwitchResult>("set_obs_preview_scene", { request });
+}
+
+
+export async function startObsRecording(): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("start_obs_recording");
+}
+
+export async function stopObsRecording(): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("stop_obs_recording");
+}
+
+export async function pauseObsRecording(): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("pause_obs_recording");
+}
+
+export async function resumeObsRecording(): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("resume_obs_recording");
 }
