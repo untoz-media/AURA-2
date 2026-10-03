@@ -16,7 +16,7 @@ on:
 jobs:
   build-windows:
     name: Build Windows NSIS installer
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
