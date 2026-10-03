@@ -464,7 +464,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003 Complete · Computer Control",
+        stage: "M004 Complete · OBS Control / Director Mode",
         local_first: true,
     }
 }
