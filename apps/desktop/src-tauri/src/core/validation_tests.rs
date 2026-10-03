@@ -318,6 +318,59 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn obs_scene_commands_route_through_act_permission() {
+    let policy = PermissionPolicy::default();
+
+    assert!(matches!(
+        assert_action(
+            "Switch scene to Camera 2",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsProgramScene(scene) if scene == "Camera 2"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Set preview scene to Interview",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsPreviewScene(scene) if scene == "Interview"
+    ));
+
+    assert!(matches!(
+        assert_action(
+            "Switch to Camera 2",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Allow,
+        ),
+        ActionIntent::ObsProgramScene(scene) if scene == "camera 2"
+    ));
+}
+
+#[test]
+fn obs_scene_commands_respect_act_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Act, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Muda para a cena Câmara 1",
+            &policy,
+            PermissionClass::Act,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::ObsProgramScene(scene) if scene == "Câmara 1"
+    ));
+}
+
+#[test]
 fn sensitive_and_destructive_cannot_be_permanently_allowed() {
     let mut policy = PermissionPolicy::default();
 
