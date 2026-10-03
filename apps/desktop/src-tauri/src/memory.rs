@@ -87,25 +87,32 @@ fn write_records(app: &AppHandle, records: &[MemoryRecord]) -> Result<(), String
     fs::write(path, content).map_err(|error| error.to_string())
 }
 
-pub fn load_memories(app: &AppHandle) -> Vec<MemoryRecord> {
-    let Ok(path) = memory_path(app) else {
-        return Vec::new();
-    };
+fn read_records(app: &AppHandle) -> Result<Vec<MemoryRecord>, String> {
+    let path = memory_path(app)?;
 
-    let Ok(content) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
 
-    let mut records = serde_json::from_str::<Vec<MemoryRecord>>(&content).unwrap_or_default();
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read local memory file: {error}"))?;
+
+    let mut records = serde_json::from_str::<Vec<MemoryRecord>>(&content)
+        .map_err(|error| {
+            format!(
+                "Local memory file is invalid and was left unchanged: {error}"
+            )
+        })?;
+
     records.sort_by(|left, right| right.updated_at_ms.cmp(&left.updated_at_ms));
-    records
+    Ok(records)
 }
 
-pub fn memory_snapshot(app: &AppHandle) -> MemorySnapshot {
-    MemorySnapshot {
-        records: load_memories(app),
+pub fn memory_snapshot(app: &AppHandle) -> Result<MemorySnapshot, String> {
+    Ok(MemorySnapshot {
+        records: read_records(app)?,
         refreshed_at_ms: timestamp_ms(),
-    }
+    })
 }
 
 pub fn create_memory(
@@ -115,7 +122,7 @@ pub fn create_memory(
 ) -> Result<MemoryCreateResult, String> {
     let content = validate_content(&request.content)?;
     let normalized = normalize_content(&content);
-    let mut records = load_memories(app);
+    let mut records = read_records(app)?;
 
     if let Some(existing) = records
         .iter_mut()
@@ -175,7 +182,7 @@ pub fn delete_memory_by_content(
 ) -> Result<MemoryRecord, String> {
     let requested = validate_content(content)?;
     let normalized = normalize_content(&requested);
-    let records = load_memories(app);
+    let records = read_records(app)?;
 
     let matches = records
         .iter()
@@ -218,7 +225,7 @@ pub fn summarize_memories(app: &AppHandle, limit: usize) -> String {
         ));
     }
 
-    summary
+    Ok(summary)
 }
 
 fn unique_memory_id(records: &[MemoryRecord], now: u64) -> String {
