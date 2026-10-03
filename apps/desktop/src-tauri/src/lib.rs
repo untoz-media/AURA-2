@@ -3755,7 +3755,7 @@ pub fn run() {
 
                     if shortcut.matches(
                         Modifiers::CONTROL | Modifiers::SHIFT,
-                        Code::KeyV,
+                        Code::F8,
                     ) {
                         let runtime = app.state::<RuntimeState>();
                         let paused = *runtime
@@ -3776,7 +3776,7 @@ pub fn run() {
                                         app,
                                         VoiceCaptureEvent {
                                             phase: "listening",
-                                            shortcut: "Ctrl+Shift+V",
+                                            shortcut: "Ctrl+Shift+F8",
                                             sample_count: 0,
                                             duration_ms: 0,
                                             sample_rate: snapshot.sample_rate,
@@ -3789,7 +3789,7 @@ pub fn run() {
                                         app,
                                         VoiceCaptureEvent {
                                             phase: "error",
-                                            shortcut: "Ctrl+Shift+V",
+                                            shortcut: "Ctrl+Shift+F8",
                                             sample_count: 0,
                                             duration_ms: 0,
                                             sample_rate: None,
@@ -3808,7 +3808,7 @@ pub fn run() {
                                             app,
                                             VoiceCaptureEvent {
                                                 phase: "captured",
-                                                shortcut: "Ctrl+Shift+V",
+                                                shortcut: "Ctrl+Shift+F8",
                                                 sample_count: info.map(|value| value.0).unwrap_or(0),
                                                 duration_ms: info.map(|value| value.3).unwrap_or(0),
                                                 sample_rate: info.map(|value| value.1),
@@ -3822,7 +3822,7 @@ pub fn run() {
                                         app,
                                         VoiceCaptureEvent {
                                             phase: "error",
-                                            shortcut: "Ctrl+Shift+V",
+                                            shortcut: "Ctrl+Shift+F8",
                                             sample_count: 0,
                                             duration_ms: 0,
                                             sample_rate: None,
@@ -3873,7 +3873,7 @@ pub fn run() {
 
             let push_to_talk_shortcut = Shortcut::new(
                 Some(Modifiers::CONTROL | Modifiers::SHIFT),
-                Code::KeyV,
+                Code::F8,
             );
             app.global_shortcut().register(push_to_talk_shortcut)?;
 
