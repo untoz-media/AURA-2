@@ -821,8 +821,10 @@ async fn read_streaming_active(client: &Client) -> Result<bool, String> {
         .status()
         .await
         .map_err(|error| format!("Could not read OBS streaming state: {error}"))?;
+    let value = serde_json::to_value(status)
+        .map_err(|error| format!("Could not decode OBS streaming state: {error}"))?;
 
-    Ok(status.active)
+    Ok(json_bool(&value, "outputActive"))
 }
 
 async fn wait_for_streaming_state(
