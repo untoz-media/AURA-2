@@ -267,5 +267,6 @@ export type ObsProductionHealth = {
   streamBitrateKbps?: number;
   streamOutputSkippedFrames?: number;
   streamOutputTotalFrames?: number;
+  streamDroppedPercent?: number;
   checkedAtMs: number;
 };
