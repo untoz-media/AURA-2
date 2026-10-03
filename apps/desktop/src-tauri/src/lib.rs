@@ -3284,7 +3284,10 @@ pub fn run() {
                         show_main_window(app);
                         let _ = app.emit("aura:open-settings", ());
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        app.state::<ModelRuntime>().stop();
+                        app.exit(0);
+                    },
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -3317,6 +3320,7 @@ pub fn run() {
                                 "AURA is running in the background. Use the tray or shortcut to return.",
                             );
                         } else {
+                            app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
