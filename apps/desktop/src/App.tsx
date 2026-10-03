@@ -76,7 +76,6 @@ function App() {
     refreshDirectorPresets,
     refreshMemories,
     refreshModels,
-    refreshModelRuntime,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
