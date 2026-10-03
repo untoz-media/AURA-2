@@ -58,6 +58,7 @@ function App() {
     recentFiles,
     routines,
     routineLastRun,
+    projectMemory,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -84,6 +85,10 @@ function App() {
     saveRoutineControl,
     deleteRoutineControl,
     runRoutineControl,
+    refreshProjectMemory,
+    saveProjectMemoryControl,
+    deleteProjectMemoryControl,
+    setActiveProjectMemoryControl,
     refreshModels,
     refreshManagedRuntime,
     runManagedRuntimeAction,
@@ -479,6 +484,12 @@ function App() {
               onRefresh={refreshMemories}
               onCreate={createMemoryControl}
               onDelete={deleteMemoryControl}
+              projectMemory={projectMemory}
+              routines={routines}
+              onProjectRefresh={refreshProjectMemory}
+              onProjectSave={saveProjectMemoryControl}
+              onProjectDelete={deleteProjectMemoryControl}
+              onProjectSetActive={setActiveProjectMemoryControl}
             />
           )}
 
