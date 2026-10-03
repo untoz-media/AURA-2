@@ -1778,7 +1778,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic computer action matched yet. M003 currently supports app/window control, keyboard, mouse, audio/media and Windows system commands."
+                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS Program/Preview scene switching."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
