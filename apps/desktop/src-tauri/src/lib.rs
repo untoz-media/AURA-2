@@ -1866,18 +1866,6 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::MemoryRemember(content) => format!(
-                        "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
-                        content
-                    ),
-                    ActionIntent::MemoryList => {
-                        "Reading AURA's local memory requires confirmation under the current permission policy."
-                            .to_string()
-                    }
-                    ActionIntent::MemoryForget(content) => format!(
-                        "Deleting the saved memory “{}” is destructive and requires confirmation.",
-                        content
-                    ),
                     ActionIntent::DirectorPreset(preset_id) => {
                             let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id) else {
                                 let message = "Director Mode preset no longer exists.".to_string();
@@ -2540,6 +2528,18 @@ fn process_user_command(
                         "{} OBS source {} requires confirmation under the current permission policy.",
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
+                    ),
+                    ActionIntent::MemoryRemember(content) => format!(
+                        "Saving “{}” to AURA's local memory requires confirmation under the current permission policy.",
+                        content
+                    ),
+                    ActionIntent::MemoryList => {
+                        "Reading AURA's local memory requires confirmation under the current permission policy."
+                            .to_string()
+                    }
+                    ActionIntent::MemoryForget(content) => format!(
+                        "Deleting the saved memory “{}” is destructive and requires confirmation.",
+                        content
                     ),
                     ActionIntent::DirectorPreset(preset_id) => {
                         let preset_name = find_director_preset_by_id(&app, preset_id)
