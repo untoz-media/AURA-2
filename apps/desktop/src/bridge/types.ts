@@ -407,3 +407,21 @@ export type ModelDownloadProgress = {
   error?: string;
   updatedAtMs: number;
 };
+
+
+export type ModelRuntimeStatus = {
+  state: "stopped" | "loading" | "ready" | "generating" | "error";
+  loadedModelId?: string;
+  pythonExecutable?: string;
+  device?: string;
+  cuda?: boolean;
+  lastError?: string;
+  refreshedAtMs: number;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestampMs: number;
+};
