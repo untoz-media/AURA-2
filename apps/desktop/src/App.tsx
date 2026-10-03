@@ -4,30 +4,40 @@ import { useAuraBridge } from "./bridge/useAuraBridge";
 import {
   AuraMark,
   NavItem,
-  SectionLabel,
   ShortcutKey,
   StatusPill,
-  Surface,
 } from "./design-system/components";
 import ConfirmationCard from "./ConfirmationCard";
 import Settings, { type SettingsSection } from "./Settings";
 import Memory from "./Memory";
+import Models from "./Models";
+import Create from "./Create";
+import Computer from "./Computer";
+import Tasks from "./Tasks";
+import DirectorMode from "./DirectorMode";
+import {
+  applyAuraTheme,
+  readAuraTheme,
+  type AuraTheme,
+} from "./theme";
 
-type AppView = "home" | "memory" | "settings";
-
-const modules = [
-  { name: "Computer", description: "Windows control", milestone: "M003", glyph: "⌁" },
-  { name: "Director", description: "OBS control", milestone: "M004", glyph: "◉" },
-  { name: "Memory", description: "Local context", milestone: "M005", glyph: "◇" },
-  { name: "Voice", description: "Natural interaction", milestone: "M006", glyph: "∿" },
-  { name: "Vision", description: "Screen understanding", milestone: "M007", glyph: "◎" },
-  { name: "Agents", description: "Multi-step actions", milestone: "M008", glyph: "✦" },
-];
+type AppView =
+  | "chat"
+  | "memory"
+  | "models"
+  | "create"
+  | "computer"
+  | "tasks"
+  | "director"
+  | "settings";
 
 function App() {
   const [command, setCommand] = useState("");
-  const [view, setView] = useState<AppView>("home");
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [view, setView] = useState<AppView>("chat");
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("general");
+  const [theme, setTheme] = useState<AuraTheme>(() => readAuraTheme());
+
   const {
     status,
     activity,
@@ -98,6 +108,11 @@ function App() {
     };
   }, []);
 
+  function changeTheme(nextTheme: AuraTheme) {
+    setTheme(nextTheme);
+    applyAuraTheme(nextTheme);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const value = command.trim();
@@ -107,27 +122,58 @@ function App() {
     await submitCommand(value);
   }
 
+  async function runQuickCommand(value: string) {
+    if (runtimeState.paused || pendingConfirmation || status === "Working") {
+      return;
+    }
+
+    await submitCommand(value);
+  }
+
+  function openSettings(section: SettingsSection = "general") {
+    setSettingsSection(section);
+    setView("settings");
+  }
+
+  function startNewConversation() {
+    setCommand("");
+    setView("chat");
+  }
+
+  const runtimeLabel = runtimeState.paused
+    ? "AURA paused"
+    : status === "Working"
+      ? "AURA working"
+      : "Computer ready";
+
   return (
-    <main className="app-shell">
+    <main className="app-shell aura1-evolved-shell">
       <aside className="sidebar">
         <div className="brand-lockup">
           <AuraMark compact />
           <div className="brand-copy">
-            <strong>AURA</strong>
-            <span>2 · pre-Beta</span>
+            <strong>AURA-2</strong>
+            <span>by Untoz</span>
           </div>
         </div>
 
+        <button
+          type="button"
+          className="new-conversation-button"
+          onClick={startNewConversation}
+        >
+          <span aria-hidden="true">＋</span>
+          New conversation
+        </button>
+
         <nav className="primary-nav" aria-label="Primary navigation">
           <NavItem
-            active={view === "home"}
-            icon="⌂"
-            onClick={() => setView("home")}
+            active={view === "chat"}
+            icon="✦"
+            onClick={() => setView("chat")}
           >
-            Home
+            Chat
           </NavItem>
-          <NavItem icon="✦">Actions</NavItem>
-          <NavItem icon="↻">Automations</NavItem>
           <NavItem
             active={view === "memory"}
             icon="◇"
@@ -135,190 +181,284 @@ function App() {
           >
             Memory
           </NavItem>
+          <NavItem
+            active={view === "models"}
+            icon="◎"
+            onClick={() => setView("models")}
+          >
+            Models
+          </NavItem>
+          <NavItem
+            active={view === "create"}
+            icon="◈"
+            onClick={() => setView("create")}
+          >
+            Create
+          </NavItem>
+          <NavItem
+            active={view === "computer"}
+            icon="⌁"
+            onClick={() => setView("computer")}
+          >
+            Computer
+          </NavItem>
+          <NavItem
+            active={view === "tasks"}
+            icon="↻"
+            onClick={() => setView("tasks")}
+          >
+            Tasks
+          </NavItem>
+          <NavItem
+            active={view === "director"}
+            icon="◉"
+            onClick={() => setView("director")}
+          >
+            Director Mode
+          </NavItem>
         </nav>
+
+        <div className="sidebar-status-card">
+          <div className="sidebar-status-line">
+            <span
+              className={`sidebar-status-dot ${bridgeError ? "error" : runtimeState.paused ? "paused" : "ready"}`}
+            />
+            <strong>{runtimeLabel}</strong>
+          </div>
+          <div className="sidebar-status-details">
+            <div>
+              <span>Current app</span>
+              <strong>{currentApp?.appName ?? "Detecting…"}</strong>
+            </div>
+            <div>
+              <span>Mode</span>
+              <strong>
+                {appStatus?.localFirst === false ? "Hybrid" : "Local-first"}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="sidebar-capabilities">
+          <span>LOCAL CAPABILITIES</span>
+          <div>
+            <button type="button" onClick={() => setView("computer")}>
+              Applications
+            </button>
+            <button type="button" onClick={() => setView("computer")}>
+              System
+            </button>
+            <button type="button" onClick={() => setView("memory")}>
+              Memory
+            </button>
+            <button type="button" onClick={() => setView("director")}>
+              OBS
+            </button>
+            <button type="button" onClick={() => setView("create")}>
+              Create
+            </button>
+          </div>
+        </div>
 
         <div className="sidebar-bottom">
           <NavItem
             active={view === "settings"}
             icon="⚙"
-            onClick={() => setView("settings")}
+            onClick={() => openSettings()}
           >
             Settings
           </NavItem>
-          <div className="local-badge">
-            <span className="local-dot" />
-            <span className={runtimeState.paused ? "runtime-paused" : ""}>
-              {runtimeState.paused
-                ? "Paused"
-                : appStatus?.localFirst === false
-                  ? "Hybrid"
-                  : "Local-first"}
-            </span>
-          </div>
+
+          <p className="sidebar-privacy">
+            <strong>AI that lives on your computer.</strong>
+            <span>Local-first. Private by design.</span>
+          </p>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="topbar" data-tauri-drag-region>
-          <div>
-            <span className="eyebrow">
-              {appStatus ? `${appStatus.name} · ${appStatus.stage}` : "AURA-2 DESKTOP"}
-            </span>
-            <h1>
-              {view === "settings"
-                ? "Control AURA."
-                : view === "memory"
-                  ? "What AURA remembers."
-                  : "Good evening."}
-            </h1>
+          <div className="topbar-brand">
+            <strong>AURA-2</strong>
+            <span>Personal computer assistant</span>
           </div>
           <StatusPill status={status} />
         </header>
 
-        {view === "home" ? (
-          <>
-            <section className="hero">
-              <div className={`aura-presence ${status.toLowerCase()}`}>
-                <AuraMark />
-              </div>
+        <div className={`workspace-content ${view === "chat" ? "chat-workspace" : ""}`}>
+          {view === "chat" && (
+            <section className="chat-view">
+              <div className="chat-welcome">
+                <div className={`aura-presence ${status.toLowerCase()}`}>
+                  <AuraMark />
+                </div>
 
-              <p className="hero-kicker">YOUR PC. NOW IT UNDERSTANDS YOU.</p>
-              <h2>What do you want to do?</h2>
+                <span className="chat-eyebrow">AURA-2 BY UNTOZ</span>
+                <h1>How can I help?</h1>
+                <p>AI that lives on your computer.</p>
 
-              <form className="command-bar" onSubmit={handleSubmit}>
-                <span className="command-spark" aria-hidden="true">✦</span>
-                <input
-                  autoFocus
-                  value={command}
-                  onChange={(event) => setCommand(event.target.value)}
-                  placeholder={
-                    runtimeState.paused
-                      ? "AURA is paused…"
-                      : "Ask AURA to do something on this computer…"
-                  }
-                  aria-label="AURA command"
-                  disabled={
-                    status === "Working"
-                    || runtimeState.paused
-                    || Boolean(pendingConfirmation)
-                  }
-                />
-                <ShortcutKey>Enter</ShortcutKey>
-              </form>
+                <div className="chat-suggestions">
+                  <button
+                    type="button"
+                    onClick={() => void runQuickCommand("What app am I using?")}
+                  >
+                    <strong>Computer status</strong>
+                    <span>Understand what you are working in</span>
+                  </button>
+                  <button type="button" onClick={() => setView("create")}>
+                    <strong>Create with AURA</strong>
+                    <span>Images now, video-ready architecture</span>
+                  </button>
+                  <button type="button" onClick={() => setView("director")}>
+                    <strong>Director Mode</strong>
+                    <span>OBS production and saved presets</span>
+                  </button>
+                </div>
 
-              {pendingConfirmation && (
-                <ConfirmationCard
-                  confirmation={pendingConfirmation}
-                  onAllow={(id) => void approveConfirmation(id)}
-                  onCancel={(id) => void cancelConfirmation(id)}
-                />
-              )}
-
-              <div className="shortcut-hint">
-                Press <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
-                <ShortcutKey>Space</ShortcutKey> from anywhere
-              </div>
-            </section>
-
-            <section className="lower-grid">
-              <Surface className="activity-card">
-                <SectionLabel
-                  trailing={
-                    <span
-                      className={bridgeError ? "activity-error-dot" : "activity-live-dot"}
-                      aria-label={bridgeError ? "Bridge error" : "Bridge connected"}
-                    />
-                  }
-                >
-                  Current activity
-                </SectionLabel>
-                <p>{activity}</p>
-                <div className="current-app-context">
+                <div className="chat-context-strip">
                   <div>
                     <span>Current app</span>
                     <strong>{currentApp?.appName ?? "Detecting…"}</strong>
                   </div>
-                  <div className="current-app-meta">
-                    <span>{currentApp?.processName ?? "—"}</span>
-                    <small>
-                      {runtimeState.paused
-                        ? "Awareness paused"
-                        : currentApp?.contextSource === "lastExternal"
-                          ? "Last external context"
-                          : currentApp
-                            ? "Foreground"
-                            : "Waiting for Windows"}
-                    </small>
+                  <div>
+                    <span>Activity</span>
+                    <strong>{activity}</strong>
                   </div>
                 </div>
-              </Surface>
+              </div>
 
-              <Surface className="modules-card">
-                <SectionLabel trailing={<span>{modules.length} modules</span>}>
-                  AURA modules
-                </SectionLabel>
-                <div className="module-grid">
-                  {modules.map((module) => (
-                    <div className="module-tile" key={module.name}>
-                      <span className="module-glyph" aria-hidden="true">{module.glyph}</span>
-                      <div className="module-copy">
-                        <strong>{module.name}</strong>
-                        <span>{module.description}</span>
-                      </div>
-                      <small>{module.milestone}</small>
-                    </div>
-                  ))}
-                </div>
-              </Surface>
+              <div className="chat-composer-area">
+                {pendingConfirmation && (
+                  <ConfirmationCard
+                    confirmation={pendingConfirmation}
+                    onAllow={(id) => void approveConfirmation(id)}
+                    onCancel={(id) => void cancelConfirmation(id)}
+                  />
+                )}
+
+                <form className="aura-composer" onSubmit={handleSubmit}>
+                  <input
+                    autoFocus
+                    value={command}
+                    onChange={(event) => setCommand(event.target.value)}
+                    placeholder={
+                      runtimeState.paused
+                        ? "AURA is paused…"
+                        : "Message AURA…"
+                    }
+                    aria-label="Message AURA"
+                    disabled={
+                      status === "Working"
+                      || runtimeState.paused
+                      || Boolean(pendingConfirmation)
+                    }
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Send"
+                    disabled={
+                      !command.trim()
+                      || status === "Working"
+                      || runtimeState.paused
+                      || Boolean(pendingConfirmation)
+                    }
+                  >
+                    ↑
+                  </button>
+                </form>
+
+                <p className="composer-meta">
+                  <span className="local-dot" />
+                  Local-first · Private by design · {appStatus?.version ?? "AURA-2"}
+                  <span className="composer-shortcut">
+                    <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
+                    <ShortcutKey>Space</ShortcutKey>
+                  </span>
+                </p>
+              </div>
             </section>
-          </>
-        ) : view === "memory" ? (
-          <Memory
-            memory={memory}
-            onRefresh={refreshMemories}
-            onCreate={createMemoryControl}
-            onDelete={deleteMemoryControl}
-          />
-        ) : (
-          <Settings
-            activeSection={settingsSection}
-            onSectionChange={setSettingsSection}
-            appStatus={appStatus}
-            runtimeState={runtimeState}
-            onPausedChange={setPaused}
-            onBackgroundChange={setBackgroundMode}
-            onAutostartChange={setAutostart}
-            permissionPolicy={permissionPolicy}
-            onPermissionChange={setPermission}
-            onResetPermissions={resetPermissions}
-            obsConnection={obsConnection}
-            obsRuntime={obsRuntime}
-            obsScenes={obsScenes}
-            obsSources={obsSources}
-            obsAudio={obsAudio}
-            obsHealth={obsHealth}
-            directorPresets={directorPresets}
-            directorLastRun={directorLastRun}
-            onObsConnect={connectObsControl}
-            onObsDisconnect={disconnectObsControl}
-            onObsRefresh={refreshObsRuntime}
-            onObsScenesRefresh={refreshObsScenes}
-            onObsSourcesRefresh={refreshObsSources}
-            onObsAudioRefresh={refreshObsAudio}
-            onObsHealthRefresh={refreshObsHealth}
-            onDirectorPresetsRefresh={refreshDirectorPresets}
-            onDirectorPresetSave={saveDirectorPresetControl}
-            onDirectorPresetDelete={deleteDirectorPresetControl}
-            onDirectorPresetRun={runDirectorPresetControl}
-            onObsProgramSceneChange={switchObsProgramScene}
-            onObsPreviewSceneChange={switchObsPreviewScene}
-            onObsRecordingAction={controlObsRecording}
-            onObsStreamingAction={controlObsStreaming}
-            onObsSourceVisibilityChange={controlObsSourceVisibility}
-            onObsAudioMuteChange={controlObsAudioMute}
-            onObsAudioVolumeChange={controlObsAudioVolume}
-          />
-        )}
+          )}
+
+          {view === "memory" && (
+            <Memory
+              memory={memory}
+              onRefresh={refreshMemories}
+              onCreate={createMemoryControl}
+              onDelete={deleteMemoryControl}
+            />
+          )}
+
+          {view === "models" && <Models />}
+
+          {view === "create" && <Create />}
+
+          {view === "computer" && (
+            <Computer
+              currentApp={currentApp}
+              runtimeState={runtimeState}
+              obsConnection={obsConnection}
+              obsRuntime={obsRuntime}
+              onCommand={runQuickCommand}
+            />
+          )}
+
+          {view === "tasks" && <Tasks />}
+
+          {view === "director" && (
+            <DirectorMode
+              connection={obsConnection}
+              runtime={obsRuntime}
+              health={obsHealth}
+              presets={directorPresets}
+              lastRun={directorLastRun}
+              onRun={runDirectorPresetControl}
+              onOpenSettings={() => openSettings("integrations")}
+            />
+          )}
+
+          {view === "settings" && (
+            <Settings
+              activeSection={settingsSection}
+              onSectionChange={setSettingsSection}
+              appStatus={appStatus}
+              runtimeState={runtimeState}
+              onPausedChange={setPaused}
+              onBackgroundChange={setBackgroundMode}
+              onAutostartChange={setAutostart}
+              permissionPolicy={permissionPolicy}
+              onPermissionChange={setPermission}
+              onResetPermissions={resetPermissions}
+              obsConnection={obsConnection}
+              obsRuntime={obsRuntime}
+              obsScenes={obsScenes}
+              obsSources={obsSources}
+              obsAudio={obsAudio}
+              obsHealth={obsHealth}
+              directorPresets={directorPresets}
+              directorLastRun={directorLastRun}
+              onObsConnect={connectObsControl}
+              onObsDisconnect={disconnectObsControl}
+              onObsRefresh={refreshObsRuntime}
+              onObsScenesRefresh={refreshObsScenes}
+              onObsSourcesRefresh={refreshObsSources}
+              onObsAudioRefresh={refreshObsAudio}
+              onObsHealthRefresh={refreshObsHealth}
+              onDirectorPresetsRefresh={refreshDirectorPresets}
+              onDirectorPresetSave={saveDirectorPresetControl}
+              onDirectorPresetDelete={deleteDirectorPresetControl}
+              onDirectorPresetRun={runDirectorPresetControl}
+              onObsProgramSceneChange={switchObsProgramScene}
+              onObsPreviewSceneChange={switchObsPreviewScene}
+              onObsRecordingAction={controlObsRecording}
+              onObsStreamingAction={controlObsStreaming}
+              onObsSourceVisibilityChange={controlObsSourceVisibility}
+              onObsAudioMuteChange={controlObsAudioMute}
+              onObsAudioVolumeChange={controlObsAudioVolume}
+              theme={theme}
+              onThemeChange={changeTheme}
+            />
+          )}
+        </div>
       </section>
     </main>
   );
