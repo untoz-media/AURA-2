@@ -60,6 +60,7 @@ function App() {
     routineLastRun,
     projectMemory,
     audioInput,
+    voiceCapture,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -590,6 +591,7 @@ function App() {
               modelRuntimeStatus={modelRuntimeStatus}
               managedRuntimeStatus={managedRuntimeStatus}
               audioInput={audioInput}
+              voiceCapture={voiceCapture}
               onAudioRefresh={refreshAudioInput}
               onAudioSelect={selectAudioInput}
               onAudioTestStart={startAudioTest}

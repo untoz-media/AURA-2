@@ -48,6 +48,7 @@ import type {
   ProjectMemorySnapshot,
   SaveProjectRequest,
   AudioInputSnapshot,
+  VoiceCaptureEvent,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -57,6 +58,7 @@ export const AURA_EVENTS = {
   lifecycle: "aura:lifecycle-event",
   modelDownload: "aura:model-download",
   managedRuntime: "aura:managed-runtime",
+  voiceCapture: "aura:voice-capture",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -445,4 +447,14 @@ export async function startAudioInputTest(): Promise<AudioInputSnapshot> {
 
 export async function stopAudioInputTest(): Promise<AudioInputSnapshot> {
   return invoke<AudioInputSnapshot>("stop_audio_input_test");
+}
+
+
+export async function listenToVoiceCapture(
+  handler: (event: VoiceCaptureEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<VoiceCaptureEvent>(
+    AURA_EVENTS.voiceCapture,
+    ({ payload }) => handler(payload),
+  );
 }
