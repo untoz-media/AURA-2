@@ -10,6 +10,7 @@ import {
   getObsAudioInputs,
   getObsProductionHealth,
   getDirectorPresets,
+  getMemories,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -34,6 +35,8 @@ import {
   saveDirectorPreset,
   deleteDirectorPreset,
   runDirectorPreset,
+  createMemory,
+  deleteMemory,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -62,6 +65,8 @@ import type {
   DirectorPreset,
   SaveDirectorPresetRequest,
   DirectorPresetRunResult,
+  MemorySnapshot,
+  MemoryCreateResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -94,6 +99,11 @@ const DEFAULT_OBS_AUDIO: ObsAudioInputList = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_MEMORY: MemorySnapshot = {
+  records: [],
+  refreshedAtMs: 0,
+};
+
 export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
@@ -116,6 +126,7 @@ export function useAuraBridge() {
   const [directorPresets, setDirectorPresets] = useState<DirectorPreset[]>([]);
   const [directorLastRun, setDirectorLastRun] =
     useState<DirectorPresetRunResult | null>(null);
+  const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -138,14 +149,16 @@ export function useAuraBridge() {
       getPermissionPolicy(),
       getObsConnectionState(),
       getDirectorPresets(),
+      getMemories(),
     ])
-      .then(([app, runtime, permissions, obs, presets]) => {
+      .then(([app, runtime, permissions, obs, presets, memorySnapshot]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
         setObsConnection(obs);
         setDirectorPresets(presets);
+        setMemory(memorySnapshot);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -170,6 +183,16 @@ export function useAuraBridge() {
         setStatus(event.status);
         setActivity(event.message);
         setBridgeError(null);
+
+        if (event.kind === "command.completed") {
+          void getMemories()
+            .then((snapshot) => {
+              if (!cancelled) setMemory(snapshot);
+            })
+            .catch(() => {
+              // Memory refresh is supplementary to the command result.
+            });
+        }
 
         if (
           event.kind === "command.awaiting_confirmation"
@@ -322,6 +345,58 @@ export function useAuraBridge() {
     return health;
   }, [obsConnection.connected]);
 
+
+  const refreshMemories = useCallback(async () => {
+    const snapshot = await getMemories();
+    setMemory(snapshot);
+    return snapshot;
+  }, []);
+
+  const createMemoryControl = useCallback(async (
+    content: string,
+  ): Promise<MemoryCreateResult> => {
+    try {
+      setBridgeError(null);
+      const result = await createMemory({ content });
+      const snapshot = await getMemories();
+      setMemory(snapshot);
+      setActivity(
+        result.created
+          ? `Remembered: ${result.record.content}`
+          : `Memory already existed and was refreshed: ${result.record.content}`,
+      );
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "memory.create_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const deleteMemoryControl = useCallback(async (
+    memoryId: string,
+  ) => {
+    try {
+      setBridgeError(null);
+      const removed = await deleteMemory(memoryId);
+      const snapshot = await getMemories();
+      setMemory(snapshot);
+      setActivity(`Forgot: ${removed.content}`);
+      return removed;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "memory.delete_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
 
   const refreshDirectorPresets = useCallback(async () => {
     const presets = await getDirectorPresets();
@@ -981,6 +1056,7 @@ export function useAuraBridge() {
     obsHealth,
     directorPresets,
     directorLastRun,
+    memory,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -997,6 +1073,9 @@ export function useAuraBridge() {
     refreshObsAudio,
     refreshObsHealth,
     refreshDirectorPresets,
+    refreshMemories,
+    createMemoryControl,
+    deleteMemoryControl,
     saveDirectorPresetControl,
     deleteDirectorPresetControl,
     runDirectorPresetControl,
