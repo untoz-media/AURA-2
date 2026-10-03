@@ -277,6 +277,10 @@ impl AudioInputManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take();
         self.level_milli.store(0, Ordering::Relaxed);
+        *self
+            .stream_metadata
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 
         self.snapshot().unwrap_or(AudioInputSnapshot {
             devices: Vec::new(),
