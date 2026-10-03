@@ -2,6 +2,7 @@ import type {
   CurrentAppInfo,
   ObsConnectionState,
   ObsRuntimeState,
+  RecentFilesSnapshot,
   RuntimeState,
 } from "./bridge/types";
 import "./feature-pages.css";
@@ -11,6 +12,8 @@ type Props = {
   runtimeState: RuntimeState;
   obsConnection: ObsConnectionState;
   obsRuntime: ObsRuntimeState;
+  recentFiles: RecentFilesSnapshot;
+  onRecentFilesRefresh: () => Promise<RecentFilesSnapshot>;
   onCommand: (command: string) => Promise<void>;
 };
 
@@ -19,11 +22,14 @@ export default function Computer({
   runtimeState,
   obsConnection,
   obsRuntime,
+  recentFiles,
+  onRecentFilesRefresh,
   onCommand,
 }: Props) {
   const actions = [
     { label: "Show windows", command: "Show windows" },
     { label: "Current app", command: "What app am I using?" },
+    { label: "Recent files", command: "Recent files" },
     { label: "Production health", command: "Check production health" },
     { label: "List OBS scenes", command: "List OBS scenes" },
   ];
@@ -45,7 +51,7 @@ export default function Computer({
         <article className="computer-context-card">
           <span>Current app</span>
           <strong>{currentApp?.appName ?? "Detecting…"}</strong>
-          <small>{currentApp?.processName ?? "Waiting for Windows"}</small>
+          <small>{currentApp?.windowTitle ?? currentApp?.processName ?? "Waiting for Windows"}</small>
           <em>
             {runtimeState.paused
               ? "Awareness paused"
@@ -82,6 +88,43 @@ export default function Computer({
                 : "Idle"}
           </em>
         </article>
+      </div>
+
+      <div className="feature-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">RECENT CONTEXT</span>
+            <strong>Windows Recent Items, without scanning your drives.</strong>
+          </div>
+          <button
+            type="button"
+            className="feature-secondary-button"
+            onClick={() => void onRecentFilesRefresh()}
+            disabled={runtimeState.paused}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {recentFiles.items.length > 0 ? (
+          <div className="recent-files-list">
+            {recentFiles.items.map((item) => (
+              <article key={`${item.name}-${item.modifiedAtMs}`}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>Windows Recent Items</span>
+                </div>
+                <time dateTime={new Date(item.modifiedAtMs).toISOString()}>
+                  {item.modifiedAtMs > 0
+                    ? new Date(item.modifiedAtMs).toLocaleString()
+                    : "Time unavailable"}
+                </time>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="feature-empty">No recent Windows items are available.</div>
+        )}
       </div>
 
       <div className="feature-section">

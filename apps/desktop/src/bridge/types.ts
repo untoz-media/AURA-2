@@ -356,6 +356,17 @@ export type CurrentAppInfo = {
   capturedAtMs: number;
 };
 
+export type RecentFileItem = {
+  name: string;
+  modifiedAtMs: number;
+};
+
+export type RecentFilesSnapshot = {
+  items: RecentFileItem[];
+  source: "windowsRecentItems";
+  refreshedAtMs: number;
+};
+
 
 export type ModelInstallState =
   | "unavailable"

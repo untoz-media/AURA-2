@@ -318,6 +318,45 @@ fn policy_overrides_are_applied_by_router() {
 }
 
 #[test]
+fn recent_files_context_is_read_only() {
+    let policy = PermissionPolicy::default();
+
+    for command in [
+        "Recent files",
+        "What files did I use recently?",
+        "Ficheiros recentes",
+    ] {
+        assert!(matches!(
+            assert_action(
+                command,
+                &policy,
+                PermissionClass::Read,
+                PermissionDecision::Allow,
+            ),
+            ActionIntent::RecentFiles
+        ));
+    }
+}
+
+#[test]
+fn recent_files_context_respects_read_policy_override() {
+    let mut policy = PermissionPolicy::default();
+    policy
+        .set(PermissionClass::Read, PermissionDecision::Ask)
+        .unwrap();
+
+    assert!(matches!(
+        assert_action(
+            "Show recent files",
+            &policy,
+            PermissionClass::Read,
+            PermissionDecision::Ask,
+        ),
+        ActionIntent::RecentFiles
+    ));
+}
+
+#[test]
 fn active_window_context_is_read_only() {
     let policy = PermissionPolicy::default();
 

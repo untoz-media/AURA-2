@@ -36,6 +36,7 @@ import type {
   MemoryCreateResult,
   MemoryRecord,
   CurrentAppInfo,
+  RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
   ModelRuntimeStatus,
@@ -297,6 +298,10 @@ export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {
 
 export async function getCurrentAppContext(): Promise<CurrentAppInfo> {
   return invoke<CurrentAppInfo>("get_current_app_context");
+}
+
+export async function getRecentFilesContext(): Promise<RecentFilesSnapshot> {
+  return invoke<RecentFilesSnapshot>("get_recent_files_context");
 }
 
 
