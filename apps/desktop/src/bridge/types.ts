@@ -149,3 +149,12 @@ export type ObsSceneSwitchResult = {
   sceneUuid: string;
   changedAtMs: number;
 };
+
+
+export type ObsRecordingActionResult = {
+  action: "start" | "stop" | "pause" | "resume";
+  recording: boolean;
+  paused: boolean;
+  outputPath?: string;
+  changedAtMs: number;
+};
