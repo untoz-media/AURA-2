@@ -11,10 +11,15 @@ use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{summarize_windows, switch_to_app};
 use core::{
-    action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult},
+    action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
     confirmation::{
         validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
     },
+};
+use integrations::director::{
+    delete_director_preset, find_director_preset_by_id, load_director_presets,
+    preset_requires_sensitive_permission, resolve_director_preset_command, run_director_preset,
+    save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
@@ -34,7 +39,7 @@ use tauri::{
     image::Image,
     menu::{CheckMenuItem, Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, State, WindowEvent,
+    AppHandle, Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{
@@ -162,6 +167,108 @@ fn format_duration_ms(duration_ms: u64) -> String {
     let seconds = total_seconds % 60;
 
     format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
+fn should_prefer_director_preset(text: &str, base_route: &RouteResult) -> bool {
+    let normalized = text
+        .trim()
+        .trim_matches(|character: char| {
+            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
+        })
+        .to_lowercase();
+
+    let explicit_preset = [
+        "run director preset ",
+        "run preset ",
+        "execute preset ",
+        "executa o preset ",
+        "executa preset ",
+        "ativa o preset ",
+        "ativa preset ",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix));
+
+    if explicit_preset {
+        return true;
+    }
+
+    match base_route {
+        RouteResult::NoMatch | RouteResult::UnsupportedApp(_) => true,
+        RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsProgramScene(_),
+            ..
+        }) => [
+            "switch to ",
+            "focus ",
+            "go to ",
+            "vai para ",
+            "muda para ",
+            "troca para ",
+            "foca ",
+            "focar ",
+        ]
+        .iter()
+        .any(|prefix| normalized.starts_with(prefix)),
+        _ => false,
+    }
+}
+
+fn route_director_preset(
+    app: &AppHandle,
+    text: &str,
+    policy: &PermissionPolicy,
+) -> Option<RouteResult> {
+    let preset = resolve_director_preset_command(app, text)?;
+    let permission = if preset_requires_sensitive_permission(&preset) {
+        PermissionClass::Sensitive
+    } else {
+        PermissionClass::Act
+    };
+
+    Some(RouteResult::Action(RoutedAction {
+        intent: ActionIntent::DirectorPreset(preset.id),
+        permission,
+        decision: policy.decision_for(permission),
+    }))
+}
+
+#[cfg(test)]
+mod director_route_tests {
+    use super::*;
+
+    fn routed(intent: ActionIntent) -> RouteResult {
+        RouteResult::Action(RoutedAction {
+            intent,
+            permission: PermissionClass::Act,
+            decision: PermissionDecision::Allow,
+        })
+    }
+
+    #[test]
+    fn director_presets_override_only_generic_fallbacks() {
+        assert!(should_prefer_director_preset(
+            "run preset Prepare Match",
+            &RouteResult::NoMatch,
+        ));
+        assert!(should_prefer_director_preset(
+            "start show",
+            &RouteResult::UnsupportedApp("show".to_string()),
+        ));
+        assert!(should_prefer_director_preset(
+            "go to break",
+            &routed(ActionIntent::ObsProgramScene("break".to_string())),
+        ));
+
+        assert!(!should_prefer_director_preset(
+            "Mute",
+            &routed(ActionIntent::Media(MediaAction::Mute)),
+        ));
+        assert!(!should_prefer_director_preset(
+            "switch scene to Camera 2",
+            &routed(ActionIntent::ObsProgramScene("Camera 2".to_string())),
+        ));
+    }
 }
 
 fn next_command_id() -> String {
@@ -440,7 +547,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M003 Complete · Computer Control",
+        stage: "M004 Complete · OBS Control / Director Mode",
         local_first: true,
     }
 }
@@ -747,7 +854,15 @@ fn process_user_command(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
-    match route_command(&text, &policy) {
+    let base_route = route_command(&text, &policy);
+    let director_route = route_director_preset(&app, &text, &policy);
+
+    let routed = match director_route {
+        Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+        _ => base_route,
+    };
+
+    match routed {
         RouteResult::Action(action) => {
             let decision = if let Some(permission) = approved_permission {
                 if permission != action.permission {
@@ -781,6 +896,7 @@ fn process_user_command(
                 let worker_id = id.clone();
                 let worker_text = text.clone();
                 let worker_source = source.clone();
+                let worker_permission = action.permission;
 
                 thread::spawn(move || {
                     match action.intent {
@@ -1616,7 +1732,129 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::ObsProductionHealth => {
+                        ActionIntent::DirectorPreset(preset_id) => {
+                            let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id) else {
+                                let message = "Director Mode preset no longer exists.".to_string();
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "director.preset_missing",
+                                        message,
+                                    },
+                                );
+                                return;
+                            };
+
+                            if preset_requires_sensitive_permission(&preset)
+                                && worker_permission != PermissionClass::Sensitive
+                            {
+                                let message = "Preset changed to require Sensitive permission. Run the command again so AURA can request confirmation.".to_string();
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "director.permission_changed",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Running Director Mode preset {}…",
+                                        preset.name
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            let result = tauri::async_runtime::block_on(async {
+                                let obs = worker_app.state::<ObsController>();
+                                run_director_preset(&obs, &preset).await
+                            });
+
+                            if result.success {
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "Director Mode preset {} completed: {}/{} steps.",
+                                            result.preset_name,
+                                            result.completed_steps,
+                                            result.total_steps
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                            } else {
+                                let message = format!(
+                                    "Director Mode preset {} stopped at step {}: {}",
+                                    result.preset_name,
+                                    result.failed_step.map(|step| step + 1).unwrap_or(0),
+                                    result.error.as_deref().unwrap_or("Unknown preset error.")
+                                );
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "director.preset_failed",
+                                        message,
+                                    },
+                                );
+                            }
+                        }
+                    ActionIntent::ObsProductionHealth => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -2157,6 +2395,15 @@ fn process_user_command(
                         if *enabled { "Showing" } else { "Hiding" },
                         source_name
                     ),
+                    ActionIntent::DirectorPreset(preset_id) => {
+                        let preset_name = find_director_preset_by_id(&app, preset_id)
+                            .map(|preset| preset.name)
+                            .unwrap_or_else(|| preset_id.clone());
+                        format!(
+                            "Running Director Mode preset {} requires confirmation under the current permission policy.",
+                            preset_name
+                        )
+                    }
                     ActionIntent::ObsProductionHealth => {
                         "Reading OBS production health requires confirmation under the current permission policy."
                             .to_string()
@@ -2370,7 +2617,7 @@ fn process_user_command(
                     kind: "command.unhandled",
                     status: AuraRuntimeStatus::Idle,
                     message:
-                        "No deterministic action matched yet. AURA currently supports Windows computer control plus OBS scenes, sources, audio, recording and streaming controls."
+                        "No deterministic action matched yet. AURA currently supports Windows computer control, OBS production control and saved Director Mode presets."
                             .to_string(),
                     command: Some(text.clone()),
                     timestamp_ms: unix_timestamp_ms(),
@@ -2384,6 +2631,39 @@ fn process_user_command(
         accepted: true,
         status: AuraRuntimeStatus::Thinking,
     })
+}
+
+#[tauri::command]
+fn get_director_presets(app: AppHandle) -> Vec<DirectorPreset> {
+    load_director_presets(&app)
+}
+
+#[tauri::command]
+fn save_director_preset_command(
+    app: AppHandle,
+    request: SaveDirectorPresetRequest,
+) -> Result<DirectorPreset, String> {
+    save_director_preset(&app, request)
+}
+
+#[tauri::command]
+fn delete_director_preset_command(
+    app: AppHandle,
+    preset_id: String,
+) -> Result<(), String> {
+    delete_director_preset(&app, &preset_id)
+}
+
+#[tauri::command]
+async fn run_director_preset_command(
+    app: AppHandle,
+    preset_id: String,
+    obs: State<'_, ObsController>,
+) -> Result<DirectorPresetRunResult, String> {
+    let preset = find_director_preset_by_id(&app, &preset_id)
+        .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+
+    Ok(run_director_preset(&obs, &preset).await)
 }
 
 #[tauri::command]
@@ -2680,6 +2960,10 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            get_director_presets,
+            save_director_preset_command,
+            delete_director_preset_command,
+            run_director_preset_command,
             open_main_window,
             hide_overlay,
             get_obs_connection_state,

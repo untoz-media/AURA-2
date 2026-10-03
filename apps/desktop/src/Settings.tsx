@@ -17,8 +17,12 @@ import type {
   ObsAudioInputList,
   ObsAudioControlResult,
   ObsProductionHealth,
+  DirectorPreset,
+  DirectorPresetRunResult,
+  SaveDirectorPresetRequest,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
+import DirectorPresets from "./DirectorPresets";
 
 type SettingsSection =
   | "general"
@@ -51,6 +55,8 @@ type Props = {
   obsSources: ObsSourceItemList;
   obsAudio: ObsAudioInputList;
   obsHealth: ObsProductionHealth | null;
+  directorPresets: DirectorPreset[];
+  directorLastRun: DirectorPresetRunResult | null;
   onObsConnect: (request: ObsConnectRequest) => Promise<ObsConnectionState>;
   onObsDisconnect: () => Promise<ObsConnectionState>;
   onObsRefresh: () => Promise<ObsRuntimeState>;
@@ -58,6 +64,14 @@ type Props = {
   onObsSourcesRefresh: () => Promise<ObsSourceItemList>;
   onObsAudioRefresh: () => Promise<ObsAudioInputList>;
   onObsHealthRefresh: () => Promise<ObsProductionHealth | null>;
+  onDirectorPresetsRefresh: () => Promise<DirectorPreset[]>;
+  onDirectorPresetSave: (
+    request: SaveDirectorPresetRequest,
+  ) => Promise<DirectorPreset>;
+  onDirectorPresetDelete: (presetId: string) => Promise<void>;
+  onDirectorPresetRun: (
+    presetId: string,
+  ) => Promise<DirectorPresetRunResult>;
   onObsProgramSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsPreviewSceneChange: (sceneUuid: string) => Promise<ObsSceneSwitchResult>;
   onObsRecordingAction: (
@@ -207,6 +221,8 @@ export default function Settings({
   obsSources,
   obsAudio,
   obsHealth,
+  directorPresets,
+  directorLastRun,
   onObsConnect,
   onObsDisconnect,
   onObsRefresh,
@@ -214,6 +230,10 @@ export default function Settings({
   onObsSourcesRefresh,
   onObsAudioRefresh,
   onObsHealthRefresh,
+  onDirectorPresetsRefresh,
+  onDirectorPresetSave,
+  onDirectorPresetDelete,
+  onDirectorPresetRun,
   onObsProgramSceneChange,
   onObsPreviewSceneChange,
   onObsRecordingAction,
@@ -1335,6 +1355,19 @@ export default function Settings({
                   )}
                 </div>
               )}
+
+              <DirectorPresets
+                connected={obsConnection.connected}
+                scenes={obsScenes}
+                sources={obsSources}
+                audio={obsAudio}
+                presets={directorPresets}
+                lastRun={directorLastRun}
+                onRefresh={onDirectorPresetsRefresh}
+                onSave={onDirectorPresetSave}
+                onDelete={onDirectorPresetDelete}
+                onRun={onDirectorPresetRun}
+              />
             </Surface>
 
             <Surface className="settings-card">

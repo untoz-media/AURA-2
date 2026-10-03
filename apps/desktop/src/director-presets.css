@@ -1,0 +1,426 @@
+.director-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--aura-border-1);
+}
+
+.director-heading,
+.director-editor-heading,
+.director-last-run-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.director-heading > div:first-child,
+.director-editor-heading > div:first-child,
+.director-last-run-head > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.director-kicker {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+}
+
+.director-heading strong,
+.director-editor-heading strong,
+.director-last-run-head strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.director-heading p,
+.director-preset-card p,
+.director-builder-note {
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.director-heading-actions,
+.director-card-actions,
+.director-editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.director-primary {
+  border-color: rgba(110, 159, 255, 0.3);
+}
+
+.director-danger {
+  border-color: rgba(255, 112, 112, 0.2);
+}
+
+.director-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.director-preset-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 12px;
+  background: var(--aura-surface-1);
+}
+
+.director-preset-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.director-preset-card-head > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.director-preset-card-head strong {
+  overflow: hidden;
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-preset-card-head span,
+.director-editor-heading span,
+.director-last-run-head span,
+.director-editor-footer > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.director-tags,
+.director-aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.director-tags {
+  justify-content: flex-end;
+}
+
+.director-tag,
+.director-aliases span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: var(--radius-pill);
+  color: var(--aura-text-4);
+  background: var(--aura-surface-2);
+  font-size: var(--text-2xs);
+}
+
+.director-tag.sensitive {
+  color: #ffd097;
+  border-color: rgba(255, 188, 102, 0.2);
+  background: rgba(255, 188, 102, 0.06);
+}
+
+.director-preview-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-2);
+}
+
+.director-preview-steps span {
+  overflow: hidden;
+  color: var(--aura-text-3);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-card-actions {
+  margin-top: auto;
+}
+
+.director-empty {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px dashed var(--aura-border-1);
+  border-radius: 10px;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.director-empty.compact {
+  margin-top: 0;
+  padding: 12px;
+}
+
+.director-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 12px;
+  background: var(--aura-surface-1);
+}
+
+.director-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.director-description-field {
+  grid-column: 1 / -1;
+}
+
+.director-action-builder {
+  display: grid;
+  grid-template-columns: 150px minmax(180px, 1fr) 120px auto;
+  align-items: end;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-2);
+}
+
+.director-action-builder select {
+  min-height: 36px;
+  width: 100%;
+  padding: 0 9px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 8px;
+  color: var(--aura-text-2);
+  background: var(--aura-surface-1);
+}
+
+.director-builder-target {
+  min-width: 0;
+}
+
+.director-add-step {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.director-builder-note {
+  padding: 0 2px;
+}
+
+.director-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.director-action-row {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-2);
+}
+
+.director-step-number {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.director-action-row strong {
+  overflow: hidden;
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-action-row-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.director-action-row-buttons button {
+  min-width: 28px;
+  min-height: 28px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 7px;
+  color: var(--aura-text-3);
+  background: var(--aura-surface-1);
+  cursor: pointer;
+}
+
+.director-action-row-buttons button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.director-editor-footer {
+  justify-content: space-between;
+}
+
+.director-last-run {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 12px;
+  background: var(--aura-surface-1);
+}
+
+.director-run-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-2xs);
+}
+
+.director-run-status.success {
+  color: #9be8bb;
+  border-color: rgba(99, 223, 154, 0.2);
+  background: rgba(99, 223, 154, 0.07);
+}
+
+.director-run-status.failed {
+  color: #ff9f9f;
+  border-color: rgba(255, 112, 112, 0.24);
+  background: rgba(255, 112, 112, 0.07);
+}
+
+.director-run-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.director-run-steps > div {
+  display: grid;
+  grid-template-columns: 30px minmax(130px, 0.7fr) auto minmax(160px, 1.3fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 8px;
+  background: var(--aura-surface-2);
+}
+
+.director-run-steps span,
+.director-run-steps p,
+.director-run-steps em {
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.director-run-steps strong {
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+  font-weight: 580;
+}
+
+.director-run-steps em {
+  justify-self: start;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.director-run-steps em.applied {
+  color: #9be8bb;
+}
+
+.director-run-steps em.skipped {
+  color: #aab0c3;
+}
+
+.director-run-steps em.failed {
+  color: #ff9f9f;
+}
+
+.director-error {
+  margin: 10px 0 0;
+  color: #ffabab;
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1050px) {
+  .director-preset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .director-action-builder {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .director-add-step {
+    align-self: end;
+  }
+}
+
+@media (max-width: 760px) {
+  .director-heading,
+  .director-editor-heading,
+  .director-last-run-head {
+    flex-direction: column;
+  }
+
+  .director-heading-actions,
+  .director-card-actions {
+    flex-wrap: wrap;
+  }
+
+  .director-fields,
+  .director-action-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .director-description-field {
+    grid-column: auto;
+  }
+
+  .director-run-steps > div {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+  }
+
+  .director-run-steps p {
+    grid-column: 2 / -1;
+  }
+}

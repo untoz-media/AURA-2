@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M004 OBS Control / Director Mode in progress · AURA-2 0.3.0-alpha.1 · pre-Beta
+> **Current stage:** M004 OBS Control / Director Mode complete · AURA-2 0.4.0-alpha.1 · pre-Beta
 
 ---
 
@@ -124,8 +124,8 @@ Native Windows app, Core bridge, tray, Overlay, Settings, background mode, autos
 ### M003 — Computer Control ✅
 Deterministic Windows control for applications, windows, keyboard, mouse, audio/media and system actions, with persistent permissions and one-shot confirmations.
 
-### M004 — OBS Integration 🚧
-OBS WebSocket v5 connection, live state detection, scene/source/audio control, recording/streaming controls, live duration and production health monitoring are implemented; Director Mode presets are next.
+### M004 — OBS Integration ✅
+OBS WebSocket v5 connection, live state detection, scene/source/audio control, recording/streaming control, live duration, production health monitoring and persistent Director Mode presets are implemented.
 
 ### M005 — Memory & Context
 Persistent local memory, app context and system awareness.
@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M003 — Computer Control** and has started **M004 — OBS Control / Director Mode** with the OBS WebSocket connection foundation.
+AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1**. The next major development block is **M005 — Memory & Context**.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 

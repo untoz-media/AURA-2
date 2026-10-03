@@ -39,6 +39,8 @@ function App() {
     obsSources,
     obsAudio,
     obsHealth,
+    directorPresets,
+    directorLastRun,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -54,6 +56,10 @@ function App() {
     refreshObsSources,
     refreshObsAudio,
     refreshObsHealth,
+    refreshDirectorPresets,
+    saveDirectorPresetControl,
+    deleteDirectorPresetControl,
+    runDirectorPresetControl,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
@@ -248,6 +254,8 @@ function App() {
             obsSources={obsSources}
             obsAudio={obsAudio}
             obsHealth={obsHealth}
+            directorPresets={directorPresets}
+            directorLastRun={directorLastRun}
             onObsConnect={connectObsControl}
             onObsDisconnect={disconnectObsControl}
             onObsRefresh={refreshObsRuntime}
@@ -255,6 +263,10 @@ function App() {
             onObsSourcesRefresh={refreshObsSources}
             onObsAudioRefresh={refreshObsAudio}
             onObsHealthRefresh={refreshObsHealth}
+            onDirectorPresetsRefresh={refreshDirectorPresets}
+            onDirectorPresetSave={saveDirectorPresetControl}
+            onDirectorPresetDelete={deleteDirectorPresetControl}
+            onDirectorPresetRun={runDirectorPresetControl}
             onObsProgramSceneChange={switchObsProgramScene}
             onObsPreviewSceneChange={switchObsPreviewScene}
             onObsRecordingAction={controlObsRecording}

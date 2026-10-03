@@ -45,7 +45,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M004 — OBS Control / Director Mode
 
-**Status: In progress**
+**Status: Complete — AURA-2 0.4.0-alpha.1**
 
 - [x] **M004.1** — OBS WebSocket connection
 - [x] **M004.2** — Detect OBS state
@@ -57,7 +57,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M004.8** — Control source visibility
 - [x] **M004.9** — Control audio levels
 - [x] **M004.10** — Production health checks
-- [ ] **M004.11** — Director Mode presets
+- [x] **M004.11** — Director Mode presets
 
 ## M005 — Memory & Context
 

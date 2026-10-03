@@ -9,6 +9,7 @@ import {
   getObsSourceItems,
   getObsAudioInputs,
   getObsProductionHealth,
+  getDirectorPresets,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -30,6 +31,9 @@ import {
   setObsSourceVisibility,
   setObsAudioMuted,
   setObsAudioVolume,
+  saveDirectorPreset,
+  deleteDirectorPreset,
+  runDirectorPreset,
   submitAuraCommand,
 } from "./aura";
 import type {
@@ -55,6 +59,9 @@ import type {
   ObsAudioInputList,
   ObsAudioControlResult,
   ObsProductionHealth,
+  DirectorPreset,
+  SaveDirectorPresetRequest,
+  DirectorPresetRunResult,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -106,6 +113,9 @@ export function useAuraBridge() {
   const [obsSources, setObsSources] = useState<ObsSourceItemList>(DEFAULT_OBS_SOURCES);
   const [obsAudio, setObsAudio] = useState<ObsAudioInputList>(DEFAULT_OBS_AUDIO);
   const [obsHealth, setObsHealth] = useState<ObsProductionHealth | null>(null);
+  const [directorPresets, setDirectorPresets] = useState<DirectorPreset[]>([]);
+  const [directorLastRun, setDirectorLastRun] =
+    useState<DirectorPresetRunResult | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -122,13 +132,20 @@ export function useAuraBridge() {
     let cleanupCore: (() => void) | undefined;
     let cleanupLifecycle: (() => void) | undefined;
 
-    Promise.all([getAppStatus(), getRuntimeState(), getPermissionPolicy(), getObsConnectionState()])
-      .then(([app, runtime, permissions, obs]) => {
+    Promise.all([
+      getAppStatus(),
+      getRuntimeState(),
+      getPermissionPolicy(),
+      getObsConnectionState(),
+      getDirectorPresets(),
+    ])
+      .then(([app, runtime, permissions, obs, presets]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
         setObsConnection(obs);
+        setDirectorPresets(presets);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -304,6 +321,105 @@ export function useAuraBridge() {
     setObsHealth(health);
     return health;
   }, [obsConnection.connected]);
+
+
+  const refreshDirectorPresets = useCallback(async () => {
+    const presets = await getDirectorPresets();
+    setDirectorPresets(presets);
+    return presets;
+  }, []);
+
+  const saveDirectorPresetControl = useCallback(async (
+    request: SaveDirectorPresetRequest,
+  ): Promise<DirectorPreset> => {
+    try {
+      setBridgeError(null);
+      const preset = await saveDirectorPreset(request);
+      const presets = await getDirectorPresets();
+      setDirectorPresets(presets);
+      setActivity(`Director Mode preset ${preset.name} saved.`);
+      return preset;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "director.preset_save_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const deleteDirectorPresetControl = useCallback(async (
+    presetId: string,
+  ): Promise<void> => {
+    try {
+      setBridgeError(null);
+      await deleteDirectorPreset(presetId);
+      const presets = await getDirectorPresets();
+      setDirectorPresets(presets);
+      setDirectorLastRun((current) =>
+        current?.presetId === presetId ? null : current,
+      );
+      setActivity("Director Mode preset deleted.");
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "director.preset_delete_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const runDirectorPresetControl = useCallback(async (
+    presetId: string,
+  ): Promise<DirectorPresetRunResult> => {
+    try {
+      setBridgeError(null);
+      const result = await runDirectorPreset(presetId);
+      setDirectorLastRun(result);
+
+      const refreshes = await Promise.allSettled([
+        getObsRuntimeState(),
+        getObsScenes(),
+        getObsSourceItems(),
+        getObsAudioInputs(),
+        getObsProductionHealth(),
+      ]);
+
+      const [runtime, scenes, sources, audio, health] = refreshes;
+      if (runtime.status === "fulfilled") setObsRuntime(runtime.value);
+      if (scenes.status === "fulfilled") setObsScenes(scenes.value);
+      if (sources.status === "fulfilled") setObsSources(sources.value);
+      if (audio.status === "fulfilled") setObsAudio(audio.value);
+      if (health.status === "fulfilled") setObsHealth(health.value);
+
+      if (result.success) {
+        setActivity(
+          `Director Mode preset ${result.presetName} completed: ${result.completedSteps}/${result.totalSteps} steps.`,
+        );
+      } else {
+        const message = result.error ?? "Director Mode preset failed.";
+        setBridgeError({
+          code: "director.preset_failed",
+          message,
+        });
+        setActivity(message);
+      }
+
+      return result;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "director.preset_run_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
 
 
   const switchObsProgramScene = useCallback(async (
@@ -863,6 +979,8 @@ export function useAuraBridge() {
     obsSources,
     obsAudio,
     obsHealth,
+    directorPresets,
+    directorLastRun,
     pendingConfirmation,
     bridgeError,
     submitCommand,
@@ -878,6 +996,10 @@ export function useAuraBridge() {
     refreshObsSources,
     refreshObsAudio,
     refreshObsHealth,
+    refreshDirectorPresets,
+    saveDirectorPresetControl,
+    deleteDirectorPresetControl,
+    runDirectorPresetControl,
     switchObsProgramScene,
     switchObsPreviewScene,
     controlObsRecording,
