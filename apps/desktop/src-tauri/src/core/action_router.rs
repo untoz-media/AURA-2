@@ -15,6 +15,12 @@ pub enum ObsRecordingAction {
     Resume,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObsStreamingAction {
+    Start,
+    Stop,
+}
+
 #[derive(Debug, Clone)]
 pub enum ActionIntent {
     LaunchApp(AppTarget),
@@ -29,6 +35,7 @@ pub enum ActionIntent {
     ObsProgramScene(String),
     ObsPreviewScene(String),
     ObsRecording(ObsRecordingAction),
+    ObsStreaming(ObsStreamingAction),
 }
 
 #[derive(Debug, Clone)]
@@ -457,6 +464,55 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
     }
 }
 
+fn obs_streaming_request(input: &str) -> Option<ObsStreamingAction> {
+    let normalized = normalize_command(input);
+
+    match normalized.as_str() {
+        "start streaming"
+        | "start stream"
+        | "start the stream"
+        | "go live"
+        | "go live on obs"
+        | "inicia a transmissão"
+        | "inicia a transmissao"
+        | "iniciar transmissão"
+        | "iniciar transmissao"
+        | "começa a transmissão"
+        | "comeca a transmissao"
+        | "começar a transmissão"
+        | "comecar a transmissao"
+        | "entra em direto"
+        | "começa o direto"
+        | "comeca o direto" => Some(ObsStreamingAction::Start),
+
+        "stop streaming"
+        | "stop stream"
+        | "stop the stream"
+        | "end stream"
+        | "end the stream"
+        | "stop live"
+        | "para a transmissão"
+        | "para a transmissao"
+        | "parar transmissão"
+        | "parar transmissao"
+        | "termina a transmissão"
+        | "termina a transmissao"
+        | "terminar transmissão"
+        | "terminar transmissao"
+        | "termina o direto"
+        | "terminar o direto" => Some(ObsStreamingAction::Stop),
+
+        _ => None,
+    }
+}
+
+fn permission_for_obs_streaming(action: ObsStreamingAction) -> PermissionClass {
+    match action {
+        ObsStreamingAction::Start => PermissionClass::Sensitive,
+        ObsStreamingAction::Stop => PermissionClass::Act,
+    }
+}
+
 fn obs_recording_request(input: &str) -> Option<ObsRecordingAction> {
     let normalized = normalize_command(input);
 
@@ -659,6 +715,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             }
             Err(message) => RouteResult::InvalidKeyboard(message),
         };
+    }
+
+    if let Some(action) = obs_streaming_request(input) {
+        let permission = permission_for_obs_streaming(action);
+        return RouteResult::Action(RoutedAction {
+            intent: ActionIntent::ObsStreaming(action),
+            permission,
+            decision: policy.decision_for(permission),
+        });
     }
 
     if let Some(action) = obs_recording_request(input) {
@@ -893,6 +958,38 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn routes_obs_streaming_controls_with_safe_permissions() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Go live", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsStreaming(ObsStreamingAction::Start),
+                permission: PermissionClass::Sensitive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Stop the stream", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsStreaming(ObsStreamingAction::Stop),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Entra em direto", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ObsStreaming(ObsStreamingAction::Start),
+                permission: PermissionClass::Sensitive,
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn routes_obs_recording_controls_as_act() {
