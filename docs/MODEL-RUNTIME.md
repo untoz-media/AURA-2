@@ -138,6 +138,7 @@ The runtime receives an optional per-turn context containing:
 - process image
 - active window title when Windows exposes one
 - whether the snapshot is the real foreground window or the last external window before AURA took focus
+- a bounded list of recent Windows items when available
 
 The Python worker injects this as an ephemeral system-context message for that generation only.
 
