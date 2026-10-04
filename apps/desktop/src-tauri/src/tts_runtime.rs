@@ -149,7 +149,13 @@ impl TtsRuntime {
             let message =
                 "Piper installation finished but the managed Python runtime cannot import it."
                     .to_string();
-            self.set_error(app, manager, None, message.clone());
+            self.set_error(
+                app,
+                manager,
+                DEFAULT_TTS_MODEL_ID,
+                None,
+                message.clone(),
+            );
             return Err(message);
         }
 
@@ -205,7 +211,7 @@ impl TtsRuntime {
         }
 
         if process_guard.is_none() {
-            *process_guard = Some(self.start_process(app, &voice_path)?);
+            *process_guard = Some(self.start_process(app, &voice_path, model_id)?);
         }
 
         let request_id = format!(
@@ -261,7 +267,7 @@ impl TtsRuntime {
                 "spoken" => {
                     let status = TtsRuntimeStatus {
                         state: "ready".to_string(),
-                        model_id: DEFAULT_TTS_MODEL_ID.to_string(),
+                        model_id: model_id.to_string(),
                         dependency_ready: true,
                         voice_installed: true,
                         sample_rate: process_guard
@@ -281,7 +287,7 @@ impl TtsRuntime {
                     let sample_rate = process_guard
                         .as_ref()
                         .and_then(|running| running.sample_rate);
-                    self.set_error(app, manager, sample_rate, message.clone());
+                    self.set_error(app, manager, model_id, sample_rate, message.clone());
                     return Err(message);
                 }
                 _ => {}
@@ -352,6 +358,7 @@ impl TtsRuntime {
         &self,
         app: &AppHandle,
         voice_path: &Path,
+        model_id: &str,
     ) -> Result<TtsProcess, String> {
         let python = managed_python_path(app)?;
         if !python.exists() {
@@ -374,7 +381,7 @@ impl TtsRuntime {
 
         self.set_status(TtsRuntimeStatus {
             state: "loading".to_string(),
-            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
+            model_id: model_id.to_string(),
             dependency_ready: true,
             voice_installed: true,
             refreshed_at_ms: timestamp_ms(),
@@ -435,14 +442,15 @@ impl TtsRuntime {
         &self,
         app: &AppHandle,
         manager: &ModelManager,
+        model_id: &str,
         sample_rate: Option<u32>,
         message: String,
     ) {
         let status = TtsRuntimeStatus {
             state: "error".to_string(),
-            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
+            model_id: model_id.to_string(),
             dependency_ready: python_module_available(app, "piper").unwrap_or(false),
-            voice_installed: manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok(),
+            voice_installed: manager.installation_path(app, model_id).is_ok(),
             sample_rate,
             last_text: self
                 .status
