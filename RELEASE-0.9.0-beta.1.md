@@ -88,6 +88,14 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 - limited retry policy for idempotent app actions
 - background Automations restricted to Read/Act + current Allow
 
+### Beta diagnostics
+
+- in-app **Settings → Diagnostics** readiness center
+- runtime/model/Voice/Vision/OBS technical state
+- Agent and Automation health summary
+- privacy-safe diagnostics report for bug reports
+- excludes prompts, memories, screenshots, audio, file paths and credentials
+
 ### Beta safety & privacy
 
 - redesigned Privacy and Safety & Permissions UI
