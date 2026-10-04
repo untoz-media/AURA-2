@@ -43,7 +43,10 @@ with new Beta-readiness work.
 - explicit per-file and batch inspection actions gated by Read permissions
 - bounded 64 KiB / 12,000-character previews for allowlisted UTF-8 text/code files
 - image-dimension inspection without exposing canonical paths
-- **Analyze with AURA** ephemeral drop attachments for local-model reasoning
+- one-turn **Attach to Chat** / **Attach all to Chat** composer attachments
+- removable attachment chips before send and safe filename labels in local chat history
+- attachment-only Send falls back to an explicit "Analyze the attached local files." request
+- **Analyze with AURA** one-click drop analysis shortcut
 - 6,000-character total model attachment cap with smaller per-file excerpts
 - attachment requests bypass action/Routine/Director routing
 - attached content is explicitly treated as untrusted data for prompt-injection resistance
