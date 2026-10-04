@@ -1569,11 +1569,7 @@ where
     T: Serialize + ?Sized,
 {
     let path = config_path(app, filename)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, value)
 }
 
 fn config_path(app: &AppHandle, filename: &str) -> Result<PathBuf, String> {
