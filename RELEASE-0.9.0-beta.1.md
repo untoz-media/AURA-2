@@ -106,6 +106,8 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 - fail-safe Action Router parser paths
 - shared tested Beta self-test finalization logic
 - fail-closed Diagnostics readiness for unexpected states
+- persistent Global Pause with direct Vision/Routine/Director/OBS execution guards
+- stop/escape production actions remain available while paused
 - privacy-safe Diagnostics report for bug reports
 - atomic crash-resistant JSON persistence for critical local state
 - integrity checks for user stores and desktop configuration
