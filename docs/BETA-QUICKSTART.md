@@ -73,6 +73,21 @@ Examples:
 
 Open Agents, describe a bounded goal, review the proposed steps and approve only if the plan matches your intent.
 
+## 9.4 Drag a local file into AURA
+
+Drag one or more local files onto the main AURA window.
+
+AURA accepts up to eight files per drop and creates temporary local metadata context only.
+
+From the drop tray you can:
+
+- **Reveal** an accepted file in File Explorer.
+- **Use in Vision** for supported raster images.
+
+Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
+
+For images, **Use in Vision** creates a normalized PNG copy inside AURA's cache. The original image remains untouched.
+
 ## 9.5 Create a local image
 
 Open **Create → Image**.
