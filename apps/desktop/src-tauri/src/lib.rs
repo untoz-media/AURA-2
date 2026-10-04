@@ -973,6 +973,20 @@ fn analyze_capture_internal(
                 }
             };
 
+            {
+                let session = app.state::<VisionSession>();
+                let mut current = session
+                    .last_capture
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if current
+                    .as_ref()
+                    .is_some_and(|item| item.path == capture.path)
+                {
+                    current.take();
+                }
+            }
+
             emit_vision_event(
                 app,
                 VisionEvent {
