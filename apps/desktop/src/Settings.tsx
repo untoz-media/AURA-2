@@ -605,7 +605,8 @@ export default function Settings({
   const enabledAutomations = automations.filter((automation) => automation.enabled).length;
   const betaCoreReady =
     Boolean(appStatus?.version?.includes("0.9.0-beta.1")) &&
-    managedRuntimeStatus.state !== "error" &&
+    managedRuntimeStatus.state === "ready" &&
+    Boolean(activeAssistant?.installed) &&
     permissionPolicy.sensitive !== "allow" &&
     permissionPolicy.destructive !== "allow";
 
@@ -1779,7 +1780,11 @@ export default function Settings({
                 <div className="diagnostics-item">
                   <span>OBS</span>
                   <strong>{obsConnection.connected ? "Connected" : "Optional · disconnected"}</strong>
-                  <small>{obsConnection.connected ? `${obsConnection.host}:${obsConnection.port}` : "Connect only when using Director Mode."}</small>
+                  <small>
+                    {obsConnection.connected
+                      ? `OBS ${obsConnection.obsStudioVersion ?? "connected"} · WebSocket ${obsConnection.obsWebsocketVersion ?? "ready"}`
+                      : "Connect only when using Director Mode."}
+                  </small>
                 </div>
               </div>
             </Surface>
