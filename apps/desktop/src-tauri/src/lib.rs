@@ -132,7 +132,7 @@ struct RuntimeSnapshot {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct VoicePreferences {
     auto_speak: bool,
     tts_speed: f32,
@@ -567,7 +567,18 @@ fn set_voice_preferences(
     preferences: VoicePreferences,
 ) -> Result<VoicePreferences, String> {
     let preferences = preferences.sanitized();
+    let previous_voice = state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_voice_id
+        .clone();
     save_voice_preferences(&app, &preferences)?;
+
+    if previous_voice != preferences.tts_voice_id {
+        app.state::<TtsRuntime>().stop();
+    }
+
     *state
         .voice_preferences
         .lock()
@@ -1025,6 +1036,11 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
 
             if !preferences.wake_word_enabled || runtime_snapshot(&state).paused {
                 thread::sleep(Duration::from_millis(750));
+                continue;
+            }
+
+            if app.state::<TtsRuntime>().is_speaking() {
+                thread::sleep(Duration::from_millis(500));
                 continue;
             }
 
@@ -4448,6 +4464,10 @@ pub fn run() {
 
                         match event.state() {
                             ShortcutState::Pressed => {
+                                if app.state::<TtsRuntime>().is_speaking() {
+                                    let _ = app.state::<TtsRuntime>().interrupt();
+                                }
+
                                 runtime
                                     .wake_monitor_generation
                                     .fetch_add(1, Ordering::Relaxed);
