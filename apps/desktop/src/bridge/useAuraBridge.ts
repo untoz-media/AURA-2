@@ -957,7 +957,7 @@ export function useAuraBridge() {
   }, []);
 
   useEffect(() => {
-    if (ttsRuntime.state !== "speaking") return;
+    if (ttsRuntime.state !== "speaking" || !uiVisible) return;
 
     let cancelled = false;
     const interval = window.setInterval(() => {
@@ -972,10 +972,10 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [ttsRuntime.state]);
+  }, [ttsRuntime.state, uiVisible]);
 
   useEffect(() => {
-    if (!audioInput.testing && !audioInput.pushToTalk) return;
+    if ((!audioInput.testing && !audioInput.pushToTalk) || !uiVisible) return;
 
     let cancelled = false;
 
@@ -993,7 +993,7 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [audioInput.testing, audioInput.pushToTalk]);
+  }, [audioInput.testing, audioInput.pushToTalk, uiVisible]);
 
   useEffect(() => {
     if (runtimeState.paused || !uiVisible) {
