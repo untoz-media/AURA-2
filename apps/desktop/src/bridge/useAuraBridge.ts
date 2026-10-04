@@ -424,6 +424,20 @@ export function useAuraBridge() {
         }
       });
 
+    getBetaDiagnostics()
+      .then((snapshot) => {
+        if (cancelled) return;
+        setBetaDiagnostics(snapshot);
+        if (snapshot.healthStatus === "degraded") {
+          setActivity(
+            "AURA Beta health check found a local subsystem that needs review.",
+          );
+        }
+      })
+      .catch(() => {
+        // Beta diagnostics are supplementary and can be refreshed manually.
+      });
+
     getRecentFilesContext()
       .then((snapshot) => {
         if (!cancelled) setRecentFiles(snapshot);
