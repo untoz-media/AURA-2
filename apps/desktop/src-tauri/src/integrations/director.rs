@@ -355,8 +355,18 @@ pub fn find_director_preset_by_id(app: &AppHandle, preset_id: &str) -> Option<Di
         .find(|preset| preset.id == preset_id)
 }
 
+pub fn resolve_director_preset_command_checked(
+    app: &AppHandle,
+    input: &str,
+) -> Result<Option<DirectorPreset>, String> {
+    Ok(resolve_director_preset_from_list(
+        read_director_presets(app)?,
+        input,
+    ))
+}
+
 pub fn resolve_director_preset_command(app: &AppHandle, input: &str) -> Option<DirectorPreset> {
-    resolve_director_preset_from_list(load_director_presets(app), input)
+    resolve_director_preset_command_checked(app, input).ok().flatten()
 }
 
 fn resolve_director_preset_from_list(
