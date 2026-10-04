@@ -754,7 +754,15 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
         thread::spawn(move || {
             let manager = app_for_tts.state::<ModelManager>();
             let tts = app_for_tts.state::<TtsRuntime>();
-            let _ = tts.speak(&app_for_tts, &manager, &text);
+            let preferences = app_for_tts
+                .state::<RuntimeState>()
+                .voice_preferences
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            if preferences.auto_speak {
+                let _ = tts.speak(&app_for_tts, &manager, &text, preferences.tts_speed);
+            }
         });
     }
 
@@ -3666,6 +3674,13 @@ fn prepare_tts_runtime(
 }
 
 #[tauri::command]
+fn stop_tts_speaking(
+    runtime: State<'_, TtsRuntime>,
+) -> Result<TtsRuntimeStatus, String> {
+    runtime.interrupt()
+}
+
+#[tauri::command]
 fn test_tts_voice(
     app: AppHandle,
     manager: State<'_, ModelManager>,
@@ -3676,7 +3691,13 @@ fn test_tts_voice(
         .as_deref()
         .unwrap_or("Olá. Eu sou a AURA, o teu assistente pessoal.")
         .trim();
-    runtime.speak(&app, &manager, phrase)
+    let speed = app
+        .state::<RuntimeState>()
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_speed;
+    runtime.speak(&app, &manager, phrase, speed)
 }
 
 #[tauri::command]
@@ -4403,6 +4424,7 @@ pub fn run() {
             get_tts_runtime_status,
             prepare_tts_runtime,
             test_tts_voice,
+            stop_tts_speaking,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
