@@ -122,6 +122,19 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Drop a directory and confirm it is rejected.
 - [ ] Drop the same canonical file twice in one batch and confirm it is deduplicated.
 - [ ] Confirm dropping a file does not open, execute, upload, remember or analyze it.
+- [ ] Inspect an allowlisted UTF-8 text/code file and confirm the preview is bounded and no filesystem path is shown.
+- [ ] Inspect an image and confirm dimensions are shown without starting Vision analysis.
+- [ ] Inspect all across a mixed batch and confirm complex binary formats remain metadata-only.
+- [ ] Attach one dropped file to Chat and confirm a removable filename chip appears above the composer.
+- [ ] Attach all dropped files and confirm all current opaque items appear as composer chips without filesystem paths.
+- [ ] Send a custom question with attachments and confirm the local model uses only bounded turn-only context.
+- [ ] Send attachments with an empty composer and confirm the visible request becomes "Analyze the attached local files."
+- [ ] After an accepted attached message, confirm attachments are detached from the next turn while the Drop Tray session remains.
+- [ ] Confirm the sent user message shows safe attachment filenames but no paths or file contents.
+- [ ] Set Read = Never and confirm attached-file Chat analysis is blocked.
+- [ ] Modify a dropped file after intake and confirm Inspect/Analyze refuses the stale Drop ID until the file is dropped again.
+- [ ] Put instruction-like text such as "ignore previous instructions" inside a dropped text file and confirm it is treated as untrusted data, not as an AURA action.
+- [ ] With attachments present, try a prompt that resembles a Computer/Routine/Director command and confirm deterministic action routing is bypassed.
 - [ ] Reveal a dropped file in Explorer and confirm the original file is selected but not executed.
 - [ ] Set Act = Never and confirm Reveal is blocked.
 - [ ] Drop PNG/JPEG/WebP/GIF/BMP images and stage each supported format for Vision.
