@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    fs,
-    path::PathBuf,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -84,10 +85,7 @@ pub fn begin_session(
     runtime: &BetaSessionRuntime,
 ) -> Result<bool, String> {
     let path = session_path(app)?;
-    let previous_unclean = fs::read_to_string(&path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<SessionMarker>(&content).ok())
-        .is_some_and(|marker| !marker.clean_exit);
+    let previous_unclean = previous_session_was_unclean(&path);
 
     runtime
         .previous_session_unclean
@@ -104,12 +102,15 @@ pub fn begin_session(
 
 pub fn mark_session_clean(app: &AppHandle) -> Result<(), String> {
     let path = session_path(app)?;
-    let Some(mut marker) = fs::read_to_string(&path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<SessionMarker>(&content).ok())
-    else {
-        return Ok(());
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!("Could not read Beta session marker: {error}"));
+        }
     };
+    let mut marker = serde_json::from_str::<SessionMarker>(&content)
+        .map_err(|error| format!("Beta session marker is invalid: {error}"))?;
 
     marker.clean_exit = true;
     write_json(&path, &marker)
@@ -178,12 +179,65 @@ fn load_preferences(app: &AppHandle) -> Result<BetaPreferences, String> {
         .map_err(|error| format!("Beta preferences are invalid and were left unchanged: {error}"))
 }
 
-fn write_json<T: Serialize + ?Sized>(path: &PathBuf, value: &T) -> Result<(), String> {
+fn previous_session_was_unclean(path: &Path) -> bool {
+    match fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str::<SessionMarker>(&content)
+            .map(|marker| !marker.clean_exit)
+            .unwrap_or(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+    }
+}
+
+fn write_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let content = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+
+    let content = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("aura-state");
+    let temporary = path.with_file_name(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        timestamp_ms()
+    ));
+
+    let write_result = (|| -> Result<(), String> {
+        let mut file = File::create(&temporary)
+            .map_err(|error| format!("Could not create temporary state file: {error}"))?;
+        file.write_all(&content)
+            .map_err(|error| format!("Could not write temporary state file: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("Could not flush temporary state file: {error}"))?;
+        drop(file);
+
+        match fs::rename(&temporary, path) {
+            Ok(()) => Ok(()),
+            Err(first_error) => {
+                if path.exists() {
+                    fs::remove_file(path).map_err(|remove_error| {
+                        format!(
+                            "Could not replace state file after rename failed ({first_error}): {remove_error}"
+                        )
+                    })?;
+                    fs::rename(&temporary, path).map_err(|rename_error| {
+                        format!("Could not finalize state file: {rename_error}")
+                    })
+                } else {
+                    Err(format!("Could not finalize state file: {first_error}"))
+                }
+            }
+        }
+    })();
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+
+    write_result
 }
 
 fn preferences_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -220,6 +274,48 @@ mod tests {
     }
 
     #[test]
+    fn missing_session_marker_is_not_recovery() {
+        let path = std::env::temp_dir().join(format!(
+            "aura-beta-missing-{}-{}.json",
+            std::process::id(),
+            timestamp_ms()
+        ));
+        let _ = fs::remove_file(&path);
+        assert!(!previous_session_was_unclean(&path));
+    }
+
+    #[test]
+    fn corrupt_session_marker_is_treated_as_unclean() {
+        let path = std::env::temp_dir().join(format!(
+            "aura-beta-corrupt-{}-{}.json",
+            std::process::id(),
+            timestamp_ms()
+        ));
+        fs::write(&path, b"{not-valid-json").expect("write corrupt marker");
+        assert!(previous_session_was_unclean(&path));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn atomic_json_write_produces_parseable_state() {
+        let path = std::env::temp_dir().join(format!(
+            "aura-beta-atomic-{}-{}.json",
+            std::process::id(),
+            timestamp_ms()
+        ));
+        let preferences = BetaPreferences {
+            onboarding_complete: true,
+        };
+
+        write_json(&path, &preferences).expect("atomic state write");
+        let content = fs::read_to_string(&path).expect("read state");
+        let restored: BetaPreferences = serde_json::from_str(&content).expect("parse state");
+
+        assert!(restored.onboarding_complete);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn diagnostics_schema_is_explicitly_versioned() {
         let snapshot = DiagnosticsSnapshot {
             schema_version: 1,
@@ -245,5 +341,21 @@ mod tests {
 
         assert_eq!(snapshot.schema_version, 1);
         assert!(!snapshot.telemetry_enabled);
+
+        let serialized = serde_json::to_string(&snapshot).expect("serialize diagnostics");
+        for forbidden in [
+            "prompt",
+            "response",
+            "transcript",
+            "screenshot",
+            "password",
+            "fileContent",
+            "memoryContent",
+        ] {
+            assert!(
+                !serialized.contains(forbidden),
+                "diagnostics unexpectedly contain sensitive field {forbidden}"
+            );
+        }
     }
 }
