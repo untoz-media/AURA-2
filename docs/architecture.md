@@ -30,6 +30,7 @@ Control    / Apps
            ├── OBS
            ├── Browser
            ├── Files
+           ├── Drop Intake
            └── Future integrations
 
 Optional intelligence services:
@@ -50,6 +51,7 @@ Examples:
 - "Open OBS" → app launcher
 - "Switch to Match scene" → OBS skill
 - "Find the image I used yesterday" → file intelligence + context
+- drag a local image → bounded Drop Intake → explicit Vision handoff
 - "Prepare my stream" → agent / action workflow
 - "What is wrong with this window?" → vision + reasoning
 
@@ -78,3 +80,14 @@ Visual computer control should only be used as a fallback when an integration do
 Local execution remains the default architecture.
 
 Cloud services may be used optionally for tasks where they provide a substantial capability improvement, but AURA should remain useful without requiring constant cloud access.
+
+
+## Drag & Drop intake boundary
+
+Native drag/drop is treated as temporary local context, not as implicit permission to execute or analyze content.
+
+The frontend forwards native dropped paths to a Core intake command once. Core canonicalizes accepted files and stores their real paths only in an in-memory registry keyed by opaque drop IDs. React receives only safe metadata and capability flags.
+
+Actions on dropped files resolve the opaque ID back inside Core.
+
+Image handoff to Vision always creates a cache copy first so Vision cleanup cannot delete the user's original file.
