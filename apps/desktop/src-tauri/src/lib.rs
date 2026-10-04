@@ -748,16 +748,20 @@ fn permission_policy_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn load_permission_policy(app: &tauri::AppHandle) -> PermissionPolicy {
     let Ok(path) = permission_policy_path(app) else {
-        return PermissionPolicy::default();
+        return PermissionPolicy::fail_closed();
     };
 
-    let Ok(content) = fs::read_to_string(path) else {
+    if !path.exists() {
         return PermissionPolicy::default();
+    }
+
+    let Ok(content) = fs::read_to_string(&path) else {
+        return PermissionPolicy::fail_closed();
     };
 
     serde_json::from_str::<PermissionPolicy>(&content)
-        .unwrap_or_default()
-        .sanitized()
+        .map(PermissionPolicy::sanitized)
+        .unwrap_or_else(|_| PermissionPolicy::fail_closed())
 }
 
 fn save_permission_policy(
