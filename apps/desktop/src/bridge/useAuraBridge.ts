@@ -2448,6 +2448,10 @@ export function useAuraBridge() {
     if (!trimmed) return null;
 
     const clientMessageId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const attachmentNames = dropIds
+      .map((dropId) => dropIntake.items.find((item) => item.id === dropId)?.name)
+      .filter((name): name is string => Boolean(name));
+
     setChatMessages((current) => [
       ...current,
       {
@@ -2455,6 +2459,7 @@ export function useAuraBridge() {
         role: "user",
         content: trimmed,
         timestampMs: Date.now(),
+        attachmentNames: attachmentNames.length > 0 ? attachmentNames : undefined,
       },
     ]);
 
@@ -2486,7 +2491,7 @@ export function useAuraBridge() {
       ]);
       return null;
     }
-  }, []);
+  }, [dropIntake.items]);
 
   const setPaused = useCallback(async (paused: boolean) => {
     const state = await setRuntimePaused(paused);
