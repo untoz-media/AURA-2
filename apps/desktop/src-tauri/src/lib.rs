@@ -1868,6 +1868,62 @@ fn run_beta_self_test(
     };
     checks.push(local_data_check);
 
+    let atomic_storage_check = match app.path().app_local_data_dir() {
+        Ok(root) => {
+            let probe_path = root.join(".aura-beta-storage-probe.json");
+            let probe = serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "probe": "atomic-storage"
+            });
+
+            match storage::write_json_atomic(&probe_path, &probe) {
+                Ok(()) => {
+                    let verified = fs::read_to_string(&probe_path)
+                        .ok()
+                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .is_some_and(|value| value.get("probe").and_then(|item| item.as_str()) == Some("atomic-storage"));
+                    let _ = fs::remove_file(&probe_path);
+
+                    if verified {
+                        beta_self_test_check(
+                            "atomicStorage",
+                            "Atomic local storage",
+                            "pass",
+                            true,
+                            "Atomic local state write and read-back succeeded.",
+                        )
+                    } else {
+                        beta_self_test_check(
+                            "atomicStorage",
+                            "Atomic local storage",
+                            "fail",
+                            true,
+                            "Atomic state write completed but read-back verification failed.",
+                        )
+                    }
+                }
+                Err(error) => {
+                    let _ = fs::remove_file(&probe_path);
+                    beta_self_test_check(
+                        "atomicStorage",
+                        "Atomic local storage",
+                        "fail",
+                        true,
+                        format!("Atomic local state write failed: {error}"),
+                    )
+                }
+            }
+        }
+        Err(error) => beta_self_test_check(
+            "atomicStorage",
+            "Atomic local storage",
+            "fail",
+            true,
+            format!("AURA could not resolve Local Data for the storage probe: {error}"),
+        ),
+    };
+    checks.push(atomic_storage_check);
+
     let policy = state
         .permission_policy
         .lock()
