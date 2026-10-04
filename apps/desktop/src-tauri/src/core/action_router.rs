@@ -1,7 +1,8 @@
 use crate::computer::{
     app_launcher::AppTarget,
     app_skills::{
-        BrowserSkill, BrowserSkillAction, NotepadSkill, NotepadSkillAction, PersonalFolderSkill,
+        BrowserSkill, BrowserSkillAction, CalculatorSkill, CalculatorSkillAction, NotepadSkill,
+        NotepadSkillAction, PersonalFolderSkill, TerminalSkill, TerminalSkillAction,
     },
     audio::MediaAction,
     file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
@@ -65,6 +66,8 @@ pub enum ActionIntent {
     RevealPersonalPath(String),
     BrowserSkill(BrowserSkill),
     NotepadSkill(NotepadSkill),
+    TerminalSkill(TerminalSkill),
+    CalculatorSkill(CalculatorSkill),
     OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
 }
@@ -377,6 +380,98 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn terminal_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "new tab in windows terminal"
+        | "new terminal tab"
+        | "open new tab in windows terminal"
+        | "novo separador no windows terminal"
+        | "novo separador no terminal"
+        | "abre novo separador no windows terminal" => Some(TerminalSkillAction::NewTab),
+
+        "next tab in windows terminal"
+        | "next terminal tab"
+        | "próximo separador no windows terminal"
+        | "proximo separador no windows terminal"
+        | "separador seguinte no terminal" => Some(TerminalSkillAction::NextTab),
+
+        "previous tab in windows terminal"
+        | "previous terminal tab"
+        | "separador anterior no windows terminal"
+        | "separador anterior no terminal" => Some(TerminalSkillAction::PreviousTab),
+
+        "command palette in windows terminal"
+        | "open command palette in windows terminal"
+        | "terminal command palette"
+        | "paleta de comandos no windows terminal"
+        | "paleta de comandos no terminal"
+        | "abre a paleta de comandos no terminal" => Some(TerminalSkillAction::CommandPalette),
+
+        "find in windows terminal"
+        | "search in windows terminal"
+        | "terminal find"
+        | "procurar no windows terminal"
+        | "pesquisar no windows terminal"
+        | "procurar no terminal" => Some(TerminalSkillAction::Find),
+
+        "open tab dropdown in windows terminal"
+        | "open terminal tab dropdown"
+        | "open profile dropdown in windows terminal"
+        | "abre a lista de perfis no windows terminal"
+        | "abre a lista de perfis no terminal" => Some(TerminalSkillAction::OpenTabDropdown),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::TerminalSkill(TerminalSkill { action }))
+}
+
+fn calculator_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "standard mode in calculator"
+        | "switch calculator to standard mode"
+        | "calculator standard mode"
+        | "modo standard na calculadora"
+        | "modo padrão na calculadora"
+        | "modo padrao na calculadora" => Some(CalculatorSkillAction::StandardMode),
+
+        "scientific mode in calculator"
+        | "switch calculator to scientific mode"
+        | "calculator scientific mode"
+        | "modo científico na calculadora"
+        | "modo cientifico na calculadora" => Some(CalculatorSkillAction::ScientificMode),
+
+        "programmer mode in calculator"
+        | "switch calculator to programmer mode"
+        | "calculator programmer mode"
+        | "modo programador na calculadora" => Some(CalculatorSkillAction::ProgrammerMode),
+
+        "date calculation in calculator"
+        | "switch calculator to date calculation"
+        | "calculator date calculation"
+        | "cálculo de datas na calculadora"
+        | "calculo de datas na calculadora"
+        | "modo cálculo de datas na calculadora"
+        | "modo calculo de datas na calculadora" => {
+            Some(CalculatorSkillAction::DateCalculationMode)
+        }
+
+        "graphing mode in calculator"
+        | "switch calculator to graphing mode"
+        | "calculator graphing mode"
+        | "modo gráfico na calculadora"
+        | "modo grafico na calculadora" => Some(CalculatorSkillAction::GraphingMode),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::CalculatorSkill(CalculatorSkill { action }))
 }
 
 fn notepad_skill_request(input: &str) -> Option<ActionIntent> {
@@ -1530,6 +1625,24 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = terminal_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = calculator_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = notepad_skill_request(input) {
         let ActionIntent::NotepadSkill(skill) = &intent else {
             unreachable!("notepad parser returns NotepadSkill intents only");
@@ -1856,6 +1969,72 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_windows_terminal_navigation_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("New tab in Windows Terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(TerminalSkill {
+                    action: TerminalSkillAction::NewTab,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Paleta de comandos no terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(TerminalSkill {
+                    action: TerminalSkillAction::CommandPalette,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn terminal_router_does_not_accept_arbitrary_shell_commands() {
+        let policy = PermissionPolicy::default();
+        assert!(!matches!(
+            route_command("Run rm -rf in Windows Terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(_),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_calculator_modes_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Scientific mode in Calculator", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::CalculatorSkill(CalculatorSkill {
+                    action: CalculatorSkillAction::ScientificMode,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Modo programador na calculadora", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::CalculatorSkill(CalculatorSkill {
+                    action: CalculatorSkillAction::ProgrammerMode,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
         ));
     }
 
