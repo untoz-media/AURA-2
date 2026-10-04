@@ -80,6 +80,19 @@ pub fn load_preferences(app: &AppHandle) -> VisionPreferences {
         .sanitized()
 }
 
+pub fn validate_preferences_store(app: &AppHandle) -> Result<(), String> {
+    let path = preferences_path(app)?;
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read Vision preferences: {error}"))?;
+    serde_json::from_str::<VisionPreferences>(&content)
+        .map(|_| ())
+        .map_err(|error| format!("Vision preferences file is invalid: {error}"))
+}
+
 pub fn save_preferences(
     app: &AppHandle,
     preferences: VisionPreferences,
