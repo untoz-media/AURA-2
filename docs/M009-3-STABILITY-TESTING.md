@@ -49,6 +49,31 @@ It fails on:
 
 These checks do not replace Rust tests or a security review. They are a cheap additional tripwire for Beta-critical invariants.
 
+## Crash-resistant local persistence
+
+The Beta audit found that several JSON stores still used direct whole-file writes. A process or OS interruption during a direct write could leave truncated local state.
+
+M009.3 now provides a shared atomic JSON persistence primitive:
+
+`serialize → write temp file in the same directory → flush/sync → rename over destination`
+
+It is used for:
+
+- Memory
+- Project Memory
+- Routines
+- Saved AURA Actions
+- Automations and Agent run state
+- Director Mode presets
+- Model Manager configuration
+- Vision preferences/history
+- permission policy
+- Voice preferences
+- desktop preferences
+
+The Beta self-test also performs a privacy-safe atomic write/read-back probe and validates the main user stores and configuration files for parse integrity.
+
+The source gate rejects a return to direct `fs::write` for these critical JSON stores.
 ## Independent Beta Quality workflow
 
 `.github/workflows/beta-quality.yml` runs on `ubuntu-latest` and performs:
