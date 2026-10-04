@@ -66,6 +66,14 @@ requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "Background automations cannot run a sensitive Director preset.",
 ]);
 
+const actionRouter = fs.readFileSync("apps/desktop/src-tauri/src/core/action_router.rs", "utf8");
+const actionRouterRuntime = actionRouter.split("#[cfg(test)]")[0];
+for (const forbidden of ["unreachable!(", ".expect("]) {
+  if (actionRouterRuntime.includes(forbidden)) {
+    failures.push(`apps/desktop/src-tauri/src/core/action_router.rs: runtime parser still relies on ${forbidden}`);
+  }
+}
+
 requireFragments("apps/desktop/src/Settings.tsx", [
   "export type SettingsSection =",
   '| "diagnostics";',
