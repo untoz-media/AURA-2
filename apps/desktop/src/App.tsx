@@ -673,9 +673,16 @@ function App() {
               recentFiles={recentFiles}
               onRecentFilesRefresh={refreshRecentFiles}
               onCommand={async (value) => {
+                const normalized = value.toLowerCase();
                 if (
                   value === "Read clipboard" ||
-                  value.toLowerCase().startsWith("find file ")
+                  normalized.startsWith("find file ") ||
+                  normalized.startsWith("latest ") ||
+                  normalized.startsWith("recent ") ||
+                  normalized.startsWith("último ") ||
+                  normalized.startsWith("ultimo ") ||
+                  normalized.startsWith("última ") ||
+                  normalized.startsWith("ultima ")
                 ) {
                   setView("chat");
                 }
