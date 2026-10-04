@@ -417,6 +417,10 @@ function App() {
                       <strong>Look at my screen</strong>
                       <span>Use local AURA Vision on an explicit screenshot</span>
                     </button>
+                    <button type="button" onClick={() => setView("agents")}>
+                      <strong>Plan a task</strong>
+                      <span>Build and review a local multi-step Agent plan</span>
+                    </button>
                     <button type="button" onClick={() => setView("create")}>
                       <strong>Create with AURA</strong>
                       <span>Images now, video-ready architecture</span>
