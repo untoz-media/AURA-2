@@ -509,6 +509,7 @@ impl AgentEngine {
         };
 
         for run in snapshots {
+            let _ = append_run_history(app, &run);
             emit_agent_event(
                 app,
                 &run,
@@ -793,13 +794,20 @@ pub fn run_saved_action(
     app: &AppHandle,
     action_id: &str,
     policy: &PermissionPolicy,
+    approved: bool,
 ) -> Result<String, String> {
     let permission = saved_action_permission(app, action_id)?;
-    if policy.decision_for(permission) == PermissionDecision::Never {
-        return Err(format!(
-            "Saved AURA Action is blocked by the current {:?} permission policy.",
-            permission
-        ));
+    match policy.decision_for(permission) {
+        PermissionDecision::Never => {
+            return Err(format!(
+                "Saved AURA Action is blocked by the current {:?} permission policy.",
+                permission
+            ))
+        }
+        PermissionDecision::Ask if !approved => {
+            return Err("This saved AURA Action requires explicit approval.".to_string())
+        }
+        _ => {}
     }
     execute_saved_action(app, action_id, false)
 }
