@@ -64,7 +64,7 @@ use std::{
         Mutex,
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     image::Image,
@@ -86,6 +86,8 @@ struct RuntimeState {
     permission_policy: Mutex<PermissionPolicy>,
     pending_confirmations: Mutex<HashMap<String, PendingConfirmation>>,
     voice_command_ids: Mutex<HashSet<String>>,
+    voice_preferences: Mutex<VoicePreferences>,
+    wake_monitor_generation: AtomicU64,
 }
 
 impl Default for RuntimeState {
@@ -97,6 +99,8 @@ impl Default for RuntimeState {
             permission_policy: Mutex::new(PermissionPolicy::default()),
             pending_confirmations: Mutex::new(HashMap::new()),
             voice_command_ids: Mutex::new(HashSet::new()),
+            voice_preferences: Mutex::new(VoicePreferences::default()),
+            wake_monitor_generation: AtomicU64::new(1),
         }
     }
 }
@@ -125,6 +129,46 @@ struct RuntimeSnapshot {
     paused: bool,
     background_enabled: bool,
     autostart_enabled: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoicePreferences {
+    auto_speak: bool,
+    tts_speed: f32,
+    conversation_mode: bool,
+    conversation_timeout_seconds: u64,
+    wake_word_enabled: bool,
+    wake_phrase: String,
+}
+
+impl Default for VoicePreferences {
+    fn default() -> Self {
+        Self {
+            auto_speak: true,
+            tts_speed: 1.0,
+            conversation_mode: false,
+            conversation_timeout_seconds: 8,
+            wake_word_enabled: false,
+            wake_phrase: "AURA".to_string(),
+        }
+    }
+}
+
+impl VoicePreferences {
+    fn sanitized(mut self) -> Self {
+        self.tts_speed = self.tts_speed.clamp(0.6, 1.5);
+        self.conversation_timeout_seconds =
+            self.conversation_timeout_seconds.clamp(3, 20);
+        self.wake_phrase = self.wake_phrase.trim().to_string();
+        if self.wake_phrase.is_empty() {
+            self.wake_phrase = "AURA".to_string();
+        }
+        if self.wake_phrase.chars().count() > 32 {
+            self.wake_phrase = self.wake_phrase.chars().take(32).collect();
+        }
+        self
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -467,6 +511,61 @@ fn save_permission_policy(
 
     let content = serde_json::to_string_pretty(policy).map_err(|error| error.to_string())?;
     fs::write(path, content).map_err(|error| error.to_string())
+}
+
+fn voice_preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    Ok(directory.join("voice-preferences.json"))
+}
+
+fn load_voice_preferences(app: &tauri::AppHandle) -> VoicePreferences {
+    let Ok(path) = voice_preferences_path(app) else {
+        return VoicePreferences::default();
+    };
+    let Ok(content) = fs::read_to_string(path) else {
+        return VoicePreferences::default();
+    };
+    serde_json::from_str::<VoicePreferences>(&content)
+        .unwrap_or_default()
+        .sanitized()
+}
+
+fn save_voice_preferences(
+    app: &tauri::AppHandle,
+    preferences: &VoicePreferences,
+) -> Result<(), String> {
+    let path = voice_preferences_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let content =
+        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
+    fs::write(path, content).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_voice_preferences(state: State<'_, RuntimeState>) -> VoicePreferences {
+    state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+#[tauri::command]
+fn set_voice_preferences(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    preferences: VoicePreferences,
+) -> Result<VoicePreferences, String> {
+    let preferences = preferences.sanitized();
+    save_voice_preferences(&app, &preferences)?;
+    *state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = preferences.clone();
+    state.wake_monitor_generation.fetch_add(1, Ordering::Relaxed);
+    Ok(preferences)
 }
 
 fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -4277,6 +4376,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_status,
             get_runtime_state,
+            get_voice_preferences,
+            set_voice_preferences,
             set_runtime_paused,
             set_background_enabled,
             set_autostart_enabled,
