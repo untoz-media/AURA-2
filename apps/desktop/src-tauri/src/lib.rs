@@ -1763,6 +1763,7 @@ fn build_beta_diagnostics(
     manager: &ModelManager,
     setup: &ManagedRuntimeSetup,
     engine: &AgentEngine,
+    image: &ImageRuntime,
 ) -> Result<DiagnosticsSnapshot, String> {
     let runtime = runtime_snapshot(state);
     let mut health_checks = beta_local_health_checks(app);
@@ -1903,6 +1904,27 @@ fn build_beta_diagnostics(
         format!("Managed runtime state is readable: {managed_runtime_state}."),
     ));
 
+    let create_image_runtime = image.status();
+    if create_image_runtime.state == "error" {
+        health_checks.push(DiagnosticCheck::failed(
+            "create-image-runtime",
+            "AURA Create runtime",
+            create_image_runtime
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "The local image runtime is in an error state.".to_string()),
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::passed(
+            "create-image-runtime",
+            "AURA Create runtime",
+            format!(
+                "Local image runtime state is readable: {}.",
+                create_image_runtime.state
+            ),
+        ));
+    }
+
     health_checks.push(DiagnosticCheck::passed(
         "privacy-boundary",
         "Privacy boundary",
@@ -1943,6 +1965,7 @@ fn build_beta_diagnostics(
         active_model_id,
         installed_model_ids,
         managed_runtime_state,
+        create_image_runtime_state: create_image_runtime.state,
         agent_runs_total,
         active_agent_runs,
         saved_actions,
@@ -1979,8 +2002,9 @@ fn get_beta_diagnostics(
     manager: State<'_, ModelManager>,
     setup: State<'_, ManagedRuntimeSetup>,
     engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
 ) -> Result<DiagnosticsSnapshot, String> {
-    build_beta_diagnostics(&app, &state, &manager, &setup, &engine)
+    build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)
 }
 
 #[tauri::command]
@@ -1990,8 +2014,9 @@ fn export_beta_diagnostics(
     manager: State<'_, ModelManager>,
     setup: State<'_, ManagedRuntimeSetup>,
     engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
 ) -> Result<String, String> {
-    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine)?;
+    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)?;
     export_beta_diagnostics_file(&app, &snapshot)
 }
 
