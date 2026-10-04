@@ -1563,6 +1563,150 @@ export default function Settings({
           </>
         )}
 
+        {activeSection === "beta" && (
+          <>
+            <header className="settings-header">
+              <span className="eyebrow">AURA PUBLIC BETA</span>
+              <h2>Beta & Diagnostics</h2>
+              <p>
+                Local readiness information for troubleshooting the Beta without
+                silently sending diagnostic data anywhere.
+              </p>
+            </header>
+
+            <Surface className="settings-card">
+              <SectionLabel trailing={<Badge tone="ready">Local only</Badge>}>
+                Beta channel
+              </SectionLabel>
+              <SettingRow
+                title="Release channel"
+                description={(appStatus?.name ?? "AURA-2") + " " + (appStatus?.version ?? "") + " · " + (appStatus?.stage ?? "Public Beta")}
+                trailing={<Badge tone="ready">Beta</Badge>}
+              />
+              <SettingRow
+                title="Previous session"
+                description={
+                  betaStatus.previousSessionUnclean
+                    ? "The previous AURA session did not record a clean exit. No report was uploaded."
+                    : "The previous session ended cleanly or no recovery condition was detected."
+                }
+                trailing={
+                  <Badge tone={betaStatus.previousSessionUnclean ? "warning" : "ready"}>
+                    {betaStatus.previousSessionUnclean ? "Recovered" : "Clean"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Telemetry"
+                description="No usage analytics are uploaded by this Beta build."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+              <SettingRow
+                title="Automatic crash uploads"
+                description="Crash and diagnostics data stay on this computer unless you manually export a diagnostics file."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Local diagnostics</SectionLabel>
+              <SettingRow
+                title="Generate diagnostics snapshot"
+                description="Collects app/runtime state, installed model IDs and aggregate Agent/Automation counts. It does not include chat messages, prompts, screenshots, memory contents or passwords."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("refresh");
+                      void onBetaDiagnosticsRefresh().finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "refresh" ? "Checking…" : "Refresh"}
+                  </button>
+                }
+              />
+
+              {betaDiagnostics && (
+                <div className="beta-diagnostics-grid">
+                  <div><span>Platform</span><strong>{betaDiagnostics.platform} · {betaDiagnostics.architecture}</strong></div>
+                  <div><span>Managed runtime</span><strong>{betaDiagnostics.managedRuntimeState}</strong></div>
+                  <div><span>Installed models</span><strong>{betaDiagnostics.installedModelIds.length}</strong></div>
+                  <div><span>Agent runs</span><strong>{betaDiagnostics.activeAgentRuns} active · {betaDiagnostics.agentRunsTotal} recorded</strong></div>
+                  <div><span>Saved Actions</span><strong>{betaDiagnostics.savedActions}</strong></div>
+                  <div><span>Automations</span><strong>{betaDiagnostics.enabledAutomations}/{betaDiagnostics.automations} enabled</strong></div>
+                </div>
+              )}
+
+              <SettingRow
+                title="Export diagnostics"
+                description="Writes a human-readable JSON diagnostics file to Downloads (or AURA Local Data as fallback). Nothing is uploaded automatically."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("export");
+                      setBetaExportPath(null);
+                      void onBetaDiagnosticsExport()
+                        .then((path) => setBetaExportPath(path))
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "export" ? "Exporting…" : "Export JSON"}
+                  </button>
+                }
+              />
+              {betaExportPath && <p className="beta-diagnostics-path">Saved locally to: {betaExportPath}</p>}
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Beta onboarding</SectionLabel>
+              <SettingRow
+                title="First-run guide"
+                description="Show the Public Beta privacy, permissions and stability introduction again."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("onboarding");
+                      void onBetaPreferencesChange({ onboardingComplete: false })
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    Show again
+                  </button>
+                }
+              />
+              <SettingRow
+                title="Permissions review"
+                description="Review Read, Act, Modify, Sensitive and Destructive rules before running Agents."
+                trailing={<button type="button" className="settings-action-button" onClick={() => onSectionChange("permissions")}>Review</button>}
+              />
+              <SettingRow
+                title="Refresh Beta status"
+                description="Re-read the local Beta session and recovery state."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("status");
+                      void onBetaRefresh().finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    Refresh
+                  </button>
+                }
+              />
+            </Surface>
+          </>
+        )}
         {activeSection === "integrations" && (
           <>
             <header className="settings-header">
