@@ -10,6 +10,31 @@ use tauri::{AppHandle, Manager};
 
 const BETA_STATE_FILE: &str = "beta-state.json";
 const SESSION_FILE: &str = "beta-session.json";
+const DIAGNOSTICS_MAX_BYTES: usize = 64 * 1024;
+const DIAGNOSTICS_TOP_LEVEL_FIELDS: &[&str] = &[
+    "schemaVersion",
+    "appName",
+    "appVersion",
+    "channel",
+    "platform",
+    "architecture",
+    "paused",
+    "backgroundEnabled",
+    "autostartEnabled",
+    "activeModelId",
+    "installedModelIds",
+    "managedRuntimeState",
+    "agentRunsTotal",
+    "activeAgentRuns",
+    "savedActions",
+    "automations",
+    "enabledAutomations",
+    "telemetryEnabled",
+    "healthStatus",
+    "healthChecks",
+    "generatedAtMs",
+];
+const DIAGNOSTIC_CHECK_FIELDS: &[&str] = &["id", "label", "status", "detail"];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -327,6 +352,8 @@ pub fn export_diagnostics(
     app: &AppHandle,
     snapshot: &DiagnosticsSnapshot,
 ) -> Result<String, String> {
+    validate_diagnostics_payload(snapshot)?;
+
     let directory = app
         .path()
         .download_dir()
@@ -341,6 +368,47 @@ pub fn export_diagnostics(
     ));
     write_json(&path, snapshot)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+fn validate_diagnostics_payload(snapshot: &DiagnosticsSnapshot) -> Result<(), String> {
+    let serialized = serde_json::to_vec(snapshot)
+        .map_err(|error| format!("Could not serialize diagnostics for privacy validation: {error}"))?;
+    if serialized.len() > DIAGNOSTICS_MAX_BYTES {
+        return Err("Diagnostics export exceeded the local privacy size limit.".to_string());
+    }
+
+    let value: serde_json::Value = serde_json::from_slice(&serialized)
+        .map_err(|error| format!("Could not validate diagnostics JSON: {error}"))?;
+    let Some(object) = value.as_object() else {
+        return Err("Diagnostics export must be a JSON object.".to_string());
+    };
+
+    for key in object.keys() {
+        if !DIAGNOSTICS_TOP_LEVEL_FIELDS.contains(&key.as_str()) {
+            return Err(format!(
+                "Diagnostics export blocked by privacy guard: unexpected field '{key}'."
+            ));
+        }
+    }
+
+    if let Some(checks) = object.get("healthChecks").and_then(|value| value.as_array()) {
+        for check in checks {
+            let Some(check_object) = check.as_object() else {
+                return Err(
+                    "Diagnostics export blocked by privacy guard: invalid health check.".to_string(),
+                );
+            };
+            for key in check_object.keys() {
+                if !DIAGNOSTIC_CHECK_FIELDS.contains(&key.as_str()) {
+                    return Err(format!(
+                        "Diagnostics export blocked by privacy guard: unexpected health-check field '{key}'."
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn load_preferences(app: &AppHandle) -> Result<BetaPreferences, String> {
@@ -523,6 +591,7 @@ mod tests {
 
         assert_eq!(snapshot.schema_version, 2);
         assert!(!snapshot.telemetry_enabled);
+        validate_diagnostics_payload(&snapshot).expect("diagnostics privacy guard");
 
         let serialized = serde_json::to_string(&snapshot).expect("serialize diagnostics");
         for forbidden in [
