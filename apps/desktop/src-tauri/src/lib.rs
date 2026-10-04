@@ -25,7 +25,9 @@ use computer::recent_files::{
     default_recent_files_snapshot, recent_files_snapshot, summarize_recent_files, RecentFilesSnapshot,
 };
 use computer::system::{execute_system_action, summarize_system, SystemAction};
-use computer::window_manager::{summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo};
+use computer::window_manager::{
+    list_windows, summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo,
+};
 use core::{
     action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
     confirmation::{
@@ -58,8 +60,8 @@ use routines::{
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
 use vision_capture::{
-    capture_active_window, capture_full_screen, capture_region, cursor_position, region_from_points,
-    remove_capture, CaptureRect, VisionCapture,
+    capture_active_window, capture_full_screen, capture_region, capture_window_handle,
+    cursor_position, region_from_points, remove_capture, CaptureRect, VisionCapture,
 };
 use vision_history::{
     clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
@@ -1031,7 +1033,49 @@ fn capture_for_vision_query(
 
     let capture = match target {
         VisionQueryTarget::Screen => capture_full_screen(app),
-        VisionQueryTarget::ActiveWindow => capture_active_window(app),
+        VisionQueryTarget::ActiveWindow => {
+            let awareness = app.state::<CurrentAppAwareness>();
+            let context = awareness.snapshot().ok();
+
+            if let Some(context) = context.filter(|item| item.context_source == "lastExternal") {
+                let windows = list_windows().ok();
+                let candidate = windows.as_ref().and_then(|items| {
+                    let preferred_title = context.window_title.as_deref();
+                    items
+                        .iter()
+                        .find(|window| {
+                            window
+                                .process_name
+                                .as_deref()
+                                .is_some_and(|name| name.eq_ignore_ascii_case(&context.process_name))
+                                && preferred_title
+                                    .is_some_and(|title| window.title.eq_ignore_ascii_case(title))
+                        })
+                        .or_else(|| {
+                            items.iter().find(|window| {
+                                window
+                                    .process_name
+                                    .as_deref()
+                                    .is_some_and(|name| {
+                                        name.eq_ignore_ascii_case(&context.process_name)
+                                    })
+                            })
+                        })
+                });
+
+                if let Some(window) = candidate {
+                    capture_window_handle(
+                        app,
+                        window.handle,
+                        Some(window.title.clone()),
+                    )
+                } else {
+                    capture_active_window(app)
+                }
+            } else {
+                capture_active_window(app)
+            }
+        },
     }?;
 
     let capture = store_last_vision_capture(app, capture);
