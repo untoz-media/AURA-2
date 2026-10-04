@@ -102,7 +102,6 @@ function App() {
     setActiveProjectMemoryControl,
     updateVoicePreferences,
     refreshVisionRuntime,
-    refreshVisionHistory,
     updateVisionPreferences,
     clearVisionHistoryControl,
     captureVisionScreenControl,
