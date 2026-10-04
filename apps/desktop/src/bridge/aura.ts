@@ -39,6 +39,7 @@ import type {
   CurrentAppInfo,
   AppSkillCatalog,
   DropIntakeSnapshot,
+  DroppedFileInspection,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
@@ -360,6 +361,12 @@ export async function clearDropIntake(): Promise<DropIntakeSnapshot> {
 
 export async function revealDroppedFile(dropId: string): Promise<string> {
   return invoke<string>("reveal_dropped_file", { dropId });
+}
+
+export async function inspectDroppedFile(
+  dropId: string,
+): Promise<DroppedFileInspection> {
+  return invoke<DroppedFileInspection>("inspect_dropped_file", { dropId });
 }
 
 export async function stageDroppedImageForVision(
