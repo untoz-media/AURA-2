@@ -58,6 +58,8 @@ V2 preserves the V1 intake boundaries:
 
 Dropping a new batch replaces the previous drop registry.
 
+Before any later Reveal, Inspect, Analyze or Vision handoff, Core re-checks the dropped file. If its size or modification timestamp changed since intake, the opaque drop ID is invalidated and the user must drop the file again. This prevents a stale Drop ID from silently reading different content after the initial consent gesture.
+
 ## File classification
 
 Extension classification exposes only a coarse local category:
