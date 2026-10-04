@@ -76,6 +76,8 @@ It gives testers a privacy-safe readiness snapshot for runtime, assistant model,
 
 No prompts, memories, screenshots, audio, file paths or credentials are included in the copied report.
 
+The Diagnostics Center also exposes a local **Core self-test** that validates Local Data readability, permission sanitization, Saved Actions/Automations stores, Agent history, model catalog and runtime health without executing PC or OBS actions.
+
 ## Release gate
 
 M009.3 should only be marked complete after the independent Beta Quality workflow passes. A successful Windows build is still required before the Public Beta in M009.6.
