@@ -560,7 +560,13 @@ export type AudioInputSnapshot = {
 
 
 export type VoiceCaptureEvent = {
-  phase: "listening" | "captured" | "transcribing" | "transcribed" | "error";
+  phase:
+    | "listening"
+    | "captured"
+    | "transcribing"
+    | "transcribed"
+    | "submitted"
+    | "error";
   shortcut: string;
   sampleCount: number;
   durationMs: number;
