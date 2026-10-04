@@ -33,6 +33,7 @@ with new Beta-readiness work.
 - explicit zero-upload telemetry policy
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
 - named app window minimize/maximize/restore controls
+- App Skills V1 for focus-verified Brave/Chrome browser actions
 - bounded File Intelligence across personal Windows folders without content scanning
 - recent-file/category queries for videos, images, audio, documents, archives and Downloads
 - canonical-path-safe reveal in File Explorer without executing files
