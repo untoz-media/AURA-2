@@ -66,6 +66,9 @@ export default function DropTray({
   const [analyzing, setAnalyzing] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
   const visible = hovering || snapshot.items.length > 0;
+  const allAttached =
+    snapshot.items.length > 0
+    && snapshot.items.every((item) => attachedIds.includes(item.id));
 
   useEffect(() => {
     setInspections({});
@@ -145,10 +148,15 @@ export default function DropTray({
               <button
                 type="button"
                 className="feature-secondary-button"
-                disabled={paused || snapshot.items.length === 0 || analyzing}
+                disabled={
+                  paused
+                  || snapshot.items.length === 0
+                  || analyzing
+                  || allAttached
+                }
                 onClick={onAttachAll}
               >
-                Attach all to Chat
+                {allAttached ? "All attached" : "Attach all to Chat"}
               </button>
               <button
                 type="button"
