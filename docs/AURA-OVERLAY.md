@@ -48,7 +48,7 @@ Commands sent from the Overlay are tagged with:
 source = "overlay"
 ```
 
-This allows future routing, telemetry and permissions logic to distinguish quick commands from full-app, voice or automation requests without duplicating the execution system.
+This allows routing, diagnostics and permissions logic to distinguish quick commands from full-app, voice or automation requests without duplicating the execution system. The AURA-2 Beta telemetry policy remains Off by default.
 
 ## UX
 
