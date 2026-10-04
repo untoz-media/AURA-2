@@ -219,10 +219,14 @@ function App() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const value = command.trim();
+    const typedValue = command.trim();
+    const dropIds = [...attachedDropIds];
+    const value =
+      typedValue
+      || (dropIds.length > 0 ? "Analyze the attached local files." : "");
+
     if (!value) return;
 
-    const dropIds = [...attachedDropIds];
     setCommand("");
     const ack = await submitCommand(value, "desktop", dropIds);
     if (ack) {
@@ -585,8 +589,8 @@ function App() {
                           </span>
                           {message.attachmentNames && message.attachmentNames.length > 0 && (
                             <div className="chat-message-attachments">
-                              {message.attachmentNames.map((name) => (
-                                <span key={name} title={name}>
+                              {message.attachmentNames.map((name, index) => (
+                                <span key={`${message.id}:attachment:${index}`} title={name}>
                                   <span aria-hidden="true">▤</span>
                                   {name}
                                 </span>
@@ -688,7 +692,7 @@ function App() {
                     type="submit"
                     aria-label="Send"
                     disabled={
-                      !command.trim()
+                      (!command.trim() && attachedDropItems.length === 0)
                       || status === "Working"
                       || runtimeState.paused
                       || Boolean(pendingConfirmation)
