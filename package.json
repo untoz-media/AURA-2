@@ -13,6 +13,7 @@
     "icons": "npm --workspace @untoz/aura-desktop run icons",
     "release:check": "node scripts/check-release.mjs",
     "beta:source-check": "node scripts/check-beta-source.mjs",
-    "beta:quality": "npm run release:check && npm run beta:source-check && npm run frontend:build"
+    "beta:quality": "npm run release:check && npm run telemetry:check && npm run beta:source-check && npm run frontend:build",
+    "telemetry:check": "node scripts/check-telemetry-policy.mjs"
   }
 }
