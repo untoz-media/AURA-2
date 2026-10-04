@@ -269,6 +269,10 @@ Current behavior:
 - allowlisted text/code formats can expose a temporary preview bounded to 64 KiB / 12,000 characters
 - image inspection can expose local dimensions without creating a Vision capture
 - **Inspect all** applies the same bounded rules across the temporary batch
+- **Analyze with AURA** sends opaque drop IDs to Core and gives the local model a separate ephemeral attachment context
+- model attachment context is capped to 6,000 characters total and never contains canonical filesystem paths
+- attachment requests bypass deterministic computer-action, Routine and Director routing
+- attached text is explicitly marked as untrusted data for prompt-injection resistance
 - PDFs, Office files, video, audio and archives remain metadata-only in this Beta step
 - PNG/JPEG/WebP/GIF/BMP images can be staged explicitly for AURA Vision
 - Vision works from a normalized PNG copy in AURA's cache, never from the original image
