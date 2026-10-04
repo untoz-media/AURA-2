@@ -4,6 +4,7 @@ use crate::computer::{
     keyboard::KeyboardShortcut,
     mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
     system::{SettingsPage, SystemAction},
+    window_manager::WindowDisplayAction,
 };
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
@@ -26,6 +27,10 @@ pub enum ActionIntent {
     LaunchApp(AppTarget),
     CloseApp(AppTarget),
     SwitchToApp(AppTarget),
+    SetAppWindowState {
+        target: AppTarget,
+        action: WindowDisplayAction,
+    },
     ListWindows,
     PressShortcut(KeyboardShortcut),
     TypeText(String),
@@ -73,6 +78,9 @@ enum AppOperation {
     Launch,
     Close,
     Switch,
+    Minimize,
+    Maximize,
+    Restore,
 }
 
 fn system_request(input: &str) -> Option<SystemAction> {
@@ -988,6 +996,26 @@ fn is_list_windows_command(input: &str) -> bool {
 }
 
 fn app_request(input: &str) -> Option<(AppOperation, &str)> {
+    const MINIMIZE_PREFIXES: &[&str] = &[
+        "minimize ",
+        "minimise ",
+        "minimiza ",
+        "minimizar ",
+    ];
+
+    const MAXIMIZE_PREFIXES: &[&str] = &[
+        "maximize ",
+        "maximise ",
+        "maximiza ",
+        "maximizar ",
+    ];
+
+    const RESTORE_PREFIXES: &[&str] = &[
+        "restore ",
+        "restaura ",
+        "restaurar ",
+    ];
+
     const LAUNCH_PREFIXES: &[&str] = &[
         "open ",
         "launch ",
@@ -1019,24 +1047,23 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
         "focar ",
     ];
 
-    if let Some(value) = SWITCH_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-    {
-        return Some((AppOperation::Switch, strip_article(value)));
+    for (operation, prefixes) in [
+        (AppOperation::Minimize, MINIMIZE_PREFIXES),
+        (AppOperation::Maximize, MAXIMIZE_PREFIXES),
+        (AppOperation::Restore, RESTORE_PREFIXES),
+        (AppOperation::Switch, SWITCH_PREFIXES),
+        (AppOperation::Launch, LAUNCH_PREFIXES),
+        (AppOperation::Close, CLOSE_PREFIXES),
+    ] {
+        if let Some(value) = prefixes
+            .iter()
+            .find_map(|prefix| input.strip_prefix(prefix))
+        {
+            return Some((operation, strip_article(value)));
+        }
     }
 
-    if let Some(value) = LAUNCH_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-    {
-        return Some((AppOperation::Launch, strip_article(value)));
-    }
-
-    CLOSE_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-        .map(|value| (AppOperation::Close, strip_article(value)))
+    None
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
@@ -1250,6 +1277,27 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             ActionIntent::SwitchToApp(target),
             PermissionClass::Act,
         ),
+        AppOperation::Minimize => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Minimize,
+            },
+            PermissionClass::Act,
+        ),
+        AppOperation::Maximize => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Maximize,
+            },
+            PermissionClass::Act,
+        ),
+        AppOperation::Restore => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Restore,
+            },
+            PermissionClass::Act,
+        ),
     };
 
     RouteResult::Action(RoutedAction {
@@ -1266,6 +1314,56 @@ mod tests {
         keyboard::{KeyCode, ModifierKey},
         mouse::{MouseAction, MouseButton, ScreenPoint},
     };
+
+    #[test]
+    fn routes_named_window_state_controls_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Minimize Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::Brave,
+                    action: WindowDisplayAction::Minimize,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Maximiza o OBS", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::ObsStudio,
+                    action: WindowDisplayAction::Maximize,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Restaura o Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::Brave,
+                    action: WindowDisplayAction::Restore,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn unknown_window_state_target_is_not_guessed() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Minimize Photoshop", &policy),
+            RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
 
     #[test]
     fn routes_system_status_as_read() {
