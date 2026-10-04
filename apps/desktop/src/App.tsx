@@ -40,6 +40,7 @@ type AppView =
 
 function App() {
   const [command, setCommand] = useState("");
+  const [attachedDropIds, setAttachedDropIds] = useState<string[]>([]);
   const [view, setView] = useState<AppView>("chat");
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("general");
@@ -204,6 +205,13 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chatMessages.length, status]);
 
+  useEffect(() => {
+    const availableIds = new Set(dropIntake.items.map((item) => item.id));
+    setAttachedDropIds((current) =>
+      current.filter((dropId) => availableIds.has(dropId)),
+    );
+  }, [dropIntake.refreshedAtMs]);
+
   function changeTheme(nextTheme: AuraTheme) {
     setTheme(nextTheme);
     applyAuraTheme(nextTheme);
@@ -214,8 +222,12 @@ function App() {
     const value = command.trim();
     if (!value) return;
 
+    const dropIds = [...attachedDropIds];
     setCommand("");
-    await submitCommand(value);
+    const ack = await submitCommand(value, "desktop", dropIds);
+    if (ack) {
+      setAttachedDropIds([]);
+    }
   }
 
   async function runQuickCommand(value: string) {
@@ -233,6 +245,7 @@ function App() {
 
   function startNewConversation() {
     setCommand("");
+    setAttachedDropIds([]);
     setView("chat");
     void clearConversationControl();
   }
@@ -242,6 +255,24 @@ function App() {
     : status === "Working"
       ? "AURA working"
       : "Computer ready";
+
+  const attachedDropItems = dropIntake.items.filter((item) =>
+    attachedDropIds.includes(item.id),
+  );
+
+  function toggleDropAttachment(dropId: string) {
+    setAttachedDropIds((current) =>
+      current.includes(dropId)
+        ? current.filter((id) => id !== dropId)
+        : [...current, dropId].slice(0, 8),
+    );
+    setView("chat");
+  }
+
+  function attachAllDroppedFiles() {
+    setAttachedDropIds(dropIntake.items.map((item) => item.id).slice(0, 8));
+    setView("chat");
+  }
 
   return (
     <main className="app-shell aura1-evolved-shell">
@@ -590,6 +621,40 @@ function App() {
                   />
                 )}
 
+                {attachedDropItems.length > 0 && (
+                  <div className="composer-attachments" aria-label="Attached local files">
+                    <div className="composer-attachments-heading">
+                      <span>
+                        {attachedDropItems.length} temporary file
+                        {attachedDropItems.length === 1 ? "" : "s"} attached
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedDropIds([])}
+                        disabled={status === "Working"}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="composer-attachment-chips">
+                      {attachedDropItems.map((item) => (
+                        <button
+                          type="button"
+                          className="composer-attachment-chip"
+                          key={item.id}
+                          title={`Remove ${item.name} from this message`}
+                          onClick={() => toggleDropAttachment(item.id)}
+                          disabled={status === "Working"}
+                        >
+                          <span aria-hidden="true">▤</span>
+                          <strong>{item.name}</strong>
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <form className="aura-composer" onSubmit={handleSubmit}>
                   <input
                     autoFocus
@@ -598,7 +663,9 @@ function App() {
                     placeholder={
                       runtimeState.paused
                         ? "AURA is paused…"
-                        : "Message AURA…"
+                        : attachedDropItems.length > 0
+                          ? `Ask AURA about ${attachedDropItems.length} attached file${attachedDropItems.length === 1 ? "" : "s"}…`
+                          : "Message AURA…"
                     }
                     aria-label="Message AURA"
                     disabled={
@@ -624,6 +691,9 @@ function App() {
                 <p className="composer-meta">
                   <span className="local-dot" />
                   Local-first · Private by design · {appStatus?.version ?? "AURA-2"}
+                  {attachedDropItems.length > 0 && (
+                    <> · Attachments are used for this turn only</>
+                  )}
                   <span className="composer-shortcut">
                     <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
                     <ShortcutKey>Space</ShortcutKey>
@@ -846,6 +916,9 @@ function App() {
         hovering={dropHover}
         paused={runtimeState.paused}
         onClear={clearDropIntakeControl}
+        attachedIds={attachedDropIds}
+        onToggleAttach={toggleDropAttachment}
+        onAttachAll={attachAllDroppedFiles}
         onReveal={revealDroppedFileControl}
         onInspect={inspectDroppedFileControl}
         onAnalyze={async (dropIds) => {
