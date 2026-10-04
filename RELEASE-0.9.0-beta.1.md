@@ -12,6 +12,8 @@ AURA-2 is a local-first personal computer assistant for Windows. Its goal is to 
 
 ### Desktop foundation
 
+- contextual First Local Setup card for Runtime/model onboarding
+
 - native Tauri 2 + React + TypeScript desktop app
 - system tray and Background Mode
 - optional Windows autostart
