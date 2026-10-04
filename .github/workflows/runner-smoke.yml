@@ -1,0 +1,21 @@
+name: Runner Smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/runner-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: GitHub-hosted runner smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prove runner assignment
+        run: |
+          echo "runner-assigned"
+          uname -a
+          node --version || true
+          python --version || true
+          cargo --version || true
