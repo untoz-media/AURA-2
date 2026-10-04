@@ -1,0 +1,58 @@
+name: AURA feature request
+description: Suggest an improvement or new capability for AURA.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AURA is local-first and permission-aware. Describe the user goal first, then the capability you think should solve it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should AURA solve?
+      description: Describe the workflow or friction, not only the feature name.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: What should the user be able to say/do, and what should AURA do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Chat / models
+        - Computer Control
+        - Memory / context
+        - Voice
+        - Vision
+        - OBS / Director Mode
+        - Agents
+        - Automations
+        - Integrations / Skills
+        - Settings / permissions
+        - UI / onboarding
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy / permission expectations
+      description: If this feature reads data or acts on the PC, what should require Allow, Ask or explicit confirmation?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional.
