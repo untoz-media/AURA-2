@@ -4717,22 +4717,54 @@ fn clear_last_vision_capture(
 #[tauri::command]
 fn capture_vision_screen(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
+
     capture_for_vision_query(&app, VisionQueryTarget::Screen)
 }
 
 #[tauri::command]
 fn capture_vision_active_window(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
+
     capture_for_vision_query(&app, VisionQueryTarget::ActiveWindow)
 }
 
 #[tauri::command]
 fn capture_vision_region(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     request: VisionRegionRequest,
 ) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
     emit_vision_event(
         &app,
         VisionEvent {
@@ -4770,9 +4802,19 @@ fn capture_vision_region(
 #[tauri::command]
 fn analyze_last_vision_capture(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     prompt: String,
     session: State<'_, VisionSession>,
 ) -> Result<VisionAnalysisPayload, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Visual analysis is blocked by AURA's Read permission policy.".to_string());
+    }
     let capture = session
         .last_capture
         .lock()
@@ -5126,6 +5168,26 @@ pub fn run() {
 
                         let runtime = app.state::<RuntimeState>();
                         if runtime_snapshot(&runtime).paused {
+                            return;
+                        }
+
+                        if runtime
+                            .permission_policy
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .decision_for(PermissionClass::Read)
+                            == PermissionDecision::Never
+                        {
+                            emit_vision_event(
+                                app,
+                                VisionEvent {
+                                    phase: "error",
+                                    message: "Region capture is blocked by AURA's Read permission policy.".to_string(),
+                                    capture: None,
+                                    analysis: None,
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
                             return;
                         }
 
