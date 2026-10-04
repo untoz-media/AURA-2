@@ -114,6 +114,7 @@ function App() {
     refreshMemories,
     clearDropIntakeControl,
     revealDroppedFileControl,
+    inspectDroppedFileControl,
     stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
@@ -846,6 +847,7 @@ function App() {
         paused={runtimeState.paused}
         onClear={clearDropIntakeControl}
         onReveal={revealDroppedFileControl}
+        onInspect={inspectDroppedFileControl}
         onUseVision={async (dropId) => {
           await stageDroppedImageForVisionControl(dropId);
           setView("vision");
