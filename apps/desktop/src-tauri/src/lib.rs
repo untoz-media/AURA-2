@@ -44,6 +44,9 @@ use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
+use computer::drop_intake::{
+    is_supported_vision_image, reveal_drop, DropIntakeSnapshot, DropIntakeState,
+};
 use computer::file_intelligence::{
     recent_personal_files, reveal_personal_path, search_personal_files,
     summarize_file_search, summarize_recent_files as summarize_recent_file_search,
@@ -93,7 +96,8 @@ use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
 use vision_capture::{
     capture_active_window, capture_full_screen, capture_region, capture_window_handle,
-    cursor_position, region_from_points, remove_capture, CaptureRect, VisionCapture,
+    cursor_position, import_local_image, region_from_points, remove_capture, CaptureRect,
+    VisionCapture,
 };
 use vision_history::{
     clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
@@ -6106,6 +6110,88 @@ fn stop_audio_input_test(
 }
 
 #[tauri::command]
+fn ingest_dropped_files(
+    paths: Vec<String>,
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.ingest(paths)
+}
+
+#[tauri::command]
+fn get_drop_intake(
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.snapshot()
+}
+
+#[tauri::command]
+fn clear_drop_intake(
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.clear()
+}
+
+#[tauri::command]
+fn reveal_dropped_file(
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<String, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Act)
+        == PermissionDecision::Never
+    {
+        return Err("Reveal in Explorer is blocked by AURA's Act permission policy.".to_string());
+    }
+
+    // This command is only exposed through an explicit dropped-file UI action.
+    // If Act=Ask, the click itself is the one-shot confirmation.
+    reveal_drop(&drops, &drop_id)
+}
+
+#[tauri::command]
+fn stage_dropped_image_for_vision(
+    app: AppHandle,
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<VisionCapture, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Dropped-image analysis is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    let path = drops.path_for(&drop_id)?;
+    if !is_supported_vision_image(&path) {
+        return Err("That dropped item is not a supported local Vision image.".to_string());
+    }
+
+    let capture = import_local_image(&app, &path)?;
+    let capture = store_last_vision_capture(&app, capture);
+
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "captured",
+            message: "Dropped image staged locally for AURA Vision.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    Ok(capture)
+}
+
+#[tauri::command]
 fn get_current_app_context(
     awareness: State<'_, CurrentAppAwareness>,
 ) -> Result<CurrentAppInfo, String> {
@@ -6398,6 +6484,7 @@ pub fn run() {
         .manage(AgentEngine::default())
         .manage(AutomationScheduler::default())
         .manage(VisionSession::default())
+        .manage(DropIntakeState::default())
         .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
         .manage(ManagedRuntimeSetup::default())
@@ -6952,6 +7039,11 @@ pub fn run() {
             capture_vision_active_window,
             capture_vision_region,
             analyze_last_vision_capture,
+            ingest_dropped_files,
+            get_drop_intake,
+            clear_drop_intake,
+            reveal_dropped_file,
+            stage_dropped_image_for_vision,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
