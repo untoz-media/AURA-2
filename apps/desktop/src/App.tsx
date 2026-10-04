@@ -672,7 +672,12 @@ function App() {
               obsRuntime={obsRuntime}
               recentFiles={recentFiles}
               onRecentFilesRefresh={refreshRecentFiles}
-              onCommand={runQuickCommand}
+              onCommand={async (value) => {
+                if (value === "Read clipboard") {
+                  setView("chat");
+                }
+                await runQuickCommand(value);
+              }}
             />
           )}
 
