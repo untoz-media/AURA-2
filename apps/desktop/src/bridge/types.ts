@@ -356,6 +356,24 @@ export type CurrentAppInfo = {
   capturedAtMs: number;
 };
 
+export type AppSkillDescriptor = {
+  id: string;
+  group: string;
+  appName: string;
+  name: string;
+  description: string;
+  command: string;
+  permission: PermissionClass;
+  available: boolean;
+  contextual: boolean;
+};
+
+export type AppSkillCatalog = {
+  skills: AppSkillDescriptor[];
+  contextAppName?: string | null;
+  refreshedAtMs: number;
+};
+
 export type RecentFileItem = {
   name: string;
   modifiedAtMs: number;
