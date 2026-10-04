@@ -168,6 +168,7 @@ fn retain_capture(app: &AppHandle, capture: &VisionCapture) -> Result<String, St
     fs::copy(&capture.path, &destination)
         .map(|_| ())
         .map_err(|error| format!("Could not retain Vision screenshot: {error}"))?;
+    remove_capture(&capture.path);
 
     Ok(destination.to_string_lossy().to_string())
 }
