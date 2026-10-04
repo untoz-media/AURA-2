@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -23,6 +24,11 @@ impl Default for BetaPreferences {
             diagnostics_history_enabled: false,
         }
     }
+}
+
+#[derive(Default)]
+pub struct BetaSessionRuntime {
+    previous_session_unclean: AtomicBool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -77,12 +83,19 @@ pub struct DiagnosticsSnapshot {
     pub generated_at_ms: u64,
 }
 
-pub fn begin_session(app: &AppHandle) -> Result<bool, String> {
+pub fn begin_session(
+    app: &AppHandle,
+    runtime: &BetaSessionRuntime,
+) -> Result<bool, String> {
     let path = session_path(app)?;
     let previous_unclean = fs::read_to_string(&path)
         .ok()
         .and_then(|content| serde_json::from_str::<SessionMarker>(&content).ok())
         .is_some_and(|marker| !marker.clean_exit);
+
+    runtime
+        .previous_session_unclean
+        .store(previous_unclean, Ordering::Relaxed);
 
     let marker = SessionMarker {
         session_id: format!("session-{}", timestamp_ms()),
@@ -106,19 +119,18 @@ pub fn mark_session_clean(app: &AppHandle) -> Result<(), String> {
     write_json(&path, &marker)
 }
 
-pub fn status(app: &AppHandle) -> Result<BetaStatus, String> {
+pub fn status(
+    app: &AppHandle,
+    runtime: &BetaSessionRuntime,
+) -> Result<BetaStatus, String> {
     let preferences = load_preferences(app)?;
-    let previous_session_unclean = session_path(app)?
-        .exists()
-        && fs::read_to_string(session_path(app)?)
-            .ok()
-            .and_then(|content| serde_json::from_str::<SessionMarker>(&content).ok())
-            .is_some_and(|marker| !marker.clean_exit);
 
     Ok(BetaStatus {
         channel: "beta".to_string(),
         onboarding_complete: preferences.onboarding_complete,
-        previous_session_unclean,
+        previous_session_unclean: runtime
+            .previous_session_unclean
+            .load(Ordering::Relaxed),
         diagnostics_history_enabled: preferences.diagnostics_history_enabled,
         telemetry_enabled: false,
         automatic_crash_uploads: false,
@@ -129,6 +141,7 @@ pub fn status(app: &AppHandle) -> Result<BetaStatus, String> {
 
 pub fn save_preferences(
     app: &AppHandle,
+    runtime: &BetaSessionRuntime,
     request: SetBetaPreferencesRequest,
 ) -> Result<BetaStatus, String> {
     let preferences = BetaPreferences {
@@ -136,7 +149,7 @@ pub fn save_preferences(
         diagnostics_history_enabled: request.diagnostics_history_enabled,
     };
     write_json(&preferences_path(app)?, &preferences)?;
-    status(app)
+    status(app, runtime)
 }
 
 pub fn export_diagnostics(
