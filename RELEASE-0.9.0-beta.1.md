@@ -99,6 +99,14 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 - privacy-safe diagnostics report for bug reports
 - excludes prompts, memories, screenshots, audio, file paths and credentials
 
+### Beta stability hardening
+
+- independent Beta quality/source gates
+- repaired Agent regression-test annotations
+- fail-safe Action Router parser paths
+- shared tested Beta self-test finalization logic
+- fail-closed Diagnostics readiness for unexpected states
+- privacy-safe Diagnostics report for bug reports
 ### Beta safety & privacy
 
 - redesigned Privacy and Safety & Permissions UI
