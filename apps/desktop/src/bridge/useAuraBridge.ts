@@ -390,39 +390,66 @@ export function useAuraBridge() {
     let cleanupAgent: (() => void) | undefined;
     let cleanupAutomation: (() => void) | undefined;
 
-    Promise.all([
+    Promise.allSettled([
       getAppStatus(),
       getRuntimeState(),
       getPermissionPolicy(),
       getObsConnectionState(),
       getDirectorPresets(),
       getBetaStatus(),
-    ])
-      .then(([app, runtime, permissions, obs, presets, beta]) => {
-        if (cancelled) return;
-        setAppStatus(app);
-        setRuntimeState(runtime);
-        setPermissionPolicyState(permissions);
-        setObsConnection(obs);
-        setDirectorPresets(presets);
-        setBetaStatusState(beta);
+    ]).then(([app, runtime, permissions, obs, presets, beta]) => {
+      if (cancelled) return;
 
-        if (runtime.paused) {
+      const criticalFailures: string[] = [];
+
+      if (app.status === "fulfilled") {
+        setAppStatus(app.value);
+      } else {
+        criticalFailures.push("app status");
+      }
+
+      if (runtime.status === "fulfilled") {
+        setRuntimeState(runtime.value);
+
+        if (runtime.value.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
-        } else if (runtime.backgroundEnabled) {
+        } else if (runtime.value.backgroundEnabled) {
           setActivity("AURA is ready and can remain available in the background.");
         } else {
           setActivity("Background mode is disabled. Closing AURA will quit the app.");
         }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setBridgeError({
-            code: "bridge.status_failed",
-            message: String(error),
-          });
-        }
-      });
+      } else {
+        criticalFailures.push("runtime state");
+      }
+
+      if (permissions.status === "fulfilled") {
+        setPermissionPolicyState(permissions.value);
+      } else {
+        criticalFailures.push("permission policy");
+      }
+
+      if (obs.status === "fulfilled") {
+        setObsConnection(obs.value);
+      }
+
+      if (presets.status === "fulfilled") {
+        setDirectorPresets(presets.value);
+      }
+
+      if (beta.status === "fulfilled") {
+        setBetaStatusState(beta.value);
+      }
+
+      if (criticalFailures.length > 0) {
+        const message =
+          `AURA started with unavailable core state: ${criticalFailures.join(", ")}. Safe defaults remain active where possible.`;
+        setBridgeError({
+          code: "bridge.partial_startup",
+          message,
+        });
+        setActivity(message);
+      }
+    });
 
     getBetaDiagnostics()
       .then((snapshot) => {
