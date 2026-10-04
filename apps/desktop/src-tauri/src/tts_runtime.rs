@@ -484,3 +484,18 @@ fn timestamp_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_supported_local_voice_paths() {
+        assert!(voice_relative_path("voice-piper-ptpt")
+            .is_some_and(|path| path.ends_with("pt_PT-tugão-medium.onnx")));
+        assert!(voice_relative_path("voice-piper-engb-alan")
+            .is_some_and(|path| path.ends_with("en_GB-alan-medium.onnx")));
+        assert_eq!(voice_relative_path("unknown"), None);
+    }
+}
