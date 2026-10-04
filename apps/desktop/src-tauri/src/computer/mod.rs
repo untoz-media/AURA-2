@@ -1,4 +1,5 @@
 pub mod app_launcher;
+pub mod app_skills;
 pub mod app_lifecycle;
 pub mod audio;
 pub mod clipboard;
