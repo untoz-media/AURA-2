@@ -65,6 +65,13 @@ The result was still:
 
 The same startup failure occurs on both `ubuntu-latest` and `windows-2022`.
 
+The latest re-check on the expanded Beta candidate reproduced the same infrastructure signature:
+
+- Windows Build run `37237151569`: `runner_name` empty, `steps: []`, failure in ~2 seconds
+- Static Checks run `37237151580`: `runner_name` empty, `steps: []`, failure in ~1 second
+
+This confirms that the newer Create, Clipboard and File Intelligence code was not executed by those failed hosted jobs.
+
 This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
 
 Before retrying, check the Untoz organization:
