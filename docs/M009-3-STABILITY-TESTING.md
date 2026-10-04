@@ -62,6 +62,17 @@ This prevents Startup Automations from firing during launch when the user had ex
 Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
 
 If an existing desktop-preferences file is unreadable or invalid, AURA now fails closed with `paused=true` so Agents and Automations cannot silently resume from corrupted local state.
+## Local references fail loudly instead of degrading silently
+
+Beta no longer treats corrupted local context as an empty list in safety-sensitive paths.
+
+- Agent planning fails if Routines, Saved Actions or Director presets cannot be loaded.
+- Agent step validation and permission calculation use strict local-store reads.
+- Director preset Save/Delete first parse the existing store and never overwrite an invalid file.
+- Routine Save validates every referenced Director preset before persisting the Routine.
+- Routine execution resolves Director presets through a checked reader.
+- Chat routing distinguishes `no local match` from `local store invalid` and emits terminal failure events rather than falling through to another route.
+- Director preset loading is isolated from the main desktop bootstrap so a broken optional store surfaces an error without preventing the rest of AURA from loading.
 ## Startup recovery failures are visible
 
 `recover_interrupted_runs` is no longer ignored during application setup. If Agent history cannot be read or updated, AURA emits an `agents.recovery_failed` lifecycle warning so the user can open Diagnostics and investigate the local store.
