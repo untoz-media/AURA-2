@@ -62,6 +62,7 @@ function verifyReleaseConfiguration() {
 function runPythonCompile() {
   const files = [
     "apps/desktop/src-tauri/src/model_runtime.py",
+    "apps/desktop/src-tauri/src/image_runtime.py",
     "apps/desktop/src-tauri/src/speech_runtime.py",
     "apps/desktop/src-tauri/src/tts_runtime.py",
     "apps/desktop/src-tauri/src/vision_runtime.py",
