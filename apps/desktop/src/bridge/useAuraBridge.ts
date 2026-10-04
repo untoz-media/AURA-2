@@ -436,15 +436,48 @@ export function useAuraBridge() {
     listenToVoiceCapture((event: VoiceCaptureEvent) => {
       if (cancelled) return;
       setVoiceCapture(event);
-      setStatus(event.phase === "listening" ? "Listening" : "Idle");
+
+      if (event.phase === "listening") {
+        setStatus("Listening");
+      } else if (event.phase === "transcribing" || event.phase === "transcribed") {
+        setStatus("Thinking");
+      } else if (event.phase === "submitted") {
+        // AURA Core owns status from this point onward.
+      } else {
+        setStatus("Idle");
+      }
+
       setActivity(event.message);
-      if (event.phase === "transcribed" || event.phase === "error") {
+
+      if (event.phase === "submitted" && event.text) {
+        const messageId = `voice:${event.timestampMs}:user`;
+        setChatMessages((current) =>
+          current.some((message) => message.id === messageId)
+            ? current
+            : [
+                ...current,
+                {
+                  id: messageId,
+                  role: "user",
+                  content: event.text!,
+                  timestampMs: event.timestampMs,
+                },
+              ],
+        );
+      }
+
+      if (
+        event.phase === "transcribed" ||
+        event.phase === "submitted" ||
+        event.phase === "error"
+      ) {
         void getSpeechRuntimeStatus()
           .then((runtime) => {
             if (!cancelled) setSpeechRuntime(runtime);
           })
           .catch(() => undefined);
       }
+
       void getAudioInputState()
         .then((snapshot) => {
           if (!cancelled) setAudioInput(snapshot);
