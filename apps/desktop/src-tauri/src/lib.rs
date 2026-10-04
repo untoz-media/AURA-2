@@ -36,6 +36,10 @@ use beta::{
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
+use computer::clipboard::{
+    clear as clear_clipboard, read_text as read_clipboard_text,
+    summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
+};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::recent_files::{
@@ -120,6 +124,7 @@ struct RuntimeState {
     permission_policy: Mutex<PermissionPolicy>,
     pending_confirmations: Mutex<HashMap<String, PendingConfirmation>>,
     voice_command_ids: Mutex<HashSet<String>>,
+    private_voice_command_ids: Mutex<HashSet<String>>,
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
     conversation_active: AtomicBool,
@@ -140,6 +145,7 @@ impl Default for RuntimeState {
             permission_policy: Mutex::new(PermissionPolicy::default()),
             pending_confirmations: Mutex::new(HashMap::new()),
             voice_command_ids: Mutex::new(HashSet::new()),
+            private_voice_command_ids: Mutex::new(HashSet::new()),
             voice_preferences: Mutex::new(VoicePreferences::default()),
             wake_monitor_generation: AtomicU64::new(1),
             conversation_active: AtomicBool::new(false),
@@ -1635,6 +1641,11 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let is_voice = voice_ids.contains(&event.id);
+        let mut private_voice_ids = state
+            .private_voice_command_ids
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let is_private_voice_result = private_voice_ids.contains(&event.id);
         let terminal = matches!(
             event.kind,
             "command.completed" | "command.failed" | "command.cancelled"
@@ -1642,11 +1653,14 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
 
         if terminal {
             voice_ids.remove(&event.id);
+            private_voice_ids.remove(&event.id);
         }
 
         (
             is_voice && terminal,
-            is_voice && matches!(event.kind, "command.completed" | "command.failed"),
+            is_voice
+                && !is_private_voice_result
+                && matches!(event.kind, "command.completed" | "command.failed"),
         )
     };
 
@@ -2360,6 +2374,14 @@ fn process_user_command(
 
     match routed {
         RouteResult::Action(action) => {
+            if source == "voice" && matches!(&action.intent, ActionIntent::ClipboardRead) {
+                state
+                    .private_voice_command_ids
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(id.clone());
+            }
+
             let decision = if let Some(permission) = approved_permission {
                 if permission != action.permission {
                     emit_core_event(
@@ -3459,6 +3481,158 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ClipboardRead => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Reading clipboard text locally…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match read_clipboard_text() {
+                                Ok(text) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_clipboard_text(&text),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not read clipboard text: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_read_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ClipboardWrite(text) => {
+                            let character_count = text.chars().count();
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Copying {character_count} characters to the clipboard…"
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match write_clipboard_text(&text) {
+                                Ok(written) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "Copied {written} characters to the clipboard."
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not write clipboard text: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_write_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ClipboardClear => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Clearing the Windows clipboard…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match clear_clipboard() {
+                                Ok(()) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: "Clipboard cleared.".to_string(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not clear the clipboard: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_clear_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::UserRoutine(routine_id) => {
                             let routine = find_routine_by_id(&worker_app, &routine_id);
                             match routine {
@@ -4414,6 +4588,18 @@ fn process_user_command(
                     }
                     ActionIntent::RecentFiles => {
                         "Reading Windows Recent Items requires confirmation under the current permission policy."
+                            .to_string()
+                    }
+                    ActionIntent::ClipboardRead => {
+                        "The clipboard can contain passwords, tokens or private text. Confirm before AURA reads it."
+                            .to_string()
+                    }
+                    ActionIntent::ClipboardWrite(value) => format!(
+                        "Copying {} characters to the Windows clipboard requires confirmation.",
+                        value.chars().count()
+                    ),
+                    ActionIntent::ClipboardClear => {
+                        "Clearing the Windows clipboard is destructive and requires confirmation."
                             .to_string()
                     }
                     ActionIntent::UserRoutine(routine_id) => format!(
