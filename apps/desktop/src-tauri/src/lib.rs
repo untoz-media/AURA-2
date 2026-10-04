@@ -4993,11 +4993,17 @@ fn get_managed_runtime_status(
 fn install_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.start_install(app, false)
 }
 
@@ -5005,11 +5011,17 @@ fn install_managed_runtime(
 fn repair_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.start_install(app, true)
 }
 
@@ -5017,11 +5029,17 @@ fn repair_managed_runtime(
 fn remove_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.remove(&app)
 }
 
