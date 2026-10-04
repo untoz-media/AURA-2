@@ -114,6 +114,25 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Start a new conversation and confirm chat context clears without deleting the model.
 - [ ] Remove a model and confirm active-model state remains valid.
 
+## F.4 Drag & Drop Actions
+
+- [ ] Drag one local file over the AURA main window and confirm the drop overlay appears on enter/over and disappears on leave.
+- [ ] Drop a valid file and confirm the tray shows filename/type/size without exposing its filesystem path.
+- [ ] Drop more than 8 items and confirm AURA accepts at most 8 and reports the bounded rejection/truncation state.
+- [ ] Drop a directory and confirm it is rejected.
+- [ ] Drop the same canonical file twice in one batch and confirm it is deduplicated.
+- [ ] Confirm dropping a file does not open, execute, upload, remember or analyze it.
+- [ ] Reveal a dropped file in Explorer and confirm the original file is selected but not executed.
+- [ ] Set Act = Never and confirm Reveal is blocked.
+- [ ] Drop PNG/JPEG/WebP/GIF/BMP images and stage each supported format for Vision.
+- [ ] Confirm an unsupported image-like format such as SVG is not offered to Vision.
+- [ ] Confirm a source image larger than 40 MB is rejected for Vision staging.
+- [ ] Confirm an image over the 24-million-pixel Vision limit is rejected.
+- [ ] Confirm Vision receives a cached `droppedImage` capture and clearing Vision does not delete the original file.
+- [ ] Set Read = Never and confirm Use in Vision is blocked.
+- [ ] Confirm dropped-file paths/content are absent from exported Beta diagnostics.
+- [ ] Dismiss the drop tray and confirm original files are unchanged.
+
 ## F.5 AURA Create
 
 - [ ] Confirm `AURA Create · Image` appears as a feature-specific downloadable model.
