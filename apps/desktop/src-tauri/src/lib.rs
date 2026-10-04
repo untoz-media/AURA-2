@@ -2400,6 +2400,8 @@ fn process_user_command(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
+    // Submitting a desktop Chat message with explicitly attached drop IDs is
+    // the one-shot user gesture for Read=Ask. Read=Never remains a hard block.
     if !drop_ids.is_empty()
         && policy.decision_for(PermissionClass::Read) == PermissionDecision::Never
     {
@@ -5459,13 +5461,23 @@ fn process_user_command(
                 let worker_drop_ids = drop_ids.clone();
     
                 thread::spawn(move || {
+                    let attachment_count = worker_drop_ids.len();
+                    let processing_message = if attachment_count > 0 {
+                        format!(
+                            "Analyzing {attachment_count} attached local file{} with the selected local model…",
+                            if attachment_count == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        "Thinking with the selected local model…".to_string()
+                    };
+
                     emit_core_event(
                         &worker_app,
                         CoreEvent {
                             id: worker_id.clone(),
                             kind: "command.processing",
                             status: AuraRuntimeStatus::Working,
-                            message: "Thinking with the selected local model…".to_string(),
+                            message: processing_message,
                             command: Some(worker_text.clone()),
                             timestamp_ms: unix_timestamp_ms(),
                         },
