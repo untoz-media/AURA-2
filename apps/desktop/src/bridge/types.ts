@@ -717,6 +717,7 @@ export type AgentPlan = {
   summary: string;
   steps: AgentStep[];
   requiresConfirmation: boolean;
+  blockedByPolicy: boolean;
   highestPermission: PermissionClass;
   createdAtMs: number;
 };
