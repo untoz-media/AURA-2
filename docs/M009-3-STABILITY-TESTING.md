@@ -60,6 +60,8 @@ Startup order is:
 This prevents Startup Automations from firing during launch when the user had explicitly paused AURA before the previous shutdown/restart.
 
 Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
+
+If an existing desktop-preferences file is unreadable or invalid, AURA now fails closed with `paused=true` so Agents and Automations cannot silently resume from corrupted local state.
 ## Permission corruption fails closed
 
 The persisted permission policy previously fell back to normal defaults when its JSON could not be read or parsed. Because normal defaults allow Read and Act, a corrupted file could unintentionally become less restrictive than the user's previous policy.
