@@ -141,7 +141,26 @@ Prompts, memory, screenshots, audio/transcripts, file context, Agent history and
 
 See [Telemetry Policy](./TELEMETRY-POLICY.md) for the full policy.
 
-## 9. Troubleshooting
+## 9. Beta Diagnostics
+
+Open **Settings → Diagnostics** to review AURA's Beta readiness without exposing personal content.
+
+The Diagnostics Center shows:
+
+- AURA build/version
+- Managed Runtime state
+- selected assistant model readiness
+- Voice STT/TTS state
+- Vision model/runtime state
+- OBS connection state
+- Global Pause and permission guardrails
+- Agent failure/interruption count
+- enabled Automation count
+- automatic product telemetry status
+
+The **Copy diagnostics** action creates a privacy-safe text report for bug reports. It intentionally excludes prompts, memories, screenshots, audio, file paths, OBS passwords and other personal content.
+
+## 10. Troubleshooting
 
 ### Local model will not start
 
@@ -174,7 +193,7 @@ Open **Settings → Permissions** and inspect the permission class reported by t
 - verify host, port and password
 - use `127.0.0.1` for the normal same-PC setup
 
-## 10. Reporting Beta problems
+## 11. Reporting Beta problems
 
 When reporting a bug, include only the information you choose to share:
 
