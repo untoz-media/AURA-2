@@ -4151,126 +4151,211 @@ fn process_user_command(
             );
         }
         RouteResult::NoMatch => {
-            let worker_app = app.clone();
-            let worker_id = id.clone();
-            let worker_text = text.clone();
+            if let Some(target) = vision_query_target(&text) {
+                let read_decision = state
+                    .permission_policy
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .decision_for(PermissionClass::Read);
 
-            thread::spawn(move || {
-                emit_core_event(
-                    &worker_app,
-                    CoreEvent {
-                        id: worker_id.clone(),
-                        kind: "command.processing",
-                        status: AuraRuntimeStatus::Working,
-                        message: "Thinking with the selected local model…".to_string(),
-                        command: Some(worker_text.clone()),
-                        timestamp_ms: unix_timestamp_ms(),
-                    },
-                );
+                if read_decision == PermissionDecision::Never {
+                    emit_core_event(
+                        &app,
+                        CoreEvent {
+                            id: id.clone(),
+                            kind: "command.failed",
+                            status: AuraRuntimeStatus::Idle,
+                            message: "Screen reading is blocked by AURA's Read permission policy.".to_string(),
+                            command: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                } else {
+                    let worker_app = app.clone();
+                    let worker_id = id.clone();
+                    let worker_text = text.clone();
 
-                let manager = worker_app.state::<ModelManager>();
-                let runtime = worker_app.state::<ModelRuntime>();
-                let desktop_context = {
-                    let awareness = worker_app.state::<CurrentAppAwareness>();
-                    let foreground = awareness.snapshot().ok();
-                    let recent = recent_files_snapshot(5).ok();
-                    let project = summarize_active_project(&worker_app).ok().flatten();
-
-                    if foreground.is_none() && recent.is_none() && project.is_none() {
-                        None
-                    } else {
-                        let mut summary = String::new();
-
-                        if let Some(context) = foreground {
-                            summary.push_str(&format!(
-                                "Current app: {}\nProcess: {}",
-                                context.app_name, context.process_name
-                            ));
-
-                            if let Some(title) = context.window_title.as_deref() {
-                                summary.push_str(&format!("\nActive window title: {title}"));
-                            }
-
-                            if context.context_source == "lastExternal" {
-                                summary.push_str(
-                                    "\nContext source: last external window before AURA took focus",
-                                );
-                            } else {
-                                summary.push_str("\nContext source: foreground");
-                            }
-                        }
-
-                        if let Some(snapshot) = recent {
-                            if !snapshot.items.is_empty() {
-                                if !summary.is_empty() {
-                                    summary.push_str("\n");
-                                }
-                                let names = snapshot
-                                    .items
-                                    .iter()
-                                    .map(|item| item.name.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" · ");
-                                summary.push_str(&format!("Recent files: {names}"));
-                            }
-                        }
-
-                        if let Some(project) = project {
-                            if !summary.is_empty() {
-                                summary.push_str("\n");
-                            }
-                            summary.push_str(&project);
-                        }
-
-                        (!summary.is_empty()).then_some(summary)
-                    }
-                };
-
-                match runtime.generate(
-                    &worker_app,
-                    &manager,
-                    &worker_text,
-                    desktop_context.as_deref(),
-                ) {
-                    Ok(response) => {
-                        emit_core_event(
-                            &worker_app,
-                            CoreEvent {
-                                id: worker_id,
-                                kind: "command.completed",
-                                status: AuraRuntimeStatus::Idle,
-                                message: response,
-                                command: Some(worker_text),
-                                timestamp_ms: unix_timestamp_ms(),
-                            },
-                        );
-                    }
-                    Err(error) => {
-                        let message = format!("Local model unavailable: {error}");
-
+                    thread::spawn(move || {
                         emit_core_event(
                             &worker_app,
                             CoreEvent {
                                 id: worker_id.clone(),
-                                kind: "command.failed",
-                                status: AuraRuntimeStatus::Idle,
-                                message: message.clone(),
-                                command: Some(worker_text),
+                                kind: "command.processing",
+                                status: AuraRuntimeStatus::Working,
+                                message: "Looking at the requested local screen context…".to_string(),
+                                command: Some(worker_text.clone()),
                                 timestamp_ms: unix_timestamp_ms(),
                             },
                         );
 
-                        emit_core_error(
-                            &worker_app,
-                            CoreError {
-                                id: Some(worker_id),
-                                code: "model.runtime_failed",
-                                message,
-                            },
-                        );
-                    }
+                        let result = capture_for_vision_query(&worker_app, target)
+                            .and_then(|capture| {
+                                analyze_capture_internal(
+                                    &worker_app,
+                                    &capture,
+                                    &vision_prompt(&worker_text),
+                                )
+                            });
+
+                        match result {
+                            Ok(analysis) => emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id,
+                                    kind: "command.completed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: analysis.analysis,
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            ),
+                            Err(error) => {
+                                let message = format!("Vision unavailable: {error}");
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "vision.runtime_failed",
+                                        message,
+                                    },
+                                );
+                            }
+                        }
+                    });
                 }
-            });
+            } else {
+                let worker_app = app.clone();
+                let worker_id = id.clone();
+                let worker_text = text.clone();
+    
+                thread::spawn(move || {
+                    emit_core_event(
+                        &worker_app,
+                        CoreEvent {
+                            id: worker_id.clone(),
+                            kind: "command.processing",
+                            status: AuraRuntimeStatus::Working,
+                            message: "Thinking with the selected local model…".to_string(),
+                            command: Some(worker_text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+    
+                    let manager = worker_app.state::<ModelManager>();
+                    let runtime = worker_app.state::<ModelRuntime>();
+                    let desktop_context = {
+                        let awareness = worker_app.state::<CurrentAppAwareness>();
+                        let foreground = awareness.snapshot().ok();
+                        let recent = recent_files_snapshot(5).ok();
+                        let project = summarize_active_project(&worker_app).ok().flatten();
+    
+                        if foreground.is_none() && recent.is_none() && project.is_none() {
+                            None
+                        } else {
+                            let mut summary = String::new();
+    
+                            if let Some(context) = foreground {
+                                summary.push_str(&format!(
+                                    "Current app: {}\nProcess: {}",
+                                    context.app_name, context.process_name
+                                ));
+    
+                                if let Some(title) = context.window_title.as_deref() {
+                                    summary.push_str(&format!("\nActive window title: {title}"));
+                                }
+    
+                                if context.context_source == "lastExternal" {
+                                    summary.push_str(
+                                        "\nContext source: last external window before AURA took focus",
+                                    );
+                                } else {
+                                    summary.push_str("\nContext source: foreground");
+                                }
+                            }
+    
+                            if let Some(snapshot) = recent {
+                                if !snapshot.items.is_empty() {
+                                    if !summary.is_empty() {
+                                        summary.push_str("\n");
+                                    }
+                                    let names = snapshot
+                                        .items
+                                        .iter()
+                                        .map(|item| item.name.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join(" · ");
+                                    summary.push_str(&format!("Recent files: {names}"));
+                                }
+                            }
+    
+                            if let Some(project) = project {
+                                if !summary.is_empty() {
+                                    summary.push_str("\n");
+                                }
+                                summary.push_str(&project);
+                            }
+    
+                            (!summary.is_empty()).then_some(summary)
+                        }
+                    };
+    
+                    match runtime.generate(
+                        &worker_app,
+                        &manager,
+                        &worker_text,
+                        desktop_context.as_deref(),
+                    ) {
+                        Ok(response) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id,
+                                    kind: "command.completed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: response,
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+                        }
+                        Err(error) => {
+                            let message = format!("Local model unavailable: {error}");
+    
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.failed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: message.clone(),
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+    
+                            emit_core_error(
+                                &worker_app,
+                                CoreError {
+                                    id: Some(worker_id),
+                                    code: "model.runtime_failed",
+                                    message,
+                                },
+                            );
+                        }
+                    }
+                });
+            }
         }
     }
 
