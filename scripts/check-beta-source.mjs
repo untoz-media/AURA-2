@@ -74,6 +74,19 @@ for (const forbidden of ["unreachable!(", ".expect("]) {
   }
 }
 
+const desktopLib = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
+if (/fn finish_beta_self_test\([^)]*\)[^{]*\{\s*finish_beta_self_test\(/s.test(desktopLib)) {
+  failures.push("apps/desktop/src-tauri/src/lib.rs: Beta self-test finisher is recursively calling itself");
+}
+if (!desktopLib.includes("finish_beta_self_test(checks)")) {
+  failures.push("apps/desktop/src-tauri/src/lib.rs: runtime Beta self-test is not using the tested finalization helper");
+}
+
+const settingsSource = fs.readFileSync("apps/desktop/src/Settings.tsx", "utf8");
+if (!settingsSource.includes('tone={!betaSelfTest.ready ? "critical"')) {
+  failures.push("apps/desktop/src/Settings.tsx: non-ready Beta self-test must render as critical");
+}
+
 requireFragments("apps/desktop/src/Settings.tsx", [
   "export type SettingsSection =",
   '| "diagnostics";',
