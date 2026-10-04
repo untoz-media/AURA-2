@@ -193,7 +193,26 @@ fn beta_self_test_check(
 }
 
 fn finish_beta_self_test(checks: Vec<BetaSelfTestCheck>) -> BetaSelfTestReport {
-    finish_beta_self_test(checks)
+    let passed = checks.iter().filter(|check| check.status == "pass").count();
+    let warnings = checks
+        .iter()
+        .filter(|check| check.status == "warning")
+        .count();
+    let failed = checks.iter().filter(|check| check.status == "fail").count();
+
+    let ready = checks.iter().filter(|check| check.required).all(|check| {
+        matches!(check.status, "pass" | "warning")
+    });
+
+    BetaSelfTestReport {
+        version: env!("CARGO_PKG_VERSION"),
+        ready,
+        passed,
+        warnings,
+        failed,
+        checks,
+        completed_at_ms: unix_timestamp_ms(),
+    }
 }
 
 #[cfg(test)]
@@ -221,6 +240,32 @@ mod beta_self_test_tests {
 
         assert!(report.ready);
         assert_eq!(report.warnings, 1);
+        assert_eq!(report.failed, 0);
+    }
+
+    #[test]
+    fn required_warning_is_reported_without_becoming_a_hard_failure() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "warning", true, "not initialized"),
+            beta_self_test_check("policy", "Policy", "pass", true, "safe"),
+        ]);
+
+        assert!(report.ready);
+        assert_eq!(report.passed, 1);
+        assert_eq!(report.warnings, 1);
+        assert_eq!(report.failed, 0);
+        assert_eq!(report.checks.len(), 2);
+    }
+
+    #[test]
+    fn unknown_required_status_fails_closed() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "unknown", true, "unexpected"),
+        ]);
+
+        assert!(!report.ready);
+        assert_eq!(report.passed, 0);
+        assert_eq!(report.warnings, 0);
         assert_eq!(report.failed, 0);
     }
 }
