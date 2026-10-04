@@ -131,7 +131,7 @@ impl TtsRuntime {
             let message =
                 "Piper installation finished but the managed Python runtime cannot import it."
                     .to_string();
-            self.set_error(app, manager, message.clone());
+            self.set_error(app, manager, None, message.clone());
             return Err(message);
         }
 
@@ -252,7 +252,10 @@ impl TtsRuntime {
                     let message = envelope
                         .message
                         .unwrap_or_else(|| "Local text-to-speech failed.".to_string());
-                    self.set_error(app, manager, message.clone());
+                    let sample_rate = process_guard
+                        .as_ref()
+                        .and_then(|running| running.sample_rate);
+                    self.set_error(app, manager, sample_rate, message.clone());
                     return Err(message);
                 }
                 _ => {}
@@ -366,6 +369,7 @@ impl TtsRuntime {
         &self,
         app: &AppHandle,
         manager: &ModelManager,
+        sample_rate: Option<u32>,
         message: String,
     ) {
         let status = TtsRuntimeStatus {
@@ -373,12 +377,7 @@ impl TtsRuntime {
             model_id: TTS_MODEL_ID.to_string(),
             dependency_ready: python_module_available(app, "piper").unwrap_or(false),
             voice_installed: manager.installation_path(app, TTS_MODEL_ID).is_ok(),
-            sample_rate: self
-                .process
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .as_ref()
-                .and_then(|running| running.sample_rate),
+            sample_rate,
             last_text: self
                 .status
                 .lock()
