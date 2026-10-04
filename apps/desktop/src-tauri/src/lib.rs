@@ -942,6 +942,15 @@ fn emit_runtime_state(app: &tauri::AppHandle) -> RuntimeSnapshot {
     snapshot
 }
 
+fn ensure_runtime_active(state: &RuntimeState, action: &str) -> Result<(), String> {
+    if runtime_snapshot(state).paused {
+        return Err(format!(
+            "AURA is paused. Resume it before {action}."
+        ));
+    }
+    Ok(())
+}
+
 fn emit_lifecycle_event(app: &tauri::AppHandle, kind: &'static str, message: &str) {
     let _ = app.emit(
         "aura:lifecycle-event",
@@ -5543,6 +5552,7 @@ fn capture_vision_screen(
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing the screen")?;
     if state
         .permission_policy
         .lock()
@@ -5561,6 +5571,7 @@ fn capture_vision_active_window(
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing the active window")?;
     if state
         .permission_policy
         .lock()
@@ -5580,6 +5591,7 @@ fn capture_vision_region(
     state: State<'_, RuntimeState>,
     request: VisionRegionRequest,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing a Vision region")?;
     if state
         .permission_policy
         .lock()
@@ -5630,6 +5642,7 @@ fn analyze_last_vision_capture(
     prompt: String,
     session: State<'_, VisionSession>,
 ) -> Result<VisionAnalysisPayload, String> {
+    ensure_runtime_active(&state, "running Vision analysis")?;
     if state
         .permission_policy
         .lock()
@@ -5737,8 +5750,10 @@ fn delete_user_routine(app: AppHandle, routine_id: String) -> Result<(), String>
 #[tauri::command]
 fn run_user_routine(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     routine_id: String,
 ) -> Result<RoutineRunResult, String> {
+    ensure_runtime_active(&state, "running a Routine")?;
     let routine = find_routine_by_id(&app, &routine_id)
         .ok_or_else(|| "Routine no longer exists.".to_string())?;
 
@@ -5804,9 +5819,11 @@ fn delete_director_preset_command(
 #[tauri::command]
 async fn run_director_preset_command(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     preset_id: String,
     obs: State<'_, ObsController>,
 ) -> Result<DirectorPresetRunResult, String> {
+    ensure_runtime_active(&state, "running a Director Mode preset")?;
     let preset = find_director_preset_by_id(&app, &preset_id)
         .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
 
@@ -5864,9 +5881,11 @@ async fn get_obs_source_items(
 
 #[tauri::command]
 async fn set_obs_source_visibility(
+    state: State<'_, RuntimeState>,
     request: ObsSourceVisibilityRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSourceVisibilityResult, String> {
+    ensure_runtime_active(&state, "changing OBS source visibility")?;
     obs.set_source_visibility(request).await
 }
 
@@ -5879,40 +5898,50 @@ async fn get_obs_audio_inputs(
 
 #[tauri::command]
 async fn set_obs_audio_muted(
+    state: State<'_, RuntimeState>,
     request: ObsAudioMuteRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_runtime_active(&state, "changing OBS audio state")?;
     obs.set_audio_muted(request).await
 }
 
 #[tauri::command]
 async fn set_obs_audio_volume(
+    state: State<'_, RuntimeState>,
     request: ObsAudioVolumeRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_runtime_active(&state, "changing OBS audio volume")?;
     obs.set_audio_volume(request).await
 }
 
 #[tauri::command]
 async fn set_obs_program_scene(
+    state: State<'_, RuntimeState>,
     request: ObsSceneSwitchRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_runtime_active(&state, "changing the OBS Program scene")?;
     obs.set_program_scene(request).await
 }
 
 #[tauri::command]
 async fn set_obs_preview_scene(
+    state: State<'_, RuntimeState>,
     request: ObsSceneSwitchRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_runtime_active(&state, "changing the OBS Preview scene")?;
     obs.set_preview_scene(request).await
 }
 
 #[tauri::command]
 async fn start_obs_recording(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_runtime_active(&state, "starting OBS recording")?;
     obs.start_recording().await
 }
 
@@ -5932,15 +5961,19 @@ async fn pause_obs_recording(
 
 #[tauri::command]
 async fn resume_obs_recording(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_runtime_active(&state, "resuming OBS recording")?;
     obs.resume_recording().await
 }
 
 #[tauri::command]
 async fn start_obs_streaming(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsStreamingActionResult, String> {
+    ensure_runtime_active(&state, "starting OBS streaming")?;
     obs.start_streaming().await
 }
 
