@@ -2507,8 +2507,8 @@ export default function Settings({
             </Surface>
 
             <Surface className="settings-card">
-              <SectionLabel>Available & planned</SectionLabel>
-              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
+              <SectionLabel>Capabilities</SectionLabel>
+              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">Ready</Badge>} />
               <SettingRow title="Future Skills" description="Modular app integrations built on the AURA Skills architecture." trailing={<Badge tone="planned">Later</Badge>} />
             </Surface>
           </>
@@ -2518,4 +2518,3 @@ export default function Settings({
   );
 }
 
-export type { SettingsSection };
