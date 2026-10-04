@@ -165,7 +165,7 @@ export default function Agents({
   const recentRuns = useMemo(
     () =>
       runs.runs.filter((run) =>
-        ["completed", "failed", "cancelled"].includes(run.state),
+        ["completed", "failed", "cancelled", "interrupted"].includes(run.state),
       ),
     [runs.runs],
   );
