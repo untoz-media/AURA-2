@@ -54,6 +54,12 @@ requireFragments("apps/desktop/src-tauri/src/permissions.rs", [
   "PermissionDecision::Allow",
   "self.destructive = PermissionDecision::Ask",
   "self.sensitive = PermissionDecision::Ask",
+  "pub fn fail_closed() -> Self",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "return PermissionPolicy::fail_closed();",
+  ".unwrap_or_else(|_| PermissionPolicy::fail_closed())",
 ]);
 
 requireFragments("apps/desktop/src-tauri/src/agents.rs", [
