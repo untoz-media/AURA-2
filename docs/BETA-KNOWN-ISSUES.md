@@ -8,6 +8,8 @@ Current trackers: **#55** CI startup failure · **#56** dependency lockfile · *
 
 Recent Windows Build runs and the independent Beta Quality run have failed with zero recorded steps. Checkout and project commands never started.
 
+A temporary diagnostic workflow was also tested with no external actions and a single `echo` step on `ubuntu-latest`. It failed in the same way with zero recorded steps. The diagnostic workflow was removed immediately afterward. This isolates the blocker to GitHub Actions job startup/repository infrastructure rather than AURA source code, Node, Rust, Tauri, NSIS, `actions/checkout` or `actions/setup-node`.
+
 This means CI has not yet provided a valid compile/test result for the current Beta stack. The Public Beta must wait for a successful quality run and a successful Windows installer build.
 
 ### Dependency lockfile still needs to be generated
