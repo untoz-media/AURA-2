@@ -1,10 +1,35 @@
-use std::{thread, time::Duration};
+use std::{process::Command, thread, time::Duration};
+
+use tauri::{AppHandle, Manager};
 
 use super::{
     app_launcher::AppTarget,
     keyboard::{press_shortcut, KeyboardShortcut},
     window_manager::{current_app, switch_to_app},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersonalFolderSkill {
+    Desktop,
+    Documents,
+    Downloads,
+    Pictures,
+    Videos,
+    Music,
+}
+
+impl PersonalFolderSkill {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Desktop => "Desktop",
+            Self::Documents => "Documents",
+            Self::Downloads => "Downloads",
+            Self::Pictures => "Pictures",
+            Self::Videos => "Videos",
+            Self::Music => "Music",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrowserSkillAction {
@@ -106,9 +131,56 @@ pub fn execute_browser_skill(skill: BrowserSkill) -> Result<String, String> {
     ))
 }
 
+pub fn execute_personal_folder_skill(
+    app: &AppHandle,
+    skill: PersonalFolderSkill,
+) -> Result<String, String> {
+    let resolver = app.path();
+    let path = match skill {
+        PersonalFolderSkill::Desktop => resolver.desktop_dir(),
+        PersonalFolderSkill::Documents => resolver.document_dir(),
+        PersonalFolderSkill::Downloads => resolver.download_dir(),
+        PersonalFolderSkill::Pictures => resolver.picture_dir(),
+        PersonalFolderSkill::Videos => resolver.video_dir(),
+        PersonalFolderSkill::Music => resolver.audio_dir(),
+    }
+    .map_err(|error| {
+        format!(
+            "Windows did not expose the {} folder: {error}",
+            skill.display_name()
+        )
+    })?;
+
+    if !path.exists() || !path.is_dir() {
+        return Err(format!(
+            "The resolved {} folder does not exist or is unavailable.",
+            skill.display_name()
+        ));
+    }
+
+    Command::new("explorer.exe")
+        .arg(&path)
+        .spawn()
+        .map_err(|error| {
+            format!(
+                "Could not open {} in File Explorer: {error}",
+                skill.display_name()
+            )
+        })?;
+
+    Ok(format!("Opened {} in File Explorer.", skill.display_name()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn personal_folder_skill_labels_are_stable() {
+        assert_eq!(PersonalFolderSkill::Desktop.display_name(), "Desktop");
+        assert_eq!(PersonalFolderSkill::Downloads.display_name(), "Downloads");
+        assert_eq!(PersonalFolderSkill::Music.display_name(), "Music");
+    }
 
     #[test]
     fn browser_skill_rejects_non_browser_targets() {
