@@ -4996,6 +4996,7 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(VisionSession::default())
         .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
         .manage(ManagedRuntimeSetup::default())
@@ -5003,6 +5004,7 @@ pub fn run() {
         .manage(ModelRuntime::default())
         .manage(SpeechRuntime::default())
         .manage(TtsRuntime::default())
+        .manage(VisionRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -5017,6 +5019,130 @@ pub fn run() {
                     ) {
                         if event.state() == ShortcutState::Pressed {
                             toggle_overlay(app);
+                        }
+                        return;
+                    }
+
+                    if shortcut.matches(
+                        Modifiers::CONTROL | Modifiers::SHIFT,
+                        Code::F9,
+                    ) {
+                        if event.state() != ShortcutState::Pressed {
+                            return;
+                        }
+
+                        let runtime = app.state::<RuntimeState>();
+                        if runtime_snapshot(&runtime).paused {
+                            return;
+                        }
+
+                        let point = match cursor_position() {
+                            Ok(point) => point,
+                            Err(error) => {
+                                emit_vision_event(
+                                    app,
+                                    VisionEvent {
+                                        phase: "error",
+                                        message: error,
+                                        capture: None,
+                                        analysis: None,
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                return;
+                            }
+                        };
+
+                        let session = app.state::<VisionSession>();
+                        let first = {
+                            let mut start = session
+                                .region_start
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                            match start.take() {
+                                Some(first) => Some(first),
+                                None => {
+                                    *start = Some(point);
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(first) = first {
+                            match region_from_points(first, point) {
+                                Ok(rect) => {
+                                    let app_for_capture = app.clone();
+                                    thread::spawn(move || {
+                                        emit_vision_event(
+                                            &app_for_capture,
+                                            VisionEvent {
+                                                phase: "capturing",
+                                                message: "Capturing the selected screen region…".to_string(),
+                                                capture: None,
+                                                analysis: None,
+                                                timestamp_ms: unix_timestamp_ms(),
+                                            },
+                                        );
+
+                                        match capture_region(
+                                            &app_for_capture,
+                                            rect.x,
+                                            rect.y,
+                                            rect.width,
+                                            rect.height,
+                                        ) {
+                                            Ok(capture) => {
+                                                let capture =
+                                                    store_last_vision_capture(&app_for_capture, capture);
+                                                emit_vision_event(
+                                                    &app_for_capture,
+                                                    VisionEvent {
+                                                        phase: "captured",
+                                                        message: "Region captured. Ask AURA Vision to analyze it.".to_string(),
+                                                        capture: Some(capture),
+                                                        analysis: None,
+                                                        timestamp_ms: unix_timestamp_ms(),
+                                                    },
+                                                );
+                                            }
+                                            Err(error) => emit_vision_event(
+                                                &app_for_capture,
+                                                VisionEvent {
+                                                    phase: "error",
+                                                    message: error,
+                                                    capture: None,
+                                                    analysis: None,
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            ),
+                                        }
+                                    });
+                                }
+                                Err(error) => emit_vision_event(
+                                    app,
+                                    VisionEvent {
+                                        phase: "error",
+                                        message: error,
+                                        capture: None,
+                                        analysis: None,
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                            }
+                        } else {
+                            emit_vision_event(
+                                app,
+                                VisionEvent {
+                                    phase: "regionSelecting",
+                                    message: format!(
+                                        "Vision region start marked at ({}, {}). Move the cursor to the opposite corner and press Ctrl+Shift+F9 again.",
+                                        point.0, point.1
+                                    ),
+                                    capture: None,
+                                    analysis: None,
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
                         }
                         return;
                     }
@@ -5197,6 +5323,12 @@ pub fn run() {
             );
             app.global_shortcut().register(push_to_talk_shortcut)?;
 
+            let vision_region_shortcut = Shortcut::new(
+                Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                Code::F9,
+            );
+            app.global_shortcut().register(vision_region_shortcut)?;
+
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
@@ -5234,6 +5366,7 @@ pub fn run() {
                         app.state::<ModelRuntime>().stop();
                         app.state::<SpeechRuntime>().stop();
                         app.state::<TtsRuntime>().stop();
+                        app.state::<VisionRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -5271,6 +5404,7 @@ pub fn run() {
                             app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.state::<TtsRuntime>().stop();
+                            app_for_close.state::<VisionRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -5330,6 +5464,16 @@ pub fn run() {
             prepare_tts_runtime,
             test_tts_voice,
             stop_tts_speaking,
+            get_vision_runtime_status,
+            get_vision_history,
+            set_vision_preferences,
+            clear_vision_history,
+            get_last_vision_capture,
+            clear_last_vision_capture,
+            capture_vision_screen,
+            capture_vision_active_window,
+            capture_vision_region,
+            analyze_last_vision_capture,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
