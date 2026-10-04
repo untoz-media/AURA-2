@@ -1,6 +1,6 @@
 {
   "name": "aura-2",
-  "version": "0.3.0-alpha.1",
+  "version": "0.8.0-alpha.1",
   "private": true,
   "workspaces": [
     "apps/desktop"
@@ -10,6 +10,7 @@
     "build": "npm --workspace @untoz/aura-desktop run tauri:build",
     "frontend:dev": "npm --workspace @untoz/aura-desktop run dev",
     "frontend:build": "npm --workspace @untoz/aura-desktop run build",
-    "icons": "npm --workspace @untoz/aura-desktop run icons"
+    "icons": "npm --workspace @untoz/aura-desktop run icons",
+    "release:check": "node scripts/check-release.mjs"
   }
 }
