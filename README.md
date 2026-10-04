@@ -97,7 +97,7 @@ AURA-2/
 - AURA Vision
 - AURA Voice
 - Computer Control
-- App Skills
+- App Skills ✅
 - File Intelligence ✅
 - Clipboard Intelligence ✅
 - Drag & Drop actions
@@ -243,6 +243,33 @@ Current runtime behavior:
 
 The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
 
+
+
+
+### App Skills
+
+AURA now has a real deterministic App Skills layer.
+
+Browser Skills V1 supports **Brave** and **Google Chrome** with:
+
+- New tab
+- Next tab
+- Previous tab
+- Reload tab
+- Focus address bar
+- Reopen closed tab
+
+Every Browser Skill:
+
+1. resolves a known browser target;
+2. brings that browser window to the foreground;
+3. waits briefly for Windows to complete the focus transition;
+4. verifies the foreground process really is the requested browser;
+5. sends only the fixed shortcut associated with that skill.
+
+If foreground verification fails, no shortcut is injected.
+
+Browser Skills V1 use the reversible `Act` permission class and do not require an LLM.
 
 ### File Intelligence
 
