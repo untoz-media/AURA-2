@@ -1607,7 +1607,7 @@ export default function Settings({
                 title="Previous session"
                 description={
                   betaStatus.previousSessionUnclean
-                    ? "The previous AURA session did not record a clean exit. No report was uploaded."
+                    ? "The previous AURA session did not record a clean exit. AURA started paused for safety and no report was uploaded."
                     : "The previous session ended cleanly or no recovery condition was detected."
                 }
                 trailing={
