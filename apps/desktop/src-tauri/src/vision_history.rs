@@ -165,12 +165,9 @@ fn retain_capture(app: &AppHandle, capture: &VisionCapture) -> Result<String, St
     fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let destination = directory.join(format!("{}.png", capture.id));
 
-    fs::rename(&capture.path, &destination).or_else(|_| {
-        fs::copy(&capture.path, &destination)
-            .map(|_| ())
-            .and_then(|_| fs::remove_file(&capture.path))
-    })
-    .map_err(|error| format!("Could not retain Vision screenshot: {error}"))?;
+    fs::copy(&capture.path, &destination)
+        .map(|_| ())
+        .map_err(|error| format!("Could not retain Vision screenshot: {error}"))?;
 
     Ok(destination.to_string_lossy().to_string())
 }
