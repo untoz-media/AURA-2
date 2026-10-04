@@ -257,6 +257,51 @@ fn should_prefer_director_preset(text: &str, base_route: &RouteResult) -> bool {
     }
 }
 
+fn normalize_voice_command(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let lowered = trimmed.to_lowercase();
+    let prefixes = [
+        "hey aura",
+        "ok aura",
+        "okay aura",
+        "olá aura",
+        "ola aura",
+        "aura",
+    ];
+
+    for prefix in prefixes {
+        if lowered == prefix {
+            return String::new();
+        }
+
+        if lowered.starts_with(prefix) {
+            let boundary = trimmed
+                .chars()
+                .nth(prefix.chars().count())
+                .is_some_and(|character| {
+                    character.is_whitespace()
+                        || matches!(character, ',' | ':' | ';' | '-' | '—')
+                });
+
+            if boundary {
+                return trimmed[prefix.len()..]
+                    .trim_start_matches(|character: char| {
+                        character.is_whitespace()
+                            || matches!(character, ',' | ':' | ';' | '-' | '—')
+                    })
+                    .trim()
+                    .to_string();
+            }
+        }
+    }
+
+    trimmed.to_string()
+}
+
 fn should_prefer_user_routine(text: &str, base_route: &RouteResult) -> bool {
     let normalized = text
         .trim()
@@ -357,6 +402,28 @@ mod director_route_tests {
             "switch scene to Camera 2",
             &routed(ActionIntent::ObsProgramScene("Camera 2".to_string())),
         ));
+    }
+}
+
+#[cfg(test)]
+mod voice_command_tests {
+    use super::*;
+
+    #[test]
+    fn removes_aura_wake_prefix_without_changing_command() {
+        assert_eq!(normalize_voice_command("AURA, abre o Brave"), "abre o Brave");
+        assert_eq!(normalize_voice_command("Hey AURA: open Brave"), "open Brave");
+        assert_eq!(normalize_voice_command("Olá AURA — abre o OBS"), "abre o OBS");
+    }
+
+    #[test]
+    fn preserves_commands_without_wake_prefix() {
+        assert_eq!(normalize_voice_command("abre o Brave"), "abre o Brave");
+    }
+
+    #[test]
+    fn wake_word_alone_is_not_a_command() {
+        assert_eq!(normalize_voice_command("AURA"), "");
     }
 }
 
@@ -640,7 +707,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M005 In Progress · Memory & Context",
+        stage: "M006 In Progress · Voice",
         local_first: true,
     }
 }
@@ -3858,20 +3925,99 @@ pub fn run() {
                                                 let speech = app_for_speech.state::<SpeechRuntime>();
 
                                                 match speech.transcribe(&app_for_speech, &manager, capture) {
-                                                    Ok(result) => emit_voice_capture_event(
-                                                        &app_for_speech,
-                                                        VoiceCaptureEvent {
-                                                            phase: "transcribed",
-                                                            shortcut: "Ctrl+Shift+F8",
-                                                            sample_count: result.input_samples_16khz,
-                                                            duration_ms: result.duration_ms,
-                                                            sample_rate: Some(16_000),
-                                                            channels: Some(1),
-                                                            message: "Local transcription complete.".to_string(),
-                                                            text: Some(result.text),
-                                                            timestamp_ms: unix_timestamp_ms(),
-                                                        },
-                                                    ),
+                                                    Ok(result) => {
+                                                        let transcript = result.text.trim().to_string();
+
+                                                        if result.duration_ms < 250 || result.input_rms < 0.003 {
+                                                            emit_voice_capture_event(
+                                                                &app_for_speech,
+                                                                VoiceCaptureEvent {
+                                                                    phase: "error",
+                                                                    shortcut: "Ctrl+Shift+F8",
+                                                                    sample_count: result.input_samples_16khz,
+                                                                    duration_ms: result.duration_ms,
+                                                                    sample_rate: Some(16_000),
+                                                                    channels: Some(1),
+                                                                    message: "Voice capture was too short or too quiet to execute safely.".to_string(),
+                                                                    text: Some(transcript),
+                                                                    timestamp_ms: unix_timestamp_ms(),
+                                                                },
+                                                            );
+                                                            return;
+                                                        }
+                                                        emit_voice_capture_event(
+                                                            &app_for_speech,
+                                                            VoiceCaptureEvent {
+                                                                phase: "transcribed",
+                                                                shortcut: "Ctrl+Shift+F8",
+                                                                sample_count: result.input_samples_16khz,
+                                                                duration_ms: result.duration_ms,
+                                                                sample_rate: Some(16_000),
+                                                                channels: Some(1),
+                                                                message: "Local transcription complete.".to_string(),
+                                                                text: Some(transcript.clone()),
+                                                                timestamp_ms: unix_timestamp_ms(),
+                                                            },
+                                                        );
+
+                                                        let command_text = normalize_voice_command(&transcript);
+                                                        if command_text.is_empty() {
+                                                            emit_voice_capture_event(
+                                                                &app_for_speech,
+                                                                VoiceCaptureEvent {
+                                                                    phase: "error",
+                                                                    shortcut: "Ctrl+Shift+F8",
+                                                                    sample_count: result.input_samples_16khz,
+                                                                    duration_ms: result.duration_ms,
+                                                                    sample_rate: Some(16_000),
+                                                                    channels: Some(1),
+                                                                    message: "AURA heard the wake name but no command followed it.".to_string(),
+                                                                    text: Some(transcript),
+                                                                    timestamp_ms: unix_timestamp_ms(),
+                                                                },
+                                                            );
+                                                        } else {
+                                                            let state = app_for_speech.state::<RuntimeState>();
+                                                            match process_user_command(
+                                                                app_for_speech.clone(),
+                                                                state,
+                                                                CommandRequest {
+                                                                    text: command_text.clone(),
+                                                                    source: "voice".to_string(),
+                                                                    approval_id: None,
+                                                                },
+                                                            ) {
+                                                                Ok(_) => emit_voice_capture_event(
+                                                                    &app_for_speech,
+                                                                    VoiceCaptureEvent {
+                                                                        phase: "submitted",
+                                                                        shortcut: "Ctrl+Shift+F8",
+                                                                        sample_count: result.input_samples_16khz,
+                                                                        duration_ms: result.duration_ms,
+                                                                        sample_rate: Some(16_000),
+                                                                        channels: Some(1),
+                                                                        message: "Voice command sent to AURA Core.".to_string(),
+                                                                        text: Some(command_text),
+                                                                        timestamp_ms: unix_timestamp_ms(),
+                                                                    },
+                                                                ),
+                                                                Err(error) => emit_voice_capture_event(
+                                                                    &app_for_speech,
+                                                                    VoiceCaptureEvent {
+                                                                        phase: "error",
+                                                                        shortcut: "Ctrl+Shift+F8",
+                                                                        sample_count: result.input_samples_16khz,
+                                                                        duration_ms: result.duration_ms,
+                                                                        sample_rate: Some(16_000),
+                                                                        channels: Some(1),
+                                                                        message: error,
+                                                                        text: Some(command_text),
+                                                                        timestamp_ms: unix_timestamp_ms(),
+                                                                    },
+                                                                ),
+                                                            }
+                                                        }
+                                                    },
                                                     Err(error) => emit_voice_capture_event(
                                                         &app_for_speech,
                                                         VoiceCaptureEvent {

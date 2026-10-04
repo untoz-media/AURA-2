@@ -30,6 +30,23 @@ pub struct CapturedAudio {
 }
 
 impl CapturedAudio {
+    pub fn rms(&self) -> f32 {
+        if self.samples.is_empty() {
+            return 0.0;
+        }
+
+        let sum_squares = self
+            .samples
+            .iter()
+            .map(|sample| {
+                let value = *sample as f64;
+                value * value
+            })
+            .sum::<f64>();
+
+        (sum_squares / self.samples.len() as f64).sqrt() as f32
+    }
+
     pub fn mono_16khz(&self) -> Vec<f32> {
         if self.samples.is_empty() || self.sample_rate == 0 || self.channels == 0 {
             return Vec::new();
@@ -636,6 +653,19 @@ mod tests {
         };
 
         assert_eq!(capture.mono_16khz(), vec![0.0, 0.5]);
+    }
+
+    #[test]
+    fn calculates_capture_rms() {
+        let capture = CapturedAudio {
+            samples: vec![0.5, -0.5, 0.5, -0.5],
+            sample_rate: 16_000,
+            channels: 1,
+            started_at_ms: 1,
+            completed_at_ms: 2,
+        };
+
+        assert!((capture.rms() - 0.5).abs() < 0.0001);
     }
 
     #[test]
