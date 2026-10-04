@@ -1,0 +1,79 @@
+# M009.3 — Stability Testing
+
+**Milestone:** M009.3  
+**Stage:** AURA-2 Beta hardening  
+**Base build:** 0.8.0-alpha.1
+
+M009.3 adds repeatable regression gates before the Public Beta instead of relying on a successful Windows installer job as the only quality signal.
+
+## Regression bug found during the audit
+
+The M008 Agent test module contained two annotation defects:
+
+- `only_idempotent_app_steps_are_retried` had duplicate `#[test]` attributes
+- `action_alias_conflicts_are_case_insensitive` was missing `#[test]`, so that regression case was not executed
+
+M009.3 repairs both annotations and expands pure regression coverage for:
+
+- retry allowlisting
+- non-retryable Wait and Saved Action steps
+- Automation interval lower/upper bounds
+- invalid non-JSON planner output
+- case-insensitive Action alias collisions
+
+## Beta source safety checks
+
+`npm run beta:source-check` performs fast source-level release guards.
+
+It fails on:
+
+- unresolved Git merge-conflict markers
+- known stale Alpha UI copy
+- missing Core permission sanitization invariants
+- missing Agent plan/wait limits
+- missing unattended Automation permission constraints
+- missing sensitive background Routine/Director guards
+- retry policy drift
+- duplicate Agent `#[test]` attributes
+- critical Agent regression functions that are no longer marked as tests
+
+These checks do not replace Rust tests or a security review. They are a cheap additional tripwire for Beta-critical invariants.
+
+## Independent Beta Quality workflow
+
+`.github/workflows/beta-quality.yml` runs on `ubuntu-latest` and performs:
+
+1. dependency installation
+2. release metadata validation
+3. Beta source safety checks
+4. TypeScript compilation and Vite frontend build
+
+This workflow is intentionally independent from the Windows NSIS runner.
+
+## Windows runner incident
+
+Windows Build runs #74 and #75 both failed before the first workflow step was recorded.
+
+In both cases GitHub reported an empty step list, meaning Checkout, npm, TypeScript, Rust, Tauri and NSIS did not execute. M009.3 therefore treats that condition as a runner/infrastructure failure rather than a product test failure.
+
+The Windows workflow still remains required for a real Beta installer and now also runs the Beta source guard when the runner starts normally.
+
+## Root quality commands
+
+```powershell
+npm run release:check
+npm run beta:source-check
+npm run beta:quality
+```
+
+`beta:quality` combines release metadata checks, source guards and the frontend production build.
+
+## Release gate
+
+M009.3 should only be marked complete after the independent Beta Quality workflow passes. A successful Windows build is still required before the Public Beta in M009.6.
+
+## Next
+
+**M009.4 — Telemetry Policy**
+
+AURA should define a clear Beta telemetry/crash-reporting policy before public distribution, with local-first defaults and no silent collection.
