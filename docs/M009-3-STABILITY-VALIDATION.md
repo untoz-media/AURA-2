@@ -86,6 +86,13 @@ After the App Skills V2 registry + Notepad pass, the failure signature remains u
 
 Therefore the App Skills V2/Notepad changes were not executed by GitHub-hosted CI.
 
+After App Skills V3 (Windows Terminal + Calculator), the hosted jobs still fail before runner assignment:
+
+- Windows Build run `37240255952`: empty runner name, `steps: []`, failed before the NSIS job began
+- Static Checks run `37240255914`: empty runner name, `steps: []`, failed before Beta source validation began
+
+The App Skills V3 pass therefore also has no GitHub-hosted compile/test evidence yet.
+
 This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
 
 Before retrying, check the Untoz organization:
