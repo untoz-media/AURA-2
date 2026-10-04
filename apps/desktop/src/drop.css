@@ -207,12 +207,16 @@
 .drop-tray-heading-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 7px;
 }
 
+.drop-tray-heading-actions .feature-primary-button,
 .drop-tray-heading-actions .feature-secondary-button {
   min-height: 30px;
   padding: 0 10px;
+  white-space: nowrap;
 }
 
 .drop-file-inspection,
