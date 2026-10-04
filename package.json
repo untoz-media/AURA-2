@@ -10,6 +10,8 @@
     "build": "npm --workspace @untoz/aura-desktop run tauri:build",
     "frontend:dev": "npm --workspace @untoz/aura-desktop run dev",
     "frontend:build": "npm --workspace @untoz/aura-desktop run build",
-    "icons": "npm --workspace @untoz/aura-desktop run icons"
+    "icons": "npm --workspace @untoz/aura-desktop run icons",
+    "beta:validate": "node scripts/validate-beta.mjs",
+    "beta:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-beta-windows.ps1"
   }
 }
