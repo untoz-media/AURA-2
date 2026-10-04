@@ -14,7 +14,7 @@ use crate::{
     model_runtime::ModelRuntime,
     permissions::{PermissionClass, PermissionDecision, PermissionPolicy},
     routines::{
-        find_routine_by_id, list_routines, routine_requires_sensitive_permission, run_routine,
+        list_routines, routine_requires_sensitive_permission, run_routine,
     },
 };
 use serde::{Deserialize, Serialize};
