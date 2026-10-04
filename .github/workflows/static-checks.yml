@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   validate:
-    name: TypeScript, Python and formatting
+    name: Beta source validation
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -44,19 +44,5 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm install
 
-      - name: Verify release version metadata
-        run: node scripts/verify-versions.mjs
-
-      - name: Check desktop TypeScript and Vite build
-        run: npm --workspace @untoz/aura-desktop run build
-
-      - name: Check embedded Python worker syntax
-        run: |
-          python -m py_compile \
-            apps/desktop/src-tauri/src/model_runtime.py \
-            apps/desktop/src-tauri/src/speech_runtime.py \
-            apps/desktop/src-tauri/src/tts_runtime.py \
-            apps/desktop/src-tauri/src/vision_runtime.py
-
-      - name: Check Rust formatting
-        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+      - name: Validate Public Beta source
+        run: npm run beta:validate
