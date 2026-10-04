@@ -250,12 +250,7 @@ fn validate_preset_request(
 fn write_presets(app: &AppHandle, presets: &[DirectorPreset]) -> Result<(), String> {
     let path = presets_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(presets).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, presets)
 }
 
 pub fn load_director_presets(app: &AppHandle) -> Vec<DirectorPreset> {
