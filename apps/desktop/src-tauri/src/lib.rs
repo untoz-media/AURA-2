@@ -2725,10 +2725,58 @@ fn process_user_command(
         .clone();
 
     let base_route = route_command(&text, &policy);
-    let routine_route = route_user_routine(&app, &text, &policy)
-        .map_err(|error| format!("Could not route local Routine: {error}"))?;
-    let director_route = route_director_preset(&app, &text, &policy)
-        .map_err(|error| format!("Could not route Director Mode preset: {error}"))?;
+    let routine_route = match route_user_routine(&app, &text, &policy) {
+        Ok(route) => route,
+        Err(error) => {
+            let message = format!("Could not route local Routine: {error}");
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: message.clone(),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_core_error(
+                &app,
+                CoreError {
+                    id: Some(id.clone()),
+                    code: "routine.store_invalid",
+                    message: message.clone(),
+                },
+            );
+            return Err(message);
+        }
+    };
+    let director_route = match route_director_preset(&app, &text, &policy) {
+        Ok(route) => route,
+        Err(error) => {
+            let message = format!("Could not route Director Mode preset: {error}");
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: message.clone(),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_core_error(
+                &app,
+                CoreError {
+                    id: Some(id.clone()),
+                    code: "director.store_invalid",
+                    message: message.clone(),
+                },
+            );
+            return Err(message);
+        }
+    };
 
     let routed = match routine_route {
         Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
