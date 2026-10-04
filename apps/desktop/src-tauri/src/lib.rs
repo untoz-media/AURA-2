@@ -140,6 +140,7 @@ struct VoicePreferences {
     conversation_timeout_seconds: u64,
     wake_word_enabled: bool,
     wake_phrase: String,
+    tts_voice_id: String,
 }
 
 impl Default for VoicePreferences {
@@ -151,6 +152,7 @@ impl Default for VoicePreferences {
             conversation_timeout_seconds: 8,
             wake_word_enabled: false,
             wake_phrase: "AURA".to_string(),
+            tts_voice_id: "voice-piper-ptpt".to_string(),
         }
     }
 }
@@ -163,6 +165,12 @@ impl VoicePreferences {
         self.wake_phrase = self.wake_phrase.trim().to_string();
         if self.wake_phrase.is_empty() {
             self.wake_phrase = "AURA".to_string();
+        }
+        if !matches!(
+            self.tts_voice_id.as_str(),
+            "voice-piper-ptpt" | "voice-piper-engb-alan"
+        ) {
+            self.tts_voice_id = "voice-piper-ptpt".to_string();
         }
         if self.wake_phrase.chars().count() > 32 {
             self.wake_phrase = self.wake_phrase.chars().take(32).collect();
@@ -4008,7 +4016,10 @@ fn remove_model(
     if model_id == "voice-whisper-base" {
         speech.stop();
     }
-    if model_id == "voice-piper-ptpt" {
+    if matches!(
+        model_id.as_str(),
+        "voice-piper-ptpt" | "voice-piper-engb-alan"
+    ) {
         tts.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
@@ -4065,7 +4076,14 @@ fn test_tts_voice(
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .tts_speed;
-    runtime.speak(&app, &manager, phrase, speed)
+    let voice_id = app
+        .state::<RuntimeState>()
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_voice_id
+        .clone();
+    runtime.speak(&app, &manager, phrase, speed, &voice_id)
 }
 
 #[tauri::command]
