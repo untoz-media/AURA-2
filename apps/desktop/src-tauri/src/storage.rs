@@ -4,8 +4,11 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process,
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub fn write_json_atomic<T>(path: &Path, value: &T) -> Result<(), String>
 where
@@ -56,7 +59,13 @@ fn temporary_path(path: &Path) -> PathBuf {
         .map(|value| value.as_nanos())
         .unwrap_or_default();
 
-    parent.join(format!(".{filename}.{}.{}.tmp", process::id(), nonce))
+    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    parent.join(format!(
+        ".{filename}.{}.{}.{}.tmp",
+        process::id(),
+        nonce,
+        counter
+    ))
 }
 
 #[cfg(test)]
