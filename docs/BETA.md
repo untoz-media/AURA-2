@@ -35,6 +35,12 @@ The desktop Model Manager is ready for multiple assistant models.
 
 The AURA-2 product architecture, computer-control stack and agent system do not depend on an unrestricted model having direct access to Windows.
 
+## Current release blockers
+
+- #55 — GitHub Actions runner startup
+- #56 — npm dependency lockfile
+- #57 — private vulnerability reporting
+
 ## Public Beta gate
 
 The Public Beta must not be published until:
