@@ -60,7 +60,7 @@ use std::{
     fs,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex,
     },
     thread,
@@ -88,6 +88,7 @@ struct RuntimeState {
     voice_command_ids: Mutex<HashSet<String>>,
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
+    conversation_active: AtomicBool,
 }
 
 impl Default for RuntimeState {
@@ -101,6 +102,7 @@ impl Default for RuntimeState {
             voice_command_ids: Mutex::new(HashSet::new()),
             voice_preferences: Mutex::new(VoicePreferences::default()),
             wake_monitor_generation: AtomicU64::new(1),
+            conversation_active: AtomicBool::new(false),
         }
     }
 }
@@ -935,6 +937,18 @@ fn process_voice_capture(
 
 fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     thread::spawn(move || {
+        let runtime = app.state::<RuntimeState>();
+        if runtime
+            .conversation_active
+            .swap(true, Ordering::Relaxed)
+        {
+            return;
+        }
+
+        runtime
+            .wake_monitor_generation
+            .fetch_add(1, Ordering::Relaxed);
+
         let preferences = app
             .state::<RuntimeState>()
             .voice_preferences
@@ -943,11 +957,13 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
             .clone();
 
         if !force && !preferences.conversation_mode {
+            runtime.conversation_active.store(false, Ordering::Relaxed);
             return;
         }
 
         let audio = app.state::<AudioInputManager>();
         if audio.capture_active() {
+            runtime.conversation_active.store(false, Ordering::Relaxed);
             return;
         }
 
@@ -966,6 +982,7 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
                     timestamp_ms: unix_timestamp_ms(),
                 },
             );
+            runtime.conversation_active.store(false, Ordering::Relaxed);
             return;
         }
 
@@ -1022,11 +1039,16 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
                     timestamp_ms: unix_timestamp_ms(),
                 },
             );
+            runtime.conversation_active.store(false, Ordering::Relaxed);
+            resume_wake_monitor_if_enabled(app.clone());
             return;
         }
 
+        runtime.conversation_active.store(false, Ordering::Relaxed);
         if let Some(capture) = audio.take_last_capture() {
             process_voice_capture(app.clone(), capture, "conversation");
+        } else {
+            resume_wake_monitor_if_enabled(app.clone());
         }
     });
 }
@@ -1055,6 +1077,25 @@ fn extract_wake_command(transcript: &str, wake_phrase: &str) -> Option<String> {
     Some(remainder.to_string())
 }
 
+fn resume_wake_monitor_if_enabled(app: tauri::AppHandle) {
+    let state = app.state::<RuntimeState>();
+    let enabled = state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .wake_word_enabled;
+
+    if !enabled || state.conversation_active.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let generation = state
+        .wake_monitor_generation
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+    spawn_wake_monitor(app.clone(), generation);
+}
+
 fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
     thread::spawn(move || {
         loop {
@@ -1068,6 +1109,11 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
+
+            if state.conversation_active.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
 
             let voice_busy = !state
                 .voice_command_ids
