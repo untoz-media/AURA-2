@@ -832,6 +832,13 @@ export type SetBetaPreferencesRequest = {
   onboardingComplete: boolean;
 };
 
+export type DiagnosticCheck = {
+  id: string;
+  label: string;
+  status: "passed" | "failed" | string;
+  detail: string;
+};
+
 export type DiagnosticsSnapshot = {
   schemaVersion: number;
   appName: string;
@@ -851,5 +858,7 @@ export type DiagnosticsSnapshot = {
   automations: number;
   enabledAutomations: number;
   telemetryEnabled: boolean;
+  healthStatus: "healthy" | "degraded" | string;
+  healthChecks: DiagnosticCheck[];
   generatedAtMs: number;
 };
