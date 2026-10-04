@@ -44,6 +44,24 @@ export type AppStatus = {
   localFirst: boolean;
 };
 
+export type BetaSelfTestCheck = {
+  id: string;
+  label: string;
+  status: "pass" | "warning" | "fail" | string;
+  required: boolean;
+  message: string;
+};
+
+export type BetaSelfTestReport = {
+  version: string;
+  ready: boolean;
+  passed: number;
+  warnings: number;
+  failed: number;
+  checks: BetaSelfTestCheck[];
+  completedAtMs: number;
+};
+
 export type CoreError = {
   id?: string;
   code: string;
