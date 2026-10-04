@@ -63,6 +63,7 @@ function App() {
     voiceCapture,
     speechRuntime,
     ttsRuntime,
+    voicePreferences,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -93,6 +94,8 @@ function App() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    updateVoicePreferences,
+    stopSpeakingControl,
     refreshTtsRuntime,
     prepareTtsRuntimeControl,
     testTtsVoiceControl,
@@ -599,6 +602,9 @@ function App() {
               voiceCapture={voiceCapture}
               speechRuntime={speechRuntime}
               ttsRuntime={ttsRuntime}
+              voicePreferences={voicePreferences}
+              onVoicePreferencesChange={updateVoicePreferences}
+              onStopSpeaking={stopSpeakingControl}
               onTtsRuntimeRefresh={refreshTtsRuntime}
               onTtsRuntimePrepare={prepareTtsRuntimeControl}
               onTtsVoiceTest={testTtsVoiceControl}

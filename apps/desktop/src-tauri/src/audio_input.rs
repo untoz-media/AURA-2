@@ -613,6 +613,17 @@ impl AudioInputManager {
         self.snapshot()
     }
 
+    pub fn current_level(&self) -> f32 {
+        self.level_milli.load(Ordering::Relaxed) as f32 / 1000.0
+    }
+
+    pub fn capture_active(&self) -> bool {
+        *self
+            .push_to_talk
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn last_capture_info(&self) -> Option<(usize, u32, u16, u64)> {
         self.last_capture
             .lock()
@@ -634,9 +645,7 @@ impl AudioInputManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take()
     }
-    }
 }
-
 
 #[cfg(test)]
 mod tests {

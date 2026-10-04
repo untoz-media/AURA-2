@@ -566,6 +566,9 @@ export type VoiceCaptureEvent = {
     | "transcribing"
     | "transcribed"
     | "submitted"
+    | "conversationListening"
+    | "conversationTimeout"
+    | "wakeDetected"
     | "error";
   shortcut: string;
   sampleCount: number;
@@ -605,4 +608,15 @@ export type TtsRuntimeStatus = {
   lastText?: string | null;
   lastError?: string | null;
   refreshedAtMs: number;
+};
+
+
+export type VoicePreferences = {
+  autoSpeak: boolean;
+  ttsSpeed: number;
+  conversationMode: boolean;
+  conversationTimeoutSeconds: number;
+  wakeWordEnabled: boolean;
+  wakePhrase: string;
+  ttsVoiceId: "voice-piper-ptpt" | "voice-piper-engb-alan" | string;
 };

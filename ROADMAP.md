@@ -72,18 +72,18 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M006 — Voice
 
-**Status: In progress**
+**Status: Complete — AURA-2 0.6.0-alpha.1**
 
 - [x] **M006.1** — Audio input foundation
 - [x] **M006.2** — Push-to-talk
 - [x] **M006.3** — Local speech-to-text
 - [x] **M006.4** — Voice → AURA Core
 - [x] **M006.5** — Local text-to-speech
-- [ ] **M006.6** — Voice selection & settings
-- [ ] **M006.7** — Conversation mode
-- [ ] **M006.8** — Voice interruption / stop speaking
-- [ ] **M006.9** — Optional wake word
-- [ ] **M006.10** — Voice validation
+- [x] **M006.6** — Voice selection & settings
+- [x] **M006.7** — Conversation mode
+- [x] **M006.8** — Voice interruption / stop speaking
+- [x] **M006.9** — Optional wake word
+- [x] **M006.10** — Voice validation
 
 ## M007 — Vision
 

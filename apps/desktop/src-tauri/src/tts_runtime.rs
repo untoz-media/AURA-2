@@ -11,7 +11,7 @@ use std::{
     path::Path,
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU32, AtomicU64, Ordering},
         Mutex,
     },
     time::{SystemTime, UNIX_EPOCH},
@@ -24,11 +24,17 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const TTS_MODEL_ID: &str = "voice-piper-ptpt";
+const DEFAULT_TTS_MODEL_ID: &str = "voice-piper-ptpt";
 const TTS_RUNTIME_PACKAGE: &str = "piper-tts>=1.8,<2";
 const TTS_RUNTIME_SCRIPT: &str = include_str!("tts_runtime.py");
-const VOICE_ONNX_RELATIVE: &str =
-    "pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx";
+
+fn voice_relative_path(model_id: &str) -> Option<&'static str> {
+    match model_id {
+        "voice-piper-ptpt" => Some("pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx"),
+        "voice-piper-engb-alan" => Some("en/en_GB/alan/medium/en_GB-alan-medium.onnx"),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +53,7 @@ impl Default for TtsRuntimeStatus {
     fn default() -> Self {
         Self {
             state: "stopped".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
             dependency_ready: false,
             voice_installed: false,
             sample_rate: None,
@@ -80,6 +86,7 @@ pub struct TtsRuntime {
     process: Mutex<Option<TtsProcess>>,
     status: Mutex<TtsRuntimeStatus>,
     request_counter: AtomicU64,
+    process_id: AtomicU32,
 }
 
 impl Default for TtsRuntime {
@@ -88,11 +95,20 @@ impl Default for TtsRuntime {
             process: Mutex::new(None),
             status: Mutex::new(TtsRuntimeStatus::default()),
             request_counter: AtomicU64::new(1),
+            process_id: AtomicU32::new(0),
         }
     }
 }
 
 impl TtsRuntime {
+    pub fn is_speaking(&self) -> bool {
+        self.status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .state
+            == "speaking"
+    }
+
     pub fn status(&self, app: &AppHandle, manager: &ModelManager) -> TtsRuntimeStatus {
         let mut current = self
             .status
@@ -100,10 +116,12 @@ impl TtsRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
 
-        current.dependency_ready =
-            python_module_available(app, "piper").unwrap_or(false);
+        if !current.dependency_ready {
+            current.dependency_ready =
+                python_module_available(app, "piper").unwrap_or(false);
+        }
         current.voice_installed =
-            manager.installation_path(app, TTS_MODEL_ID).is_ok();
+            manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
         current.refreshed_at_ms = timestamp_ms();
 
         current
@@ -118,9 +136,9 @@ impl TtsRuntime {
 
         self.set_status(TtsRuntimeStatus {
             state: "installingDependency".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
             dependency_ready: false,
-            voice_installed: manager.installation_path(app, TTS_MODEL_ID).is_ok(),
+            voice_installed: manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok(),
             refreshed_at_ms: timestamp_ms(),
             ..TtsRuntimeStatus::default()
         });
@@ -131,15 +149,21 @@ impl TtsRuntime {
             let message =
                 "Piper installation finished but the managed Python runtime cannot import it."
                     .to_string();
-            self.set_error(app, manager, None, message.clone());
+            self.set_error(
+                app,
+                manager,
+                DEFAULT_TTS_MODEL_ID,
+                None,
+                message.clone(),
+            );
             return Err(message);
         }
 
         let status = TtsRuntimeStatus {
             state: "ready".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
             dependency_ready: true,
-            voice_installed: manager.installation_path(app, TTS_MODEL_ID).is_ok(),
+            voice_installed: manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok(),
             sample_rate: None,
             last_text: None,
             last_error: None,
@@ -154,6 +178,8 @@ impl TtsRuntime {
         app: &AppHandle,
         manager: &ModelManager,
         text: &str,
+        speed: f32,
+        model_id: &str,
     ) -> Result<TtsRuntimeStatus, String> {
         let text = text.trim();
         if text.is_empty() {
@@ -167,10 +193,12 @@ impl TtsRuntime {
             );
         }
 
-        let voice_root = manager.installation_path(app, TTS_MODEL_ID)?;
-        let voice_path = voice_root.join(VOICE_ONNX_RELATIVE);
+        let relative_path = voice_relative_path(model_id)
+            .ok_or_else(|| format!("Unknown TTS voice model: {model_id}."))?;
+        let voice_root = manager.installation_path(app, model_id)?;
+        let voice_path = voice_root.join(relative_path);
         if !voice_path.exists() {
-            return Err("The installed Portuguese TTS voice is incomplete.".to_string());
+            return Err("The selected local TTS voice is incomplete.".to_string());
         }
 
         let mut process_guard = self
@@ -178,8 +206,12 @@ impl TtsRuntime {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+        if self.process_id.load(Ordering::Relaxed) == 0 {
+            process_guard.take();
+        }
+
         if process_guard.is_none() {
-            *process_guard = Some(self.start_process(app, &voice_path)?);
+            *process_guard = Some(self.start_process(app, &voice_path, model_id)?);
         }
 
         let request_id = format!(
@@ -194,7 +226,7 @@ impl TtsRuntime {
 
         self.set_status(TtsRuntimeStatus {
             state: "speaking".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: model_id.to_string(),
             dependency_ready: true,
             voice_installed: true,
             sample_rate,
@@ -207,7 +239,7 @@ impl TtsRuntime {
             "type": "speak",
             "id": request_id.clone(),
             "text": text,
-            "speed": 1.0,
+            "speed": speed.clamp(0.6, 1.5),
         });
 
         {
@@ -235,7 +267,7 @@ impl TtsRuntime {
                 "spoken" => {
                     let status = TtsRuntimeStatus {
                         state: "ready".to_string(),
-                        model_id: TTS_MODEL_ID.to_string(),
+                        model_id: model_id.to_string(),
                         dependency_ready: true,
                         voice_installed: true,
                         sample_rate: process_guard
@@ -255,7 +287,7 @@ impl TtsRuntime {
                     let sample_rate = process_guard
                         .as_ref()
                         .and_then(|running| running.sample_rate);
-                    self.set_error(app, manager, sample_rate, message.clone());
+                    self.set_error(app, manager, model_id, sample_rate, message.clone());
                     return Err(message);
                 }
                 _ => {}
@@ -280,13 +312,53 @@ impl TtsRuntime {
             let _ = running.child.wait();
         }
 
+        self.process_id.store(0, Ordering::Relaxed);
         self.set_status(TtsRuntimeStatus::default());
+    }
+
+    pub fn interrupt(&self) -> Result<TtsRuntimeStatus, String> {
+        let pid = self.process_id.swap(0, Ordering::Relaxed);
+        if pid != 0 {
+            #[cfg(windows)]
+            {
+                let status = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .status()
+                    .map_err(|error| format!("Could not stop local TTS playback: {error}"))?;
+                if !status.success() {
+                    return Err("Windows could not stop the TTS worker.".to_string());
+                }
+            }
+        }
+
+        let previous = self
+            .status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let status = TtsRuntimeStatus {
+            state: "stopped".to_string(),
+            model_id: previous.model_id,
+            dependency_ready: previous.dependency_ready,
+            voice_installed: previous.voice_installed,
+            sample_rate: previous.sample_rate,
+            last_text: previous.last_text,
+            last_error: None,
+            refreshed_at_ms: timestamp_ms(),
+        };
+        self.set_status(status.clone());
+        Ok(status)
     }
 
     fn start_process(
         &self,
         app: &AppHandle,
         voice_path: &Path,
+        model_id: &str,
     ) -> Result<TtsProcess, String> {
         let python = managed_python_path(app)?;
         if !python.exists() {
@@ -309,7 +381,7 @@ impl TtsRuntime {
 
         self.set_status(TtsRuntimeStatus {
             state: "loading".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: model_id.to_string(),
             dependency_ready: true,
             voice_installed: true,
             refreshed_at_ms: timestamp_ms(),
@@ -332,6 +404,7 @@ impl TtsRuntime {
         let mut child = command
             .spawn()
             .map_err(|error| format!("Could not start local TTS runtime: {error}"))?;
+        self.process_id.store(child.id(), Ordering::Relaxed);
         let stdin = child
             .stdin
             .take()
@@ -369,14 +442,15 @@ impl TtsRuntime {
         &self,
         app: &AppHandle,
         manager: &ModelManager,
+        model_id: &str,
         sample_rate: Option<u32>,
         message: String,
     ) {
         let status = TtsRuntimeStatus {
             state: "error".to_string(),
-            model_id: TTS_MODEL_ID.to_string(),
+            model_id: model_id.to_string(),
             dependency_ready: python_module_available(app, "piper").unwrap_or(false),
-            voice_installed: manager.installation_path(app, TTS_MODEL_ID).is_ok(),
+            voice_installed: manager.installation_path(app, model_id).is_ok(),
             sample_rate,
             last_text: self
                 .status
@@ -417,4 +491,19 @@ fn timestamp_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_supported_local_voice_paths() {
+        assert!(voice_relative_path("voice-piper-ptpt")
+            .is_some_and(|path| path.ends_with("pt_PT-tugão-medium.onnx")));
+        assert!(voice_relative_path("voice-piper-engb-alan")
+            .is_some_and(|path| path.ends_with("en_GB-alan-medium.onnx")));
+        assert_eq!(voice_relative_path("unknown"), None);
+    }
 }

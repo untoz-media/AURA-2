@@ -56,7 +56,10 @@ import {
   getAudioInputState,
   getSpeechRuntimeStatus,
   getTtsRuntimeStatus,
+  getVoicePreferences,
+  setVoicePreferences,
   prepareTtsRuntime,
+  stopTtsSpeaking,
   testTtsVoice,
   selectAudioInputDevice,
   startAudioInputTest,
@@ -118,6 +121,7 @@ import type {
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
+  VoicePreferences,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -189,6 +193,16 @@ const DEFAULT_TTS_RUNTIME: TtsRuntimeStatus = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_VOICE_PREFERENCES: VoicePreferences = {
+  autoSpeak: true,
+  ttsSpeed: 1,
+  conversationMode: false,
+  conversationTimeoutSeconds: 8,
+  wakeWordEnabled: false,
+  wakePhrase: "AURA",
+  ttsVoiceId: "voice-piper-ptpt",
+};
+
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
   models: [],
   modelsRoot: "",
@@ -253,6 +267,8 @@ export function useAuraBridge() {
     useState<SpeechRuntimeStatus>(DEFAULT_SPEECH_RUNTIME);
   const [ttsRuntime, setTtsRuntime] =
     useState<TtsRuntimeStatus>(DEFAULT_TTS_RUNTIME);
+  const [voicePreferences, setVoicePreferencesState] =
+    useState<VoicePreferences>(DEFAULT_VOICE_PREFERENCES);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -342,6 +358,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // TTS remains unavailable until explicitly prepared.
+      });
+
+    getVoicePreferences()
+      .then((preferences) => {
+        if (!cancelled) setVoicePreferencesState(preferences);
+      })
+      .catch(() => {
+        // Defaults remain active until preferences can be read.
       });
 
     getAudioInputState()
@@ -459,9 +483,16 @@ export function useAuraBridge() {
       if (cancelled) return;
       setVoiceCapture(event);
 
-      if (event.phase === "listening") {
+      if (
+        event.phase === "listening" ||
+        event.phase === "conversationListening"
+      ) {
         setStatus("Listening");
-      } else if (event.phase === "transcribing" || event.phase === "transcribed") {
+      } else if (
+        event.phase === "transcribing" ||
+        event.phase === "transcribed" ||
+        event.phase === "wakeDetected"
+      ) {
         setStatus("Thinking");
       } else if (event.phase === "submitted") {
         // AURA Core owns status from this point onward.
@@ -546,6 +577,19 @@ export function useAuraBridge() {
         setStatus(event.status);
         setActivity(event.message);
         setBridgeError(null);
+
+        if (
+          event.kind === "command.completed" ||
+          event.kind === "command.failed"
+        ) {
+          window.setTimeout(() => {
+            void getTtsRuntimeStatus()
+              .then((runtime) => {
+                if (!cancelled) setTtsRuntime(runtime);
+              })
+              .catch(() => undefined);
+          }, 120);
+        }
 
         if (
           ["command.completed", "command.failed", "command.cancelled"].includes(
@@ -663,6 +707,24 @@ export function useAuraBridge() {
       cleanupVoiceCapture?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (ttsRuntime.state !== "speaking") return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      void getTtsRuntimeStatus()
+        .then((runtime) => {
+          if (!cancelled) setTtsRuntime(runtime);
+        })
+        .catch(() => undefined);
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [ttsRuntime.state]);
 
   useEffect(() => {
     if (!audioInput.testing && !audioInput.pushToTalk) return;
@@ -938,6 +1000,20 @@ export function useAuraBridge() {
     const snapshot = await getProjectMemory();
     setProjectMemory(snapshot);
     return snapshot;
+  }, []);
+
+  const updateVoicePreferences = useCallback(async (
+    preferences: VoicePreferences,
+  ) => {
+    const saved = await setVoicePreferences(preferences);
+    setVoicePreferencesState(saved);
+    return saved;
+  }, []);
+
+  const stopSpeakingControl = useCallback(async () => {
+    const runtime = await stopTtsSpeaking();
+    setTtsRuntime(runtime);
+    return runtime;
   }, []);
 
   const refreshTtsRuntime = useCallback(async () => {
@@ -1823,6 +1899,7 @@ export function useAuraBridge() {
     voiceCapture,
     speechRuntime,
     ttsRuntime,
+    voicePreferences,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1854,6 +1931,8 @@ export function useAuraBridge() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    updateVoicePreferences,
+    stopSpeakingControl,
     refreshTtsRuntime,
     prepareTtsRuntimeControl,
     testTtsVoiceControl,

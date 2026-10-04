@@ -1183,3 +1183,41 @@
 .voice-license-note {
   opacity: 0.78;
 }
+
+
+.voice-setting-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .55fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.voice-setting-grid input[type="range"] {
+  width: 100%;
+  accent-color: var(--aura-accent);
+}
+
+.voice-device-field small {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.voice-wake-phrase,
+.voice-tts-select {
+  margin-top: 12px;
+}
+
+.voice-wake-phrase input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  color: var(--aura-text-2);
+  background: var(--aura-surface-1);
+}
+
+@media (max-width: 760px) {
+  .voice-setting-grid {
+    grid-template-columns: 1fr;
+  }
+}

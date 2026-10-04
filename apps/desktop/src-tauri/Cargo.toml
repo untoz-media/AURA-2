@@ -1,6 +1,6 @@
 [package]
 name = "aura-desktop"
-version = "0.5.0-alpha.1"
+version = "0.6.0-alpha.1"
 description = "AURA-2 local-first personal AI assistant for Windows"
 authors = ["Untoz"]
 edition = "2021"

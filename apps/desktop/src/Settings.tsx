@@ -27,6 +27,7 @@ import type {
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
+  VoicePreferences,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -110,6 +111,11 @@ type Props = {
   voiceCapture: VoiceCaptureEvent | null;
   speechRuntime: SpeechRuntimeStatus;
   ttsRuntime: TtsRuntimeStatus;
+  voicePreferences: VoicePreferences;
+  onVoicePreferencesChange: (
+    preferences: VoicePreferences,
+  ) => Promise<VoicePreferences>;
+  onStopSpeaking: () => Promise<TtsRuntimeStatus>;
   onTtsRuntimeRefresh: () => Promise<TtsRuntimeStatus>;
   onTtsRuntimePrepare: () => Promise<TtsRuntimeStatus>;
   onTtsVoiceTest: (text?: string) => Promise<TtsRuntimeStatus>;
@@ -278,6 +284,9 @@ export default function Settings({
   voiceCapture,
   speechRuntime,
   ttsRuntime,
+  voicePreferences,
+  onVoicePreferencesChange,
+  onStopSpeaking,
   onTtsRuntimeRefresh,
   onTtsRuntimePrepare,
   onTtsVoiceTest,
@@ -303,11 +312,18 @@ export default function Settings({
   const [obsStreamClockMs, setObsStreamClockMs] = useState(0);
   const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
   const [ttsBusy, setTtsBusy] = useState<string | null>(null);
+  const [voicePrefsBusy, setVoicePrefsBusy] = useState(false);
+  const [wakePhraseDraft, setWakePhraseDraft] = useState(
+    voicePreferences.wakePhrase,
+  );
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
-  const ttsModel = modelCatalog.models.find(
-    (model) => model.id === "voice-piper-ptpt",
+  const ttsVoices = modelCatalog.models.filter(
+    (model) => model.role === "textToSpeech",
+  );
+  const ttsModel = ttsVoices.find(
+    (model) => model.id === voicePreferences.ttsVoiceId,
   );
 
   async function runVoiceModel(
@@ -326,6 +342,29 @@ export default function Settings({
       await onVoiceModelOperation(operation, voiceModel.id);
     } finally {
       setVoiceModelBusy(null);
+    }
+  }
+
+  async function updateVoicePreference(
+    patch: Partial<VoicePreferences>,
+  ) {
+    setVoicePrefsBusy(true);
+    try {
+      await onVoicePreferencesChange({
+        ...voicePreferences,
+        ...patch,
+      });
+    } finally {
+      setVoicePrefsBusy(false);
+    }
+  }
+
+  async function stopSpeakingNow() {
+    setTtsBusy("stop");
+    try {
+      await onStopSpeaking();
+    } finally {
+      setTtsBusy(null);
     }
   }
 
@@ -366,6 +405,10 @@ export default function Settings({
       setTtsBusy(null);
     }
   }
+
+  useEffect(() => {
+    setWakePhraseDraft(voicePreferences.wakePhrase);
+  }, [voicePreferences.wakePhrase]);
 
   useEffect(() => {
     setObsHost(obsConnection.host);
@@ -895,7 +938,7 @@ export default function Settings({
             <header className="settings-header">
               <span className="eyebrow">AURA SETTINGS</span>
               <h2>Voice</h2>
-              <p>Local microphone input foundation for AURA Voice.</p>
+              <p>Local speech input, spoken replies, conversation mode and wake phrase.</p>
             </header>
 
             <Surface className="settings-card">
@@ -976,7 +1019,116 @@ export default function Settings({
             </Surface>
 
             <Surface className="settings-card">
-              <SectionLabel>Coming next</SectionLabel>
+              <SectionLabel>Voice behaviour</SectionLabel>
+
+              <SettingRow
+                title="Automatic spoken replies"
+                description="Speak final responses only when the command originated from Voice."
+                trailing={
+                  <Toggle
+                    checked={voicePreferences.autoSpeak}
+                    disabled={voicePrefsBusy}
+                    onChange={(checked) =>
+                      void updateVoicePreference({ autoSpeak: checked })
+                    }
+                    label="Automatic spoken replies"
+                  />
+                }
+              />
+
+              <div className="voice-setting-grid">
+                <label className="voice-device-field">
+                  <span>Speech speed</span>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.5"
+                    step="0.05"
+                    value={voicePreferences.ttsSpeed}
+                    disabled={voicePrefsBusy}
+                    onChange={(event) =>
+                      void updateVoicePreference({
+                        ttsSpeed: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <small>{voicePreferences.ttsSpeed.toFixed(2)}×</small>
+                </label>
+
+                <label className="voice-device-field">
+                  <span>Conversation timeout</span>
+                  <select
+                    value={voicePreferences.conversationTimeoutSeconds}
+                    disabled={voicePrefsBusy}
+                    onChange={(event) =>
+                      void updateVoicePreference({
+                        conversationTimeoutSeconds: Number(event.target.value),
+                      })
+                    }
+                  >
+                    {[5, 8, 10, 12, 15, 20].map((seconds) => (
+                      <option value={seconds} key={seconds}>
+                        {seconds}s
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <SettingRow
+                title="Conversation Mode"
+                description="After AURA finishes a spoken reply, automatically listen for one follow-up and stop after silence or timeout."
+                trailing={
+                  <Toggle
+                    checked={voicePreferences.conversationMode}
+                    disabled={voicePrefsBusy}
+                    onChange={(checked) =>
+                      void updateVoicePreference({ conversationMode: checked })
+                    }
+                    label="Conversation Mode"
+                  />
+                }
+              />
+
+              <SettingRow
+                title="Wake Phrase (experimental)"
+                description="Continuously checks short local audio windows with Whisper. More private than cloud wake-word services, but uses noticeably more CPU/GPU."
+                trailing={
+                  <Toggle
+                    checked={voicePreferences.wakeWordEnabled}
+                    disabled={
+                      voicePrefsBusy ||
+                      voiceModel?.state !== "installed" ||
+                      speechRuntime.state === "error"
+                    }
+                    onChange={(checked) =>
+                      void updateVoicePreference({ wakeWordEnabled: checked })
+                    }
+                    label="Wake Phrase"
+                  />
+                }
+              />
+
+              <label className="voice-device-field voice-wake-phrase">
+                <span>Wake phrase</span>
+                <input
+                  type="text"
+                  value={wakePhraseDraft}
+                  disabled={voicePrefsBusy || !voicePreferences.wakeWordEnabled}
+                  maxLength={32}
+                  onChange={(event) => setWakePhraseDraft(event.target.value)}
+                  onBlur={() =>
+                    void updateVoicePreference({
+                      wakePhrase: wakePhraseDraft,
+                    })
+                  }
+                />
+                <small>Default: AURA. Wake mode is fully local and off by default.</small>
+              </label>
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Voice stack</SectionLabel>
               <SettingRow
                 title="Push to talk"
                 description={
@@ -1160,6 +1312,26 @@ export default function Settings({
                   only for commands that originated from Voice.
                 </p>
 
+                <label className="voice-device-field voice-tts-select">
+                  <span>Voice</span>
+                  <select
+                    value={voicePreferences.ttsVoiceId}
+                    disabled={voicePrefsBusy || ttsBusy !== null}
+                    onChange={(event) =>
+                      void updateVoicePreference({
+                        ttsVoiceId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="voice-piper-ptpt">
+                      Tugão · Português (Portugal)
+                    </option>
+                    <option value="voice-piper-engb-alan">
+                      Alan · English (UK)
+                    </option>
+                  </select>
+                </label>
+
                 {ttsModel &&
                   (ttsModel.state === "downloading" ||
                     ttsModel.state === "paused") && (
@@ -1257,6 +1429,18 @@ export default function Settings({
                     </button>
                   )}
 
+                  {ttsModel?.state === "installed" &&
+                    ttsRuntime.dependencyReady && (
+                    <button
+                      type="button"
+                      className="feature-secondary-button"
+                      disabled={ttsBusy === "stop"}
+                      onClick={() => void stopSpeakingNow()}
+                    >
+                      {ttsBusy === "stop" ? "Stopping…" : "Stop speaking"}
+                    </button>
+                  )}
+
                   {ttsModel?.state === "installed" && (
                     <button
                       type="button"
@@ -1294,7 +1478,7 @@ export default function Settings({
                   inside AURA's private managed environment.
                 </p>
               </div>
-              <SettingRow title="Wake word" description="Optional hands-free activation after the core voice path is stable." trailing={<Badge tone="planned">M006.9</Badge>} />
+
             </Surface>
           </>
         )}

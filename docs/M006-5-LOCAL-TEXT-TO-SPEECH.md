@@ -126,13 +126,11 @@ M006.5 remains local-first:
 - audio is not uploaded
 - generated WAV is not persisted automatically
 
-## Current limitation
+## Interruption
 
-Playback is currently blocking inside the dedicated TTS worker.
+Playback still runs inside the dedicated TTS worker, keeping the desktop UI responsive.
 
-The desktop application remains responsive because synthesis/playback occurs outside the UI thread.
-
-M006.8 will add explicit speech interruption / stop-speaking behavior.
+M006.8 adds explicit Stop speaking and Push-to-Talk barge-in by terminating and cleanly restarting the isolated TTS worker when needed.
 
 ## Roadmap
 
@@ -141,8 +139,8 @@ M006.8 will add explicit speech interruption / stop-speaking behavior.
 - M006.3 ✅ Local speech-to-text
 - M006.4 ✅ Voice → AURA Core
 - M006.5 ✅ Local text-to-speech
-- M006.6 Voice selection & settings
-- M006.7 Conversation mode
-- M006.8 Voice interruption / stop speaking
-- M006.9 Optional wake word
-- M006.10 Voice validation
+- M006.6 ✅ Voice selection & settings
+- M006.7 ✅ Conversation mode
+- M006.8 ✅ Voice interruption / stop speaking
+- M006.9 ✅ Optional wake word
+- M006.10 ✅ Voice validation

@@ -12,7 +12,7 @@ mod routines;
 mod speech_runtime;
 mod tts_runtime;
 
-use audio_input::{AudioInputManager, AudioInputSnapshot};
+use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
@@ -60,7 +60,7 @@ use std::{
     fs,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex,
     },
     thread,
@@ -88,6 +88,7 @@ struct RuntimeState {
     voice_command_ids: Mutex<HashSet<String>>,
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
+    conversation_active: AtomicBool,
 }
 
 impl Default for RuntimeState {
@@ -101,6 +102,7 @@ impl Default for RuntimeState {
             voice_command_ids: Mutex::new(HashSet::new()),
             voice_preferences: Mutex::new(VoicePreferences::default()),
             wake_monitor_generation: AtomicU64::new(1),
+            conversation_active: AtomicBool::new(false),
         }
     }
 }
@@ -132,7 +134,7 @@ struct RuntimeSnapshot {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct VoicePreferences {
     auto_speak: bool,
     tts_speed: f32,
@@ -140,6 +142,7 @@ struct VoicePreferences {
     conversation_timeout_seconds: u64,
     wake_word_enabled: bool,
     wake_phrase: String,
+    tts_voice_id: String,
 }
 
 impl Default for VoicePreferences {
@@ -151,6 +154,7 @@ impl Default for VoicePreferences {
             conversation_timeout_seconds: 8,
             wake_word_enabled: false,
             wake_phrase: "AURA".to_string(),
+            tts_voice_id: "voice-piper-ptpt".to_string(),
         }
     }
 }
@@ -163,6 +167,12 @@ impl VoicePreferences {
         self.wake_phrase = self.wake_phrase.trim().to_string();
         if self.wake_phrase.is_empty() {
             self.wake_phrase = "AURA".to_string();
+        }
+        if !matches!(
+            self.tts_voice_id.as_str(),
+            "voice-piper-ptpt" | "voice-piper-engb-alan"
+        ) {
+            self.tts_voice_id = "voice-piper-ptpt".to_string();
         }
         if self.wake_phrase.chars().count() > 32 {
             self.wake_phrase = self.wake_phrase.chars().take(32).collect();
@@ -473,6 +483,41 @@ mod voice_command_tests {
     fn wake_word_alone_is_not_a_command() {
         assert_eq!(normalize_voice_command("AURA"), "");
     }
+
+    #[test]
+    fn extracts_configured_wake_phrase_and_followup() {
+        assert_eq!(
+            extract_wake_command("AURA, abre o Brave", "AURA"),
+            Some("abre o Brave".to_string())
+        );
+        assert_eq!(
+            extract_wake_command("AURA", "AURA"),
+            Some(String::new())
+        );
+        assert_eq!(
+            extract_wake_command("abre o Brave", "AURA"),
+            None
+        );
+    }
+
+    #[test]
+    fn voice_preferences_are_sanitized() {
+        let preferences = VoicePreferences {
+            auto_speak: true,
+            tts_speed: 9.0,
+            conversation_mode: true,
+            conversation_timeout_seconds: 99,
+            wake_word_enabled: true,
+            wake_phrase: "   ".to_string(),
+            tts_voice_id: "unknown".to_string(),
+        }
+        .sanitized();
+
+        assert_eq!(preferences.tts_speed, 1.5);
+        assert_eq!(preferences.conversation_timeout_seconds, 20);
+        assert_eq!(preferences.wake_phrase, "AURA");
+        assert_eq!(preferences.tts_voice_id, "voice-piper-ptpt");
+    }
 }
 
 fn next_command_id() -> String {
@@ -559,12 +604,31 @@ fn set_voice_preferences(
     preferences: VoicePreferences,
 ) -> Result<VoicePreferences, String> {
     let preferences = preferences.sanitized();
+    let previous_voice = state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_voice_id
+        .clone();
     save_voice_preferences(&app, &preferences)?;
+
+    if previous_voice != preferences.tts_voice_id {
+        app.state::<TtsRuntime>().stop();
+    }
+
     *state
         .voice_preferences
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = preferences.clone();
-    state.wake_monitor_generation.fetch_add(1, Ordering::Relaxed);
+    let generation = state
+        .wake_monitor_generation
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+
+    if preferences.wake_word_enabled {
+        spawn_wake_monitor(app.clone(), generation);
+    }
+
     Ok(preferences)
 }
 
@@ -730,8 +794,431 @@ fn emit_voice_capture_event(app: &tauri::AppHandle, event: VoiceCaptureEvent) {
     let _ = app.emit("aura:voice-capture", event);
 }
 
+fn process_voice_capture(
+    app: tauri::AppHandle,
+    capture: CapturedAudio,
+    source_label: &'static str,
+) {
+    thread::spawn(move || {
+        let sample_count = capture.samples.len();
+        let duration_ms = capture.completed_at_ms.saturating_sub(capture.started_at_ms);
+
+        emit_voice_capture_event(
+            &app,
+            VoiceCaptureEvent {
+                phase: "transcribing",
+                shortcut: source_label,
+                sample_count,
+                duration_ms,
+                sample_rate: Some(capture.sample_rate),
+                channels: Some(capture.channels),
+                message: "Transcribing locally with AURA Voice STT…".to_string(),
+                text: None,
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        let manager = app.state::<ModelManager>();
+        let speech = app.state::<SpeechRuntime>();
+
+        match speech.transcribe(&app, &manager, capture) {
+            Ok(result) => {
+                let transcript = result.text.trim().to_string();
+
+                if result.duration_ms < 250 || result.input_rms < 0.003 {
+                    emit_voice_capture_event(
+                        &app,
+                        VoiceCaptureEvent {
+                            phase: "error",
+                            shortcut: source_label,
+                            sample_count: result.input_samples_16khz,
+                            duration_ms: result.duration_ms,
+                            sample_rate: Some(16_000),
+                            channels: Some(1),
+                            message: "Voice capture was too short or too quiet to execute safely.".to_string(),
+                            text: Some(transcript),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                    return;
+                }
+
+                emit_voice_capture_event(
+                    &app,
+                    VoiceCaptureEvent {
+                        phase: "transcribed",
+                        shortcut: source_label,
+                        sample_count: result.input_samples_16khz,
+                        duration_ms: result.duration_ms,
+                        sample_rate: Some(16_000),
+                        channels: Some(1),
+                        message: "Local transcription complete.".to_string(),
+                        text: Some(transcript.clone()),
+                        timestamp_ms: unix_timestamp_ms(),
+                    },
+                );
+
+                let command_text = normalize_voice_command(&transcript);
+                if command_text.is_empty() {
+                    emit_voice_capture_event(
+                        &app,
+                        VoiceCaptureEvent {
+                            phase: "error",
+                            shortcut: source_label,
+                            sample_count: result.input_samples_16khz,
+                            duration_ms: result.duration_ms,
+                            sample_rate: Some(16_000),
+                            channels: Some(1),
+                            message: "AURA heard the wake name but no command followed it.".to_string(),
+                            text: Some(transcript),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                    return;
+                }
+
+                let state = app.state::<RuntimeState>();
+                match process_user_command(
+                    app.clone(),
+                    state,
+                    CommandRequest {
+                        text: command_text.clone(),
+                        source: "voice".to_string(),
+                        approval_id: None,
+                    },
+                ) {
+                    Ok(_) => emit_voice_capture_event(
+                        &app,
+                        VoiceCaptureEvent {
+                            phase: "submitted",
+                            shortcut: source_label,
+                            sample_count: result.input_samples_16khz,
+                            duration_ms: result.duration_ms,
+                            sample_rate: Some(16_000),
+                            channels: Some(1),
+                            message: "Voice command sent to AURA Core.".to_string(),
+                            text: Some(command_text),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    ),
+                    Err(error) => emit_voice_capture_event(
+                        &app,
+                        VoiceCaptureEvent {
+                            phase: "error",
+                            shortcut: source_label,
+                            sample_count: result.input_samples_16khz,
+                            duration_ms: result.duration_ms,
+                            sample_rate: Some(16_000),
+                            channels: Some(1),
+                            message: error,
+                            text: Some(command_text),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    ),
+                }
+            }
+            Err(error) => emit_voice_capture_event(
+                &app,
+                VoiceCaptureEvent {
+                    phase: "error",
+                    shortcut: source_label,
+                    sample_count: 0,
+                    duration_ms: 0,
+                    sample_rate: None,
+                    channels: None,
+                    message: error,
+                    text: None,
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            ),
+        }
+    });
+}
+
+fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
+    thread::spawn(move || {
+        let runtime = app.state::<RuntimeState>();
+        if runtime
+            .conversation_active
+            .swap(true, Ordering::Relaxed)
+        {
+            return;
+        }
+
+        runtime
+            .wake_monitor_generation
+            .fetch_add(1, Ordering::Relaxed);
+
+        let preferences = app
+            .state::<RuntimeState>()
+            .voice_preferences
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+
+        if !force && !preferences.conversation_mode {
+            runtime.conversation_active.store(false, Ordering::Relaxed);
+            return;
+        }
+
+        let audio = app.state::<AudioInputManager>();
+        if audio.capture_active() {
+            runtime.conversation_active.store(false, Ordering::Relaxed);
+            return;
+        }
+
+        if let Err(error) = audio.start_push_to_talk() {
+            emit_voice_capture_event(
+                &app,
+                VoiceCaptureEvent {
+                    phase: "error",
+                    shortcut: "conversation",
+                    sample_count: 0,
+                    duration_ms: 0,
+                    sample_rate: None,
+                    channels: None,
+                    message: error,
+                    text: None,
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            runtime.conversation_active.store(false, Ordering::Relaxed);
+            return;
+        }
+
+        emit_voice_capture_event(
+            &app,
+            VoiceCaptureEvent {
+                phase: "conversationListening",
+                shortcut: "conversation",
+                sample_count: 0,
+                duration_ms: 0,
+                sample_rate: None,
+                channels: None,
+                message: "Conversation Mode is listening for a follow-up…".to_string(),
+                text: None,
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        let started = Instant::now();
+        let mut heard_speech = false;
+        let mut last_voice = Instant::now();
+        let timeout = Duration::from_secs(preferences.conversation_timeout_seconds);
+
+        while started.elapsed() < timeout {
+            let level = audio.current_level();
+
+            if level >= 0.015 {
+                heard_speech = true;
+                last_voice = Instant::now();
+            }
+
+            if heard_speech && level < 0.008 && last_voice.elapsed() >= Duration::from_millis(900) {
+                break;
+            }
+
+            thread::sleep(Duration::from_millis(100));
+        }
+
+        let _ = audio.stop_push_to_talk();
+
+        if !heard_speech {
+            let _ = audio.take_last_capture();
+            emit_voice_capture_event(
+                &app,
+                VoiceCaptureEvent {
+                    phase: "conversationTimeout",
+                    shortcut: "conversation",
+                    sample_count: 0,
+                    duration_ms: started.elapsed().as_millis() as u64,
+                    sample_rate: None,
+                    channels: None,
+                    message: "Conversation Mode timed out with no follow-up speech.".to_string(),
+                    text: None,
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            runtime.conversation_active.store(false, Ordering::Relaxed);
+            resume_wake_monitor_if_enabled(app.clone());
+            return;
+        }
+
+        runtime.conversation_active.store(false, Ordering::Relaxed);
+        if let Some(capture) = audio.take_last_capture() {
+            process_voice_capture(app.clone(), capture, "conversation");
+        } else {
+            resume_wake_monitor_if_enabled(app.clone());
+        }
+    });
+}
+
+fn extract_wake_command(transcript: &str, wake_phrase: &str) -> Option<String> {
+    let transcript = transcript.trim();
+    let wake_phrase = wake_phrase.trim();
+    if transcript.is_empty() || wake_phrase.is_empty() {
+        return None;
+    }
+
+    let transcript_lower = transcript.to_lowercase();
+    let wake_lower = wake_phrase.to_lowercase();
+
+    if !transcript_lower.starts_with(&wake_lower) {
+        return None;
+    }
+
+    let remainder = transcript[wake_phrase.len()..]
+        .trim_start_matches(|character: char| {
+            character.is_whitespace()
+                || matches!(character, ',' | ':' | ';' | '-' | '—' | '.' | '!')
+        })
+        .trim();
+
+    Some(remainder.to_string())
+}
+
+fn resume_wake_monitor_if_enabled(app: tauri::AppHandle) {
+    let state = app.state::<RuntimeState>();
+    let enabled = state
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .wake_word_enabled;
+
+    if !enabled || state.conversation_active.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let generation = state
+        .wake_monitor_generation
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+    spawn_wake_monitor(app.clone(), generation);
+}
+
+fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
+    thread::spawn(move || {
+        loop {
+            let state = app.state::<RuntimeState>();
+            if state.wake_monitor_generation.load(Ordering::Relaxed) != generation {
+                break;
+            }
+
+            let preferences = state
+                .voice_preferences
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+
+            if state.conversation_active.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
+            let voice_busy = !state
+                .voice_command_ids
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_empty();
+
+            if voice_busy {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
+            if !preferences.wake_word_enabled || runtime_snapshot(&state).paused {
+                thread::sleep(Duration::from_millis(750));
+                continue;
+            }
+
+            if app.state::<TtsRuntime>().is_speaking() {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
+            let audio = app.state::<AudioInputManager>();
+            if audio.capture_active() {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
+            if audio.start_push_to_talk().is_err() {
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+
+            thread::sleep(Duration::from_millis(2200));
+
+            if app
+                .state::<RuntimeState>()
+                .wake_monitor_generation
+                .load(Ordering::Relaxed)
+                != generation
+            {
+                break;
+            }
+
+            let _ = audio.stop_push_to_talk();
+
+            let Some(capture) = audio.take_last_capture() else {
+                thread::sleep(Duration::from_millis(600));
+                continue;
+            };
+
+            if capture.rms() < 0.004 {
+                thread::sleep(Duration::from_millis(600));
+                continue;
+            }
+
+            let manager = app.state::<ModelManager>();
+            let speech = app.state::<SpeechRuntime>();
+            let Ok(result) = speech.transcribe(&app, &manager, capture) else {
+                thread::sleep(Duration::from_secs(3));
+                continue;
+            };
+
+            let Some(command) = extract_wake_command(&result.text, &preferences.wake_phrase) else {
+                thread::sleep(Duration::from_millis(600));
+                continue;
+            };
+
+            emit_voice_capture_event(
+                &app,
+                VoiceCaptureEvent {
+                    phase: "wakeDetected",
+                    shortcut: "wakePhrase",
+                    sample_count: result.input_samples_16khz,
+                    duration_ms: result.duration_ms,
+                    sample_rate: Some(16_000),
+                    channels: Some(1),
+                    message: format!("Wake phrase “{}” detected.", preferences.wake_phrase),
+                    text: Some(result.text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+
+            if command.is_empty() {
+                start_conversation_follow_up(app.clone(), true);
+            } else {
+                let state = app.state::<RuntimeState>();
+                let _ = process_user_command(
+                    app.clone(),
+                    state,
+                    CommandRequest {
+                        text: command,
+                        source: "voice".to_string(),
+                        approval_id: None,
+                    },
+                );
+            }
+
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+}
+
 fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
-    let should_speak = {
+    let (voice_terminal, should_speak) = {
         let state = app.state::<RuntimeState>();
         let mut voice_ids = state
             .voice_command_ids
@@ -739,22 +1226,51 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let is_voice = voice_ids.contains(&event.id);
-        if matches!(
+        let terminal = matches!(
             event.kind,
             "command.completed" | "command.failed" | "command.cancelled"
-        ) {
+        );
+
+        if terminal {
             voice_ids.remove(&event.id);
         }
-        is_voice && matches!(event.kind, "command.completed" | "command.failed")
+
+        (
+            is_voice && terminal,
+            is_voice && matches!(event.kind, "command.completed" | "command.failed"),
+        )
     };
 
-    if should_speak {
+    if voice_terminal {
         let app_for_tts = app.clone();
         let text = event.message.clone();
+        let cancelled = event.kind == "command.cancelled";
+
         thread::spawn(move || {
             let manager = app_for_tts.state::<ModelManager>();
             let tts = app_for_tts.state::<TtsRuntime>();
-            let _ = tts.speak(&app_for_tts, &manager, &text);
+            let preferences = app_for_tts
+                .state::<RuntimeState>()
+                .voice_preferences
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+
+            if should_speak && preferences.auto_speak {
+                let _ = tts.speak(
+                    &app_for_tts,
+                    &manager,
+                    &text,
+                    preferences.tts_speed,
+                    &preferences.tts_voice_id,
+                );
+            }
+
+            if !cancelled && preferences.conversation_mode {
+                start_conversation_follow_up(app_for_tts.clone(), false);
+            } else {
+                resume_wake_monitor_if_enabled(app_for_tts.clone());
+            }
         });
     }
 
@@ -837,7 +1353,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M006 In Progress · Voice",
+        stage: "M006 Complete · Voice · 0.6.0-alpha.1",
         local_first: true,
     }
 }
@@ -3632,7 +4148,10 @@ fn remove_model(
     if model_id == "voice-whisper-base" {
         speech.stop();
     }
-    if model_id == "voice-piper-ptpt" {
+    if matches!(
+        model_id.as_str(),
+        "voice-piper-ptpt" | "voice-piper-engb-alan"
+    ) {
         tts.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
@@ -3666,6 +4185,13 @@ fn prepare_tts_runtime(
 }
 
 #[tauri::command]
+fn stop_tts_speaking(
+    runtime: State<'_, TtsRuntime>,
+) -> Result<TtsRuntimeStatus, String> {
+    runtime.interrupt()
+}
+
+#[tauri::command]
 fn test_tts_voice(
     app: AppHandle,
     manager: State<'_, ModelManager>,
@@ -3676,7 +4202,20 @@ fn test_tts_voice(
         .as_deref()
         .unwrap_or("Olá. Eu sou a AURA, o teu assistente pessoal.")
         .trim();
-    runtime.speak(&app, &manager, phrase)
+    let speed = app
+        .state::<RuntimeState>()
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_speed;
+    let voice_id = app
+        .state::<RuntimeState>()
+        .voice_preferences
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .tts_voice_id
+        .clone();
+    runtime.speak(&app, &manager, phrase, speed, &voice_id)
 }
 
 #[tauri::command]
@@ -4028,6 +4567,19 @@ pub fn run() {
 
                         match event.state() {
                             ShortcutState::Pressed => {
+                                if app.state::<TtsRuntime>().is_speaking() {
+                                    let _ = app.state::<TtsRuntime>().interrupt();
+                                }
+
+                                runtime
+                                    .wake_monitor_generation
+                                    .fetch_add(1, Ordering::Relaxed);
+
+                                if audio.capture_active() {
+                                    let _ = audio.stop_push_to_talk();
+                                    let _ = audio.take_last_capture();
+                                }
+
                                 match audio.start_push_to_talk() {
                                     Ok(snapshot) => emit_voice_capture_event(
                                         app,
@@ -4079,136 +4631,11 @@ pub fn run() {
                                         );
 
                                         if let Some(capture) = audio.take_last_capture() {
-                                            let app_for_speech = app.clone();
-                                            std::thread::spawn(move || {
-                                                emit_voice_capture_event(
-                                                    &app_for_speech,
-                                                    VoiceCaptureEvent {
-                                                        phase: "transcribing",
-                                                        shortcut: "Ctrl+Shift+F8",
-                                                        sample_count: info.map(|value| value.0).unwrap_or(0),
-                                                        duration_ms: info.map(|value| value.3).unwrap_or(0),
-                                                        sample_rate: info.map(|value| value.1),
-                                                        channels: info.map(|value| value.2),
-                                                        message: "Transcribing locally with AURA Voice STT…".to_string(),
-                                                        text: None,
-                                                        timestamp_ms: unix_timestamp_ms(),
-                                                    },
-                                                );
-
-                                                let manager = app_for_speech.state::<ModelManager>();
-                                                let speech = app_for_speech.state::<SpeechRuntime>();
-
-                                                match speech.transcribe(&app_for_speech, &manager, capture) {
-                                                    Ok(result) => {
-                                                        let transcript = result.text.trim().to_string();
-
-                                                        if result.duration_ms < 250 || result.input_rms < 0.003 {
-                                                            emit_voice_capture_event(
-                                                                &app_for_speech,
-                                                                VoiceCaptureEvent {
-                                                                    phase: "error",
-                                                                    shortcut: "Ctrl+Shift+F8",
-                                                                    sample_count: result.input_samples_16khz,
-                                                                    duration_ms: result.duration_ms,
-                                                                    sample_rate: Some(16_000),
-                                                                    channels: Some(1),
-                                                                    message: "Voice capture was too short or too quiet to execute safely.".to_string(),
-                                                                    text: Some(transcript),
-                                                                    timestamp_ms: unix_timestamp_ms(),
-                                                                },
-                                                            );
-                                                            return;
-                                                        }
-                                                        emit_voice_capture_event(
-                                                            &app_for_speech,
-                                                            VoiceCaptureEvent {
-                                                                phase: "transcribed",
-                                                                shortcut: "Ctrl+Shift+F8",
-                                                                sample_count: result.input_samples_16khz,
-                                                                duration_ms: result.duration_ms,
-                                                                sample_rate: Some(16_000),
-                                                                channels: Some(1),
-                                                                message: "Local transcription complete.".to_string(),
-                                                                text: Some(transcript.clone()),
-                                                                timestamp_ms: unix_timestamp_ms(),
-                                                            },
-                                                        );
-
-                                                        let command_text = normalize_voice_command(&transcript);
-                                                        if command_text.is_empty() {
-                                                            emit_voice_capture_event(
-                                                                &app_for_speech,
-                                                                VoiceCaptureEvent {
-                                                                    phase: "error",
-                                                                    shortcut: "Ctrl+Shift+F8",
-                                                                    sample_count: result.input_samples_16khz,
-                                                                    duration_ms: result.duration_ms,
-                                                                    sample_rate: Some(16_000),
-                                                                    channels: Some(1),
-                                                                    message: "AURA heard the wake name but no command followed it.".to_string(),
-                                                                    text: Some(transcript),
-                                                                    timestamp_ms: unix_timestamp_ms(),
-                                                                },
-                                                            );
-                                                        } else {
-                                                            let state = app_for_speech.state::<RuntimeState>();
-                                                            match process_user_command(
-                                                                app_for_speech.clone(),
-                                                                state,
-                                                                CommandRequest {
-                                                                    text: command_text.clone(),
-                                                                    source: "voice".to_string(),
-                                                                    approval_id: None,
-                                                                },
-                                                            ) {
-                                                                Ok(_) => emit_voice_capture_event(
-                                                                    &app_for_speech,
-                                                                    VoiceCaptureEvent {
-                                                                        phase: "submitted",
-                                                                        shortcut: "Ctrl+Shift+F8",
-                                                                        sample_count: result.input_samples_16khz,
-                                                                        duration_ms: result.duration_ms,
-                                                                        sample_rate: Some(16_000),
-                                                                        channels: Some(1),
-                                                                        message: "Voice command sent to AURA Core.".to_string(),
-                                                                        text: Some(command_text),
-                                                                        timestamp_ms: unix_timestamp_ms(),
-                                                                    },
-                                                                ),
-                                                                Err(error) => emit_voice_capture_event(
-                                                                    &app_for_speech,
-                                                                    VoiceCaptureEvent {
-                                                                        phase: "error",
-                                                                        shortcut: "Ctrl+Shift+F8",
-                                                                        sample_count: result.input_samples_16khz,
-                                                                        duration_ms: result.duration_ms,
-                                                                        sample_rate: Some(16_000),
-                                                                        channels: Some(1),
-                                                                        message: error,
-                                                                        text: Some(command_text),
-                                                                        timestamp_ms: unix_timestamp_ms(),
-                                                                    },
-                                                                ),
-                                                            }
-                                                        }
-                                                    },
-                                                    Err(error) => emit_voice_capture_event(
-                                                        &app_for_speech,
-                                                        VoiceCaptureEvent {
-                                                            phase: "error",
-                                                            shortcut: "Ctrl+Shift+F8",
-                                                            sample_count: 0,
-                                                            duration_ms: 0,
-                                                            sample_rate: None,
-                                                            channels: None,
-                                                            message: error,
-                                                            text: None,
-                                                            timestamp_ms: unix_timestamp_ms(),
-                                                        },
-                                                    ),
-                                                }
-                                            });
+                                            process_voice_capture(
+                                                app.clone(),
+                                                capture,
+                                                "Ctrl+Shift+F8",
+                                            );
                                         }
                                     }
                                     Err(error) => emit_voice_capture_event(
@@ -4226,6 +4653,18 @@ pub fn run() {
                                         },
                                     ),
                                 }
+
+                                let preferences = runtime
+                                    .voice_preferences
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                    .clone();
+                                if preferences.wake_word_enabled {
+                                    let generation = runtime
+                                        .wake_monitor_generation
+                                        .load(Ordering::Relaxed);
+                                    spawn_wake_monitor(app.clone(), generation);
+                                }
                             }
                         }
                     }
@@ -4234,6 +4673,7 @@ pub fn run() {
         )
         .setup(|app| {
             let preferences = load_preferences(app.handle());
+            let voice_preferences = load_voice_preferences(app.handle());
             let permission_policy = load_permission_policy(app.handle());
             {
                 let runtime = app.state::<RuntimeState>();
@@ -4255,6 +4695,20 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *current_policy = permission_policy;
+
+                *runtime
+                    .voice_preferences
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                    voice_preferences.clone();
+            }
+
+            if voice_preferences.wake_word_enabled {
+                let generation = app
+                    .state::<RuntimeState>()
+                    .wake_monitor_generation
+                    .load(Ordering::Relaxed);
+                spawn_wake_monitor(app.handle().clone(), generation);
             }
 
             let launched_in_background = std::env::args().any(|arg| arg == "--background");
@@ -4403,6 +4857,7 @@ pub fn run() {
             get_tts_runtime_status,
             prepare_tts_runtime,
             test_tts_voice,
+            stop_tts_speaking,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,

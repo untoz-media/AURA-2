@@ -24,6 +24,12 @@ const MODEL_CONFIG_FILENAME: &str = "model-manager.json";
 const INSTALL_MARKER_FILENAME: &str = "install.json";
 const MODEL_HEADROOM_BYTES: u64 = 1_000_000_000;
 
+const PIPER_ENGB_FILES: &[&str] = &[
+    "en/en_GB/alan/medium/en_GB-alan-medium.onnx",
+    "en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
+    "en/en_GB/alan/medium/MODEL_CARD",
+];
+
 const PIPER_PTPT_FILES: &[&str] = &[
     "pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx",
     "pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx.json",
@@ -138,6 +144,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             license: Some("MIT voice model · Piper runtime GPL-3.0"),
             estimated_size_bytes: Some(63_300_000),
             files: PIPER_PTPT_FILES,
+            availability_message: None,
+        },
+        ModelDefinition {
+            id: "voice-piper-engb-alan",
+            name: "AURA Voice TTS · English UK",
+            subtitle: "Piper Alan · English (UK) · Local",
+            description: "Local English (UK) text-to-speech for AURA Voice using en_GB-alan-medium.",
+            generation: "Voice",
+            role: "textToSpeech",
+            selectable: false,
+            source_repo: Some("rhasspy/piper-voices"),
+            source_revision: Some("main"),
+            license: Some("MIT voice model · Piper runtime GPL-3.0"),
+            estimated_size_bytes: Some(63_300_000),
+            files: PIPER_ENGB_FILES,
             availability_message: None,
         },
     ]
