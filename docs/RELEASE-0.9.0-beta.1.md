@@ -39,7 +39,11 @@ with new Beta-readiness work.
 - Windows Terminal navigation/UI skills with no arbitrary shell execution
 - Windows Calculator Standard/Scientific/Programmer/Date/Graphing mode skills
 - File Explorer Skills for safe Desktop/Documents/Downloads/Pictures/Videos/Music access
-- native Drag & Drop intake with an in-memory opaque-id registry
+- native Drag & Drop V2 intake with an in-memory opaque-id registry
+- explicit per-file and batch inspection actions gated by Read permissions
+- bounded 64 KiB / 12,000-character previews for allowlisted UTF-8 text/code files
+- image-dimension inspection without exposing canonical paths
+- metadata-only handling for PDFs, Office files, video, audio and archives
 - safe dropped-image handoff to Vision through normalized cache copies
 - bounded File Intelligence across personal Windows folders without content scanning
 - recent-file/category queries for videos, images, audio, documents, archives and Downloads
