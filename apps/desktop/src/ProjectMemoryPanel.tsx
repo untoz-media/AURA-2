@@ -86,7 +86,7 @@ export default function ProjectMemoryPanel({
     <section className="project-memory-section">
       <div className="project-memory-heading">
         <div>
-          <span className="memory-kicker">M005.6 · PROJECT MEMORY</span>
+          <span className="memory-kicker">PROJECT-SCOPED CONTEXT</span>
           <h3>Projects</h3>
           <p>
             Keep project-specific context separate from your general AURA memory.

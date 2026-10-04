@@ -80,18 +80,26 @@ pub fn load_preferences(app: &AppHandle) -> VisionPreferences {
         .sanitized()
 }
 
+pub fn validate_preferences_store(app: &AppHandle) -> Result<(), String> {
+    let path = preferences_path(app)?;
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read Vision preferences: {error}"))?;
+    serde_json::from_str::<VisionPreferences>(&content)
+        .map(|_| ())
+        .map_err(|error| format!("Vision preferences file is invalid: {error}"))
+}
+
 pub fn save_preferences(
     app: &AppHandle,
     preferences: VisionPreferences,
 ) -> Result<VisionHistorySnapshot, String> {
     let preferences = preferences.sanitized();
     let path = preferences_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content =
-        serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())?;
+    crate::storage::write_json_atomic(&path, &preferences)?;
 
     if !preferences.retain_images {
         remove_retained_images(app)?;
@@ -196,11 +204,7 @@ fn load_history(app: &AppHandle) -> Result<Vec<VisionHistoryItem>, String> {
 
 fn write_history(app: &AppHandle, items: &[VisionHistoryItem]) -> Result<(), String> {
     let path = history_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(items).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, items)
 }
 
 fn preferences_path(app: &AppHandle) -> Result<PathBuf, String> {

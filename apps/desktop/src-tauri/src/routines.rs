@@ -6,7 +6,7 @@ use crate::{
     integrations::{
         director::{
             preset_requires_sensitive_permission, resolve_director_preset_command,
-            run_director_preset,
+            resolve_director_preset_command_checked, run_director_preset,
         },
         obs::ObsController,
     },
@@ -121,12 +121,7 @@ fn read_routines(app: &AppHandle) -> Result<Vec<UserRoutine>, String> {
 
 fn write_routines(app: &AppHandle, routines: &[UserRoutine]) -> Result<(), String> {
     let path = routines_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(routines).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, routines)
 }
 
 fn validate_text(value: &str, label: &str, max_chars: usize) -> Result<String, String> {
@@ -203,8 +198,26 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         return Err(format!("A routine can contain at most {MAX_STEPS} steps."));
     }
 
+    let mut normalized_steps = Vec::with_capacity(request.steps.len());
     for step in &request.steps {
         validate_step(step)?;
+        match step {
+            RoutineStep::DirectorPreset { preset } => {
+                let resolved = resolve_director_preset_command_checked(app, preset)?
+                    .ok_or_else(|| {
+                        format!(
+                            "Director preset “{preset}” does not exist. Fix the Routine before saving it."
+                        )
+                    })?;
+                if resolved.id.trim().is_empty() {
+                    return Err("Resolved Director preset has an invalid empty id.".to_string());
+                }
+                normalized_steps.push(RoutineStep::DirectorPreset {
+                    preset: resolved.id,
+                });
+            }
+            other => normalized_steps.push(other.clone()),
+        }
     }
 
     let mut aliases = Vec::new();
@@ -271,7 +284,7 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         name,
         description,
         aliases,
-        steps: request.steps,
+        steps: normalized_steps,
         updated_at_ms: now,
     };
 
@@ -305,8 +318,11 @@ pub fn find_routine_by_id(app: &AppHandle, routine_id: &str) -> Option<UserRouti
         .find(|routine| routine.id == routine_id)
 }
 
-pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRoutine> {
-    let routines = read_routines(app).ok()?;
+pub fn resolve_routine_command_checked(
+    app: &AppHandle,
+    input: &str,
+) -> Result<Option<UserRoutine>, String> {
+    let routines = read_routines(app)?;
     let normalized = normalize_phrase(input);
 
     let target = [
@@ -325,13 +341,17 @@ pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRouti
 
     let candidate = target.unwrap_or(normalized.as_str());
 
-    routines.into_iter().find(|routine| {
+    Ok(routines.into_iter().find(|routine| {
         normalize_phrase(&routine.name) == candidate
             || routine
                 .aliases
                 .iter()
                 .any(|alias| normalize_phrase(alias) == candidate)
-    })
+    }))
+}
+
+pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRoutine> {
+    resolve_routine_command_checked(app, input).ok().flatten()
 }
 
 pub fn routine_requires_sensitive_permission(app: &AppHandle, routine: &UserRoutine) -> bool {
@@ -385,8 +405,8 @@ pub async fn run_routine(
                 })
             }
             RoutineStep::DirectorPreset { preset } => {
-                match resolve_director_preset_command(app, preset) {
-                    Some(resolved) => {
+                match resolve_director_preset_command_checked(app, preset) {
+                    Ok(Some(resolved)) => {
                         let run = run_director_preset(obs, &resolved).await;
                         if run.success {
                             Ok(format!(
@@ -399,7 +419,10 @@ pub async fn run_routine(
                                 .unwrap_or_else(|| "Director preset failed.".to_string()))
                         }
                     }
-                    None => Err(format!("Director preset “{preset}” was not found.")),
+                    Ok(None) => Err(format!("Director preset “{preset}” was not found.")),
+                    Err(error) => Err(format!(
+                        "Director presets could not be loaded while running the Routine: {error}"
+                    )),
                 }
             }
             RoutineStep::Wait { milliseconds } => {

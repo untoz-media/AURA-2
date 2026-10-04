@@ -31,6 +31,13 @@ Get-FileHash .\AURA-2*.exe -Algorithm SHA256
 
 ## 4. First-run setup
 
+On a fresh install, the Chat home shows a **First Local Setup** card until the essential local AI setup is complete. It tracks:
+
+1. Managed AURA Runtime
+2. installed + selected assistant model
+
+The card links directly to Models, Permissions and Diagnostics and disappears automatically when both essential steps are ready.
+
 Recommended order:
 
 `Install AURA → review Permissions → install AURA Runtime → download/select AURA-1 → add Voice/Vision models as needed`
@@ -141,7 +148,30 @@ Prompts, memory, screenshots, audio/transcripts, file context, Agent history and
 
 See [Telemetry Policy](./TELEMETRY-POLICY.md) for the full policy.
 
-## 9. Troubleshooting
+## 9. Beta Diagnostics
+
+Open **Settings → Diagnostics** to review AURA's Beta readiness without exposing personal content.
+
+The Diagnostics Center shows:
+
+It also includes **Run self-test**, which asks AURA Core to validate local state without executing computer actions. The self-test checks Local Data readability, permission sanitization, Saved Actions, Automations, Agent history, the model catalog and runtime health.
+
+Voice, TTS and Vision are optional Beta capabilities: an unavailable optional runtime can produce a warning without failing the required Core checks.
+
+- AURA build/version
+- Managed Runtime state
+- selected assistant model readiness
+- Voice STT/TTS state
+- Vision model/runtime state
+- OBS connection state
+- Global Pause and permission guardrails
+- Agent failure/interruption count
+- enabled Automation count
+- automatic product telemetry status
+
+The **Copy diagnostics** action creates a privacy-safe text report for bug reports. It intentionally excludes prompts, memories, screenshots, audio, file paths, OBS passwords and other personal content.
+
+## 10. Troubleshooting
 
 ### Local model will not start
 
@@ -174,7 +204,7 @@ Open **Settings → Permissions** and inspect the permission class reported by t
 - verify host, port and password
 - use `127.0.0.1` for the normal same-PC setup
 
-## 10. Reporting Beta problems
+## 11. Reporting Beta problems
 
 When reporting a bug, include only the information you choose to share:
 

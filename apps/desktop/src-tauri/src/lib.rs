@@ -11,6 +11,7 @@ mod permissions;
 mod project_memory;
 mod routines;
 mod speech_runtime;
+mod storage;
 mod tts_runtime;
 mod vision_capture;
 mod vision_history;
@@ -19,8 +20,9 @@ mod vision_runtime;
 use agents::{
     delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
     recover_interrupted_runs,
-    run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
-    AgentPlan, AgentRun, AgentSnapshot, AuraAutomation, AutomationScheduler,
+    run_saved_action, save_action, save_automation, saved_action_permission,
+    set_automation_enabled, AgentEngine,
+    AgentPlan, AgentRun, AgentSnapshot, AgentStep, AuraAutomation, AutomationScheduler,
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
@@ -44,7 +46,7 @@ use core::{
 };
 use integrations::director::{
     delete_director_preset, find_director_preset_by_id, load_director_presets,
-    preset_requires_sensitive_permission, resolve_director_preset_command, run_director_preset,
+    preset_requires_sensitive_permission, resolve_director_preset_command_checked, run_director_preset, validate_director_store,
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
@@ -61,8 +63,8 @@ use project_memory::{
     summarize_active_project, ProjectMemory, ProjectMemorySnapshot, SaveProjectRequest,
 };
 use routines::{
-    delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
-    routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
+    delete_routine, find_routine_by_id, list_routines, resolve_routine_command_checked, routine_requires_sensitive_permission, run_routine,
+    save_routine, RoutineRunResult, RoutineStep,
     SaveRoutineRequest, UserRoutine,
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
@@ -74,6 +76,7 @@ use vision_capture::{
 use vision_history::{
     clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
     save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
+    validate_preferences_store as validate_vision_preferences_store,
     VisionHistorySnapshot, VisionPreferences,
 };
 use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
@@ -156,6 +159,302 @@ struct AppStatus {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct BetaSelfTestCheck {
+    id: &'static str,
+    label: &'static str,
+    status: &'static str,
+    required: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BetaSelfTestReport {
+    version: &'static str,
+    ready: bool,
+    passed: usize,
+    warnings: usize,
+    failed: usize,
+    checks: Vec<BetaSelfTestCheck>,
+    completed_at_ms: u64,
+}
+
+fn beta_self_test_check(
+    id: &'static str,
+    label: &'static str,
+    status: &'static str,
+    required: bool,
+    message: impl Into<String>,
+) -> BetaSelfTestCheck {
+    BetaSelfTestCheck {
+        id,
+        label,
+        status,
+        required,
+        message: message.into(),
+    }
+}
+
+fn local_reference_matches(
+    reference: &str,
+    id: &str,
+    name: &str,
+    aliases: &[String],
+) -> bool {
+    reference == id
+        || reference.eq_ignore_ascii_case(name)
+        || aliases
+            .iter()
+            .any(|alias| reference.eq_ignore_ascii_case(alias))
+}
+
+fn local_identity_keys(name: &str, aliases: &[String]) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    keys.insert(name.trim().to_lowercase());
+    keys.extend(
+        aliases
+            .iter()
+            .map(|alias| alias.trim().to_lowercase())
+            .filter(|alias| !alias.is_empty()),
+    );
+    keys
+}
+
+fn local_identity_changed(
+    current_name: &str,
+    current_aliases: &[String],
+    next_name: &str,
+    next_aliases: &[String],
+) -> bool {
+    local_identity_keys(current_name, current_aliases)
+        != local_identity_keys(next_name, next_aliases)
+}
+
+fn validate_workflow_references(app: &tauri::AppHandle) -> Result<String, String> {
+    let routines = list_routines(app)
+        .map_err(|error| format!("Could not load Routines: {error}"))?;
+    validate_director_store(app)
+        .map_err(|error| format!("Could not load Director presets: {error}"))?;
+    let presets = load_director_presets(app);
+    let actions = list_saved_actions(app)
+        .map_err(|error| format!("Could not load Saved Actions: {error}"))?;
+    let automations = list_automations(app)
+        .map_err(|error| format!("Could not load Automations: {error}"))?;
+
+    for routine in &routines {
+        for step in &routine.steps {
+            if let RoutineStep::DirectorPreset { preset: reference } = step {
+                let exists = presets.iter().any(|preset| {
+                    local_reference_matches(
+                        reference,
+                        &preset.id,
+                        &preset.name,
+                        &preset.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Routine “{}” references missing Director preset “{}”.",
+                        routine.name, reference
+                    ));
+                }
+            }
+        }
+    }
+
+    for action in &actions {
+        match &action.step {
+            AgentStep::RunRoutine { routine: reference } => {
+                let exists = routines.iter().any(|routine| {
+                    local_reference_matches(
+                        reference,
+                        &routine.id,
+                        &routine.name,
+                        &routine.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Saved Action “{}” references missing Routine “{}”.",
+                        action.name, reference
+                    ));
+                }
+            }
+            AgentStep::DirectorPreset { preset: reference } => {
+                let exists = presets.iter().any(|preset| {
+                    local_reference_matches(
+                        reference,
+                        &preset.id,
+                        &preset.name,
+                        &preset.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Saved Action “{}” references missing Director preset “{}”.",
+                        action.name, reference
+                    ));
+                }
+            }
+            AgentStep::SavedAction { .. } => {
+                return Err(format!(
+                    "Saved Action “{}” recursively references another Saved Action.",
+                    action.name
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    for automation in &automations {
+        if !actions
+            .iter()
+            .any(|action| action.id == automation.action_id)
+        {
+            return Err(format!(
+                "Automation “{}” references missing Saved Action “{}”.",
+                automation.name, automation.action_id
+            ));
+        }
+
+        let permission = saved_action_permission(app, &automation.action_id)
+            .map_err(|error| {
+                format!(
+                    "Automation “{}” could not validate its Saved Action: {error}",
+                    automation.name
+                )
+            })?;
+        if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+            return Err(format!(
+                "Automation “{}” references an Action that is no longer background-safe ({permission:?}).",
+                automation.name
+            ));
+        }
+    }
+
+    Ok(format!(
+        "Workflow references are valid ({} routines, {} presets, {} actions, {} automations).",
+        routines.len(),
+        presets.len(),
+        actions.len(),
+        automations.len()
+    ))
+}
+
+fn finish_beta_self_test(checks: Vec<BetaSelfTestCheck>) -> BetaSelfTestReport {
+    let passed = checks.iter().filter(|check| check.status == "pass").count();
+    let warnings = checks
+        .iter()
+        .filter(|check| check.status == "warning")
+        .count();
+    let failed = checks
+        .iter()
+        .filter(|check| !matches!(check.status, "pass" | "warning"))
+        .count();
+
+    let ready = checks
+        .iter()
+        .filter(|check| check.required)
+        .all(|check| matches!(check.status, "pass" | "warning"));
+
+    BetaSelfTestReport {
+        version: env!("CARGO_PKG_VERSION"),
+        ready,
+        passed,
+        warnings,
+        failed,
+        checks,
+        completed_at_ms: unix_timestamp_ms(),
+    }
+}
+
+#[cfg(test)]
+mod beta_self_test_tests {
+    use super::*;
+
+    #[test]
+    fn global_pause_guard_blocks_new_execution() {
+        let state = RuntimeState::default();
+        assert!(ensure_runtime_active(&state, "running work").is_ok());
+
+        *state
+            .paused
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+
+        let error = ensure_runtime_active(&state, "running work").unwrap_err();
+        assert!(error.contains("AURA is paused"));
+    }
+
+    #[test]
+    fn corrupted_desktop_preferences_fail_closed_to_paused() {
+        let recovery = DesktopPreferences::fail_closed();
+        assert!(recovery.background_enabled);
+        assert!(recovery.paused);
+    }
+
+    #[test]
+    fn legacy_desktop_preferences_default_pause_to_false() {
+        let preferences: DesktopPreferences =
+            serde_json::from_str(r#"{"backgroundEnabled":false}"#).unwrap();
+
+        assert!(!preferences.background_enabled);
+        assert!(!preferences.paused);
+    }
+
+    #[test]
+    fn required_failure_blocks_beta_readiness() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "pass", true, "ok"),
+            beta_self_test_check("policy", "Policy", "fail", true, "unsafe"),
+        ]);
+
+        assert!(!report.ready);
+        assert_eq!(report.passed, 1);
+        assert_eq!(report.failed, 1);
+    }
+
+    #[test]
+    fn optional_warning_does_not_block_beta_readiness() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "pass", true, "ok"),
+            beta_self_test_check("vision", "Vision", "warning", false, "optional"),
+        ]);
+
+        assert!(report.ready);
+        assert_eq!(report.warnings, 1);
+        assert_eq!(report.failed, 0);
+    }
+
+    #[test]
+    fn required_warning_is_reported_without_becoming_a_hard_failure() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "warning", true, "not initialized"),
+            beta_self_test_check("policy", "Policy", "pass", true, "safe"),
+        ]);
+
+        assert!(report.ready);
+        assert_eq!(report.passed, 1);
+        assert_eq!(report.warnings, 1);
+        assert_eq!(report.failed, 0);
+        assert_eq!(report.checks.len(), 2);
+    }
+
+    #[test]
+    fn unknown_required_status_fails_closed() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "unknown", true, "unexpected"),
+        ]);
+
+        assert!(!report.ready);
+        assert_eq!(report.passed, 0);
+        assert_eq!(report.warnings, 0);
+        assert_eq!(report.failed, 1);
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
     paused: bool,
     background_enabled: bool,
@@ -211,15 +510,26 @@ impl VoicePreferences {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct DesktopPreferences {
     background_enabled: bool,
+    paused: bool,
 }
 
 impl Default for DesktopPreferences {
     fn default() -> Self {
         Self {
             background_enabled: true,
+            paused: false,
+        }
+    }
+}
+
+impl DesktopPreferences {
+    fn fail_closed() -> Self {
+        Self {
+            background_enabled: true,
+            paused: true,
         }
     }
 }
@@ -449,38 +759,45 @@ fn route_user_routine(
     app: &AppHandle,
     text: &str,
     policy: &PermissionPolicy,
-) -> Option<RouteResult> {
-    let routine = resolve_routine_command(app, text)?;
+) -> Result<Option<RouteResult>, String> {
+    let Some(routine) = resolve_routine_command_checked(app, text)? else {
+        return Ok(None);
+    };
+
+    validate_director_store(app)?;
     let permission = if routine_requires_sensitive_permission(app, &routine) {
         PermissionClass::Sensitive
     } else {
         PermissionClass::Act
     };
 
-    Some(RouteResult::Action(RoutedAction {
+    Ok(Some(RouteResult::Action(RoutedAction {
         intent: ActionIntent::UserRoutine(routine.id),
         permission,
         decision: policy.decision_for(permission),
-    }))
+    })))
 }
 
 fn route_director_preset(
     app: &AppHandle,
     text: &str,
     policy: &PermissionPolicy,
-) -> Option<RouteResult> {
-    let preset = resolve_director_preset_command(app, text)?;
+) -> Result<Option<RouteResult>, String> {
+    let Some(preset) = resolve_director_preset_command_checked(app, text)? else {
+        return Ok(None);
+    };
+
     let permission = if preset_requires_sensitive_permission(&preset) {
         PermissionClass::Sensitive
     } else {
         PermissionClass::Act
     };
 
-    Some(RouteResult::Action(RoutedAction {
+    Ok(Some(RouteResult::Action(RoutedAction {
         intent: ActionIntent::DirectorPreset(preset.id),
         permission,
         decision: policy.decision_for(permission),
-    }))
+    })))
 }
 
 #[cfg(test)]
@@ -625,16 +942,20 @@ fn permission_policy_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn load_permission_policy(app: &tauri::AppHandle) -> PermissionPolicy {
     let Ok(path) = permission_policy_path(app) else {
-        return PermissionPolicy::default();
+        return PermissionPolicy::fail_closed();
     };
 
-    let Ok(content) = fs::read_to_string(path) else {
+    if !path.exists() {
         return PermissionPolicy::default();
+    }
+
+    let Ok(content) = fs::read_to_string(&path) else {
+        return PermissionPolicy::fail_closed();
     };
 
     serde_json::from_str::<PermissionPolicy>(&content)
-        .unwrap_or_default()
-        .sanitized()
+        .map(PermissionPolicy::sanitized)
+        .unwrap_or_else(|_| PermissionPolicy::fail_closed())
 }
 
 fn save_permission_policy(
@@ -643,12 +964,7 @@ fn save_permission_policy(
 ) -> Result<(), String> {
     let path = permission_policy_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(policy).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    storage::write_json_atomic(&path, policy)
 }
 
 fn voice_preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -673,12 +989,7 @@ fn save_voice_preferences(
     preferences: &VoicePreferences,
 ) -> Result<(), String> {
     let path = voice_preferences_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    storage::write_json_atomic(&path, preferences)
 }
 
 #[tauri::command]
@@ -732,14 +1043,18 @@ fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn load_preferences(app: &tauri::AppHandle) -> DesktopPreferences {
     let Ok(path) = preferences_path(app) else {
-        return DesktopPreferences::default();
+        return DesktopPreferences::fail_closed();
     };
 
-    let Ok(content) = fs::read_to_string(path) else {
+    if !path.exists() {
         return DesktopPreferences::default();
+    }
+
+    let Ok(content) = fs::read_to_string(&path) else {
+        return DesktopPreferences::fail_closed();
     };
 
-    serde_json::from_str(&content).unwrap_or_default()
+    serde_json::from_str(&content).unwrap_or_else(|_| DesktopPreferences::fail_closed())
 }
 
 fn save_preferences(
@@ -748,14 +1063,26 @@ fn save_preferences(
 ) -> Result<(), String> {
     let path = preferences_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    storage::write_json_atomic(&path, preferences)
+}
+
+fn validate_optional_json_file<T>(
+    path: Result<PathBuf, String>,
+    label: &str,
+) -> Result<(), String>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let path = path?;
+    if !path.exists() {
+        return Ok(());
     }
 
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
-
-    fs::write(path, content).map_err(|error| error.to_string())
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read {label}: {error}"))?;
+    serde_json::from_str::<T>(&content)
+        .map(|_| ())
+        .map_err(|error| format!("{label} is invalid: {error}"))
 }
 
 fn runtime_snapshot(state: &RuntimeState) -> RuntimeSnapshot {
@@ -782,6 +1109,15 @@ fn emit_runtime_state(app: &tauri::AppHandle) -> RuntimeSnapshot {
     snapshot
 }
 
+fn ensure_runtime_active(state: &RuntimeState, action: &str) -> Result<(), String> {
+    if runtime_snapshot(state).paused {
+        return Err(format!(
+            "AURA is paused. Resume it before {action}."
+        ));
+    }
+    Ok(())
+}
+
 fn emit_lifecycle_event(app: &tauri::AppHandle, kind: &'static str, message: &str) {
     let _ = app.emit(
         "aura:lifecycle-event",
@@ -806,6 +1142,24 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     app.state::<AgentEngine>().set_global_paused(app, paused);
     app.state::<AutomationScheduler>().set_paused(paused);
 
+    let background_enabled = *state
+        .background_enabled
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Err(error) = save_preferences(
+        app,
+        &DesktopPreferences {
+            background_enabled,
+            paused,
+        },
+    ) {
+        let message = format!(
+            "AURA is {} for this session, but the Pause state could not be saved for the next restart: {error}",
+            if paused { "paused" } else { "resumed" }
+        );
+        emit_lifecycle_event(app, "pause.persistence_failed", &message);
+    }
+
     emit_runtime_state(app)
 }
 
@@ -817,6 +1171,11 @@ fn set_background_state(
         app,
         &DesktopPreferences {
             background_enabled,
+            paused: *app
+                .state::<RuntimeState>()
+                .paused
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
         },
     )?;
 
@@ -1711,9 +2070,506 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M008 Complete · Agents & Automations · 0.8.0-alpha.1",
+        stage: "M009 Public Beta candidate · 0.9.0-beta.1",
         local_first: true,
     }
+}
+
+#[tauri::command]
+fn run_beta_self_test(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    engine: State<'_, AgentEngine>,
+    managed_runtime: State<'_, ManagedRuntimeSetup>,
+    manager: State<'_, ModelManager>,
+    model_runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
+    vision: State<'_, VisionRuntime>,
+) -> BetaSelfTestReport {
+    let mut checks = Vec::new();
+
+    let local_data_check = match app.path().app_local_data_dir() {
+        Ok(root) => match fs::read_dir(&root) {
+            Ok(_) => beta_self_test_check(
+                "localData",
+                "Local data",
+                "pass",
+                true,
+                "AURA Local Data is available and readable.",
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => beta_self_test_check(
+                "localData",
+                "Local data",
+                "warning",
+                true,
+                "AURA Local Data has not been created yet.",
+            ),
+            Err(error) => beta_self_test_check(
+                "localData",
+                "Local data",
+                "fail",
+                true,
+                format!("AURA Local Data could not be read: {error}"),
+            ),
+        },
+        Err(error) => beta_self_test_check(
+            "localData",
+            "Local data",
+            "fail",
+            true,
+            format!("AURA could not resolve its Local Data directory: {error}"),
+        ),
+    };
+    checks.push(local_data_check);
+
+    let atomic_storage_check = match app.path().app_local_data_dir() {
+        Ok(root) => {
+            let probe_path = root.join(".aura-beta-storage-probe.json");
+            let probe = serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "probe": "atomic-storage"
+            });
+
+            match storage::write_json_atomic(&probe_path, &probe) {
+                Ok(()) => {
+                    let verified = fs::read_to_string(&probe_path)
+                        .ok()
+                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .is_some_and(|value| value.get("probe").and_then(|item| item.as_str()) == Some("atomic-storage"));
+                    let _ = fs::remove_file(&probe_path);
+
+                    if verified {
+                        beta_self_test_check(
+                            "atomicStorage",
+                            "Atomic local storage",
+                            "pass",
+                            true,
+                            "Atomic local state write and read-back succeeded.",
+                        )
+                    } else {
+                        beta_self_test_check(
+                            "atomicStorage",
+                            "Atomic local storage",
+                            "fail",
+                            true,
+                            "Atomic state write completed but read-back verification failed.",
+                        )
+                    }
+                }
+                Err(error) => {
+                    let _ = fs::remove_file(&probe_path);
+                    beta_self_test_check(
+                        "atomicStorage",
+                        "Atomic local storage",
+                        "fail",
+                        true,
+                        format!("Atomic local state write failed: {error}"),
+                    )
+                }
+            }
+        }
+        Err(error) => beta_self_test_check(
+            "atomicStorage",
+            "Atomic local storage",
+            "fail",
+            true,
+            format!("AURA could not resolve Local Data for the storage probe: {error}"),
+        ),
+    };
+    checks.push(atomic_storage_check);
+
+    for (id, label, result) in [
+        (
+            "permissionPolicyFile",
+            "Permission policy file",
+            validate_optional_json_file::<PermissionPolicy>(
+                permission_policy_path(&app),
+                "permission policy file",
+            ),
+        ),
+        (
+            "voicePreferencesFile",
+            "Voice preferences file",
+            validate_optional_json_file::<VoicePreferences>(
+                voice_preferences_path(&app),
+                "voice preferences file",
+            ),
+        ),
+        (
+            "desktopPreferencesFile",
+            "Desktop preferences file",
+            validate_optional_json_file::<DesktopPreferences>(
+                preferences_path(&app),
+                "desktop preferences file",
+            ),
+        ),
+    ] {
+        checks.push(match result {
+            Ok(()) => beta_self_test_check(
+                id,
+                label,
+                "pass",
+                true,
+                format!("{label} is valid or has not been created yet."),
+            ),
+            Err(error) => beta_self_test_check(
+                id,
+                label,
+                "fail",
+                true,
+                error,
+            ),
+        });
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    let sanitized_policy = policy.clone().sanitized();
+    checks.push(if sanitized_policy == policy {
+        beta_self_test_check(
+            "permissionPolicy",
+            "Permission policy",
+            "pass",
+            true,
+            "Permission policy passes Core sanitization.",
+        )
+    } else {
+        beta_self_test_check(
+            "permissionPolicy",
+            "Permission policy",
+            "fail",
+            true,
+            "Persisted permission policy contained an unsafe permanent Allow value.",
+        )
+    });
+
+    checks.push(match memory_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "memoryStore",
+            "Memory store",
+            "pass",
+            true,
+            format!("Memory store loaded successfully ({} records).", snapshot.records.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "memoryStore",
+            "Memory store",
+            "fail",
+            true,
+            format!("Memory store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match project_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "projectMemoryStore",
+            "Project Memory store",
+            "pass",
+            true,
+            format!("Project Memory loaded successfully ({} projects).", snapshot.projects.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "projectMemoryStore",
+            "Project Memory store",
+            "fail",
+            true,
+            format!("Project Memory failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match list_routines(&app) {
+        Ok(routines) => beta_self_test_check(
+            "routinesStore",
+            "Routines store",
+            "pass",
+            true,
+            format!("Routines store loaded successfully ({} routines).", routines.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "routinesStore",
+            "Routines store",
+            "fail",
+            true,
+            format!("Routines store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match vision_history_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "visionHistoryStore",
+            "Vision history store",
+            "pass",
+            true,
+            format!("Vision history loaded successfully ({} items).", snapshot.items.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "visionHistoryStore",
+            "Vision history store",
+            "fail",
+            true,
+            format!("Vision history failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match validate_vision_preferences_store(&app) {
+        Ok(()) => beta_self_test_check(
+            "visionPreferencesStore",
+            "Vision preferences store",
+            "pass",
+            true,
+            "Vision preferences are valid.",
+        ),
+        Err(error) => beta_self_test_check(
+            "visionPreferencesStore",
+            "Vision preferences store",
+            "fail",
+            true,
+            error,
+        ),
+    });
+
+    checks.push(match validate_director_store(&app) {
+        Ok(count) => beta_self_test_check(
+            "directorPresetsStore",
+            "Director presets store",
+            "pass",
+            true,
+            format!("Director presets store loaded successfully ({count} presets)."),
+        ),
+        Err(error) => beta_self_test_check(
+            "directorPresetsStore",
+            "Director presets store",
+            "fail",
+            true,
+            error,
+        ),
+    });
+
+    checks.push(match validate_workflow_references(&app) {
+        Ok(message) => beta_self_test_check(
+            "workflowReferences",
+            "Workflow references",
+            "pass",
+            true,
+            message,
+        ),
+        Err(error) => beta_self_test_check(
+            "workflowReferences",
+            "Workflow references",
+            "fail",
+            true,
+            error,
+        ),
+    });
+
+    checks.push(match list_saved_actions(&app) {
+        Ok(actions) => beta_self_test_check(
+            "savedActions",
+            "Saved Actions store",
+            "pass",
+            true,
+            format!("Saved Actions store loaded successfully ({} actions).", actions.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "savedActions",
+            "Saved Actions store",
+            "fail",
+            true,
+            format!("Saved Actions store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match list_automations(&app) {
+        Ok(automations) => beta_self_test_check(
+            "automations",
+            "Automations store",
+            "pass",
+            true,
+            format!("Automations store loaded successfully ({} automations).", automations.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "automations",
+            "Automations store",
+            "fail",
+            true,
+            format!("Automations store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match engine.snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "agentHistory",
+            "Agent history",
+            "pass",
+            true,
+            format!("Agent run history loaded successfully ({} runs).", snapshot.runs.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "agentHistory",
+            "Agent history",
+            "fail",
+            true,
+            format!("Agent run history failed to load: {error}"),
+        ),
+    });
+
+    let catalog = manager.catalog(&app);
+    match catalog {
+        Ok(catalog) => {
+            checks.push(beta_self_test_check(
+                "modelCatalog",
+                "Model catalog",
+                "pass",
+                true,
+                format!("Model catalog loaded successfully ({} entries).", catalog.models.len()),
+            ));
+
+            let assistant = catalog
+                .active_model_id
+                .as_deref()
+                .and_then(|active_id| catalog.models.iter().find(|model| model.id == active_id));
+
+            checks.push(match assistant {
+                Some(model) if model.installed => beta_self_test_check(
+                    "assistantModel",
+                    "Assistant model",
+                    "pass",
+                    false,
+                    format!("{} is installed and selected.", model.name),
+                ),
+                _ => beta_self_test_check(
+                    "assistantModel",
+                    "Assistant model",
+                    "warning",
+                    false,
+                    "No installed assistant model is currently selected.",
+                ),
+            });
+        }
+        Err(error) => {
+            checks.push(beta_self_test_check(
+                "modelCatalog",
+                "Model catalog",
+                "fail",
+                true,
+                format!("Model catalog failed to load: {error}"),
+            ));
+            checks.push(beta_self_test_check(
+                "assistantModel",
+                "Assistant model",
+                "warning",
+                false,
+                "Assistant readiness could not be checked because the model catalog failed.",
+            ));
+        }
+    }
+
+    let managed = managed_runtime.status(&app);
+    checks.push(match managed.state.as_str() {
+        "ready" => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "pass",
+            false,
+            "Managed AI Runtime is installed and verified.",
+        ),
+        "error" | "needsRepair" => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "warning",
+            false,
+            format!("Managed AI Runtime needs attention: {}", managed.message),
+        ),
+        state => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "warning",
+            false,
+            format!("Managed AI Runtime state: {state}."),
+        ),
+    });
+
+    let model_status = model_runtime.status();
+    checks.push(if model_status.state == "error" {
+        beta_self_test_check(
+            "modelRuntime",
+            "Assistant runtime",
+            "warning",
+            false,
+            "Assistant runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "modelRuntime",
+            "Assistant runtime",
+            "pass",
+            false,
+            format!("Assistant runtime state: {}.", model_status.state),
+        )
+    });
+
+    let speech_status = speech.status();
+    checks.push(if speech_status.state == "error" {
+        beta_self_test_check(
+            "speechRuntime",
+            "Voice STT runtime",
+            "warning",
+            false,
+            "Voice STT runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "speechRuntime",
+            "Voice STT runtime",
+            "pass",
+            false,
+            format!("Voice STT runtime state: {}.", speech_status.state),
+        )
+    });
+
+    let tts_status = tts.status(&app, &manager);
+    checks.push(if tts_status.state == "error" {
+        beta_self_test_check(
+            "ttsRuntime",
+            "Voice TTS runtime",
+            "warning",
+            false,
+            "Voice TTS runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "ttsRuntime",
+            "Voice TTS runtime",
+            "pass",
+            false,
+            format!("Voice TTS runtime state: {}.", tts_status.state),
+        )
+    });
+
+    let vision_status = vision.status();
+    checks.push(if vision_status.state == "error" {
+        beta_self_test_check(
+            "visionRuntime",
+            "Vision runtime",
+            "warning",
+            false,
+            "Vision runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "visionRuntime",
+            "Vision runtime",
+            "pass",
+            false,
+            format!("Vision runtime state: {}.", vision_status.state),
+        )
+    });
+
+    finish_beta_self_test(checks)
 }
 
 #[tauri::command]
@@ -2033,8 +2889,58 @@ fn process_user_command(
         .clone();
 
     let base_route = route_command(&text, &policy);
-    let routine_route = route_user_routine(&app, &text, &policy);
-    let director_route = route_director_preset(&app, &text, &policy);
+    let routine_route = match route_user_routine(&app, &text, &policy) {
+        Ok(route) => route,
+        Err(error) => {
+            let message = format!("Could not route local Routine: {error}");
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: message.clone(),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_core_error(
+                &app,
+                CoreError {
+                    id: Some(id.clone()),
+                    code: "routine.store_invalid",
+                    message: message.clone(),
+                },
+            );
+            return Err(message);
+        }
+    };
+    let director_route = match route_director_preset(&app, &text, &policy) {
+        Ok(route) => route,
+        Err(error) => {
+            let message = format!("Could not route Director Mode preset: {error}");
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: message.clone(),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_core_error(
+                &app,
+                CoreError {
+                    id: Some(id.clone()),
+                    code: "director.store_invalid",
+                    message: message.clone(),
+                },
+            );
+            return Err(message);
+        }
+    };
 
     let routed = match routine_route {
         Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
@@ -3079,6 +3985,32 @@ fn process_user_command(
                             }
                         }
                         ActionIntent::UserRoutine(routine_id) => {
+                            if let Err(error) = validate_director_store(&worker_app) {
+                                let message = format!(
+                                    "Routine execution is blocked because Director presets could not be validated: {error}"
+                                );
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "routine.director_store_invalid",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
                             let routine = find_routine_by_id(&worker_app, &routine_id);
                             match routine {
                                 Some(routine) => {
@@ -4880,6 +5812,7 @@ fn capture_vision_screen(
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing the screen")?;
     if state
         .permission_policy
         .lock()
@@ -4898,6 +5831,7 @@ fn capture_vision_active_window(
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing the active window")?;
     if state
         .permission_policy
         .lock()
@@ -4917,6 +5851,7 @@ fn capture_vision_region(
     state: State<'_, RuntimeState>,
     request: VisionRegionRequest,
 ) -> Result<VisionCapture, String> {
+    ensure_runtime_active(&state, "capturing a Vision region")?;
     if state
         .permission_policy
         .lock()
@@ -4967,6 +5902,7 @@ fn analyze_last_vision_capture(
     prompt: String,
     session: State<'_, VisionSession>,
 ) -> Result<VisionAnalysisPayload, String> {
+    ensure_runtime_active(&state, "running Vision analysis")?;
     if state
         .permission_policy
         .lock()
@@ -5063,19 +5999,86 @@ fn save_user_routine(
     app: AppHandle,
     request: SaveRoutineRequest,
 ) -> Result<UserRoutine, String> {
+    if let Some(routine_id) = request.id.as_deref() {
+        let routines = list_routines(&app)?;
+        let existing = routines
+            .iter()
+            .find(|routine| routine.id == routine_id)
+            .ok_or_else(|| "Routine no longer exists.".to_string())?;
+
+        if local_identity_changed(
+            &existing.name,
+            &existing.aliases,
+            &request.name,
+            &request.aliases,
+        ) {
+            let legacy_reference = list_saved_actions(&app)?.iter().any(|action| {
+                match &action.step {
+                    AgentStep::RunRoutine { routine: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                }
+            });
+
+            if legacy_reference {
+                return Err(
+                    "This Routine still has a legacy Saved Action reference by name or alias. Re-save that Action so it stores the stable Routine ID before renaming the Routine."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
     save_routine(&app, request)
 }
 
 #[tauri::command]
 fn delete_user_routine(app: AppHandle, routine_id: String) -> Result<(), String> {
+    let routines = list_routines(&app)?;
+    let routine = routines
+        .iter()
+        .find(|routine| routine.id == routine_id)
+        .ok_or_else(|| "Routine no longer exists.".to_string())?;
+
+    let actions = list_saved_actions(&app)?;
+    let referenced = actions.iter().any(|action| match &action.step {
+        AgentStep::RunRoutine { routine: reference } => {
+            reference == &routine.id
+                || reference.eq_ignore_ascii_case(&routine.name)
+                || routine
+                    .aliases
+                    .iter()
+                    .any(|alias| reference.eq_ignore_ascii_case(alias))
+        }
+        _ => false,
+    });
+
+    if referenced {
+        return Err(
+            "This Routine is still referenced by a Saved AURA Action. Update or delete that Action first."
+                .to_string(),
+        );
+    }
+
     delete_routine(&app, &routine_id)
 }
 
 #[tauri::command]
 fn run_user_routine(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     routine_id: String,
 ) -> Result<RoutineRunResult, String> {
+    ensure_runtime_active(&state, "running a Routine")?;
+    validate_director_store(&app)
+        .map_err(|error| format!("Routine execution is blocked because Director presets could not be validated: {error}"))?;
     let routine = find_routine_by_id(&app, &routine_id)
         .ok_or_else(|| "Routine no longer exists.".to_string())?;
 
@@ -5118,8 +6121,9 @@ fn delete_memory_command(
 }
 
 #[tauri::command]
-fn get_director_presets(app: AppHandle) -> Vec<DirectorPreset> {
-    load_director_presets(&app)
+fn get_director_presets(app: AppHandle) -> Result<Vec<DirectorPreset>, String> {
+    validate_director_store(&app)?;
+    Ok(load_director_presets(&app))
 }
 
 #[tauri::command]
@@ -5127,6 +6131,55 @@ fn save_director_preset_command(
     app: AppHandle,
     request: SaveDirectorPresetRequest,
 ) -> Result<DirectorPreset, String> {
+    if let Some(preset_id) = request.id.as_deref() {
+        validate_director_store(&app)?;
+        let existing = find_director_preset_by_id(&app, preset_id)
+            .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+
+        if local_identity_changed(
+            &existing.name,
+            &existing.aliases,
+            &request.name,
+            &request.aliases,
+        ) {
+            let routine_legacy_reference = list_routines(&app)?.iter().any(|routine| {
+                routine.steps.iter().any(|step| match step {
+                    RoutineStep::DirectorPreset { preset: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                })
+            });
+            let action_legacy_reference = list_saved_actions(&app)?.iter().any(|action| {
+                match &action.step {
+                    AgentStep::DirectorPreset { preset: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                }
+            });
+
+            if routine_legacy_reference || action_legacy_reference {
+                return Err(
+                    "This Director preset still has legacy references by name or alias. Re-save the dependent Routines/Actions so they store the stable preset ID before renaming it."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
     save_director_preset(&app, request)
 }
 
@@ -5135,15 +6188,64 @@ fn delete_director_preset_command(
     app: AppHandle,
     preset_id: String,
 ) -> Result<(), String> {
+    validate_director_store(&app)?;
+    let preset = find_director_preset_by_id(&app, &preset_id)
+        .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+
+    let referenced_by_routine = list_routines(&app)?.iter().any(|routine| {
+        routine.steps.iter().any(|step| match step {
+            RoutineStep::DirectorPreset { preset: reference } => {
+                reference == &preset.id
+                    || reference.eq_ignore_ascii_case(&preset.name)
+                    || preset
+                        .aliases
+                        .iter()
+                        .any(|alias| reference.eq_ignore_ascii_case(alias))
+            }
+            _ => false,
+        })
+    });
+
+    if referenced_by_routine {
+        return Err(
+            "This Director Mode preset is still referenced by a Routine. Update or delete that Routine first."
+                .to_string(),
+        );
+    }
+
+    let referenced_by_action = list_saved_actions(&app)?.iter().any(|action| {
+        match &action.step {
+            AgentStep::DirectorPreset { preset: reference } => {
+                reference == &preset.id
+                    || reference.eq_ignore_ascii_case(&preset.name)
+                    || preset
+                        .aliases
+                        .iter()
+                        .any(|alias| reference.eq_ignore_ascii_case(alias))
+            }
+            _ => false,
+        }
+    });
+
+    if referenced_by_action {
+        return Err(
+            "This Director Mode preset is still referenced by a Saved AURA Action. Update or delete that Action first."
+                .to_string(),
+        );
+    }
+
     delete_director_preset(&app, &preset_id)
 }
 
 #[tauri::command]
 async fn run_director_preset_command(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     preset_id: String,
     obs: State<'_, ObsController>,
 ) -> Result<DirectorPresetRunResult, String> {
+    ensure_runtime_active(&state, "running a Director Mode preset")?;
+    validate_director_store(&app)?;
     let preset = find_director_preset_by_id(&app, &preset_id)
         .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
 
@@ -5201,9 +6303,11 @@ async fn get_obs_source_items(
 
 #[tauri::command]
 async fn set_obs_source_visibility(
+    state: State<'_, RuntimeState>,
     request: ObsSourceVisibilityRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSourceVisibilityResult, String> {
+    ensure_runtime_active(&state, "changing OBS source visibility")?;
     obs.set_source_visibility(request).await
 }
 
@@ -5216,40 +6320,50 @@ async fn get_obs_audio_inputs(
 
 #[tauri::command]
 async fn set_obs_audio_muted(
+    state: State<'_, RuntimeState>,
     request: ObsAudioMuteRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_runtime_active(&state, "changing OBS audio state")?;
     obs.set_audio_muted(request).await
 }
 
 #[tauri::command]
 async fn set_obs_audio_volume(
+    state: State<'_, RuntimeState>,
     request: ObsAudioVolumeRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_runtime_active(&state, "changing OBS audio volume")?;
     obs.set_audio_volume(request).await
 }
 
 #[tauri::command]
 async fn set_obs_program_scene(
+    state: State<'_, RuntimeState>,
     request: ObsSceneSwitchRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_runtime_active(&state, "changing the OBS Program scene")?;
     obs.set_program_scene(request).await
 }
 
 #[tauri::command]
 async fn set_obs_preview_scene(
+    state: State<'_, RuntimeState>,
     request: ObsSceneSwitchRequest,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_runtime_active(&state, "changing the OBS Preview scene")?;
     obs.set_preview_scene(request).await
 }
 
 #[tauri::command]
 async fn start_obs_recording(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_runtime_active(&state, "starting OBS recording")?;
     obs.start_recording().await
 }
 
@@ -5269,15 +6383,19 @@ async fn pause_obs_recording(
 
 #[tauri::command]
 async fn resume_obs_recording(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_runtime_active(&state, "resuming OBS recording")?;
     obs.resume_recording().await
 }
 
 #[tauri::command]
 async fn start_obs_streaming(
+    state: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsStreamingActionResult, String> {
+    ensure_runtime_active(&state, "starting OBS streaming")?;
     obs.start_streaming().await
 }
 
@@ -5599,6 +6717,11 @@ pub fn run() {
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *background_enabled = preferences.background_enabled;
 
+                *runtime
+                    .paused
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = preferences.paused;
+
                 let registered = app.autolaunch().is_enabled().unwrap_or(false);
                 let mut autostart_enabled = runtime
                     .autostart_enabled
@@ -5619,10 +6742,21 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
-            let _ = recover_interrupted_runs(app.handle());
+            if let Err(error) = recover_interrupted_runs(app.handle()) {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "agents.recovery_failed",
+                    &format!(
+                        "AURA could not recover interrupted Agent runs. Agent history needs attention: {error}"
+                    ),
+                );
+            }
+            app.state::<AgentEngine>()
+                .set_global_paused(app.handle(), preferences.paused);
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
-            app.state::<AutomationScheduler>().set_paused(false);
+            app.state::<AutomationScheduler>()
+                .set_paused(preferences.paused);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
 
@@ -5657,7 +6791,14 @@ pub fn run() {
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
-                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, false, None::<&str>)?;
+                CheckMenuItem::with_id(
+                    app,
+                    "pause",
+                    "Pause AURA",
+                    true,
+                    preferences.paused,
+                    None::<&str>,
+                )?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item =
@@ -5760,6 +6901,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
+            run_beta_self_test,
             get_runtime_state,
             get_voice_preferences,
             set_voice_preferences,

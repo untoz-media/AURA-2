@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppStatus,
+  BetaSelfTestReport,
   CommandAck,
   CommandRequest,
   CoreError,
@@ -85,6 +86,10 @@ export const AURA_EVENTS = {
 
 export async function getAppStatus(): Promise<AppStatus> {
   return invoke<AppStatus>("get_app_status");
+}
+
+export async function runBetaSelfTest(): Promise<BetaSelfTestReport> {
+  return invoke<BetaSelfTestReport>("run_beta_self_test");
 }
 
 export async function getRuntimeState(): Promise<RuntimeState> {

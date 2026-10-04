@@ -12,6 +12,16 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] SHA-256 matches the published checksum
 - [ ] downgrade protection rejects an older installer over a newer build
 
+## First-run setup
+
+- [ ] fresh install shows First Local Setup card when Runtime/model are missing
+- [ ] Runtime readiness step updates when Managed Runtime becomes Ready
+- [ ] assistant step updates after installing/selecting AURA-1
+- [ ] Models button opens Models
+- [ ] Review permissions opens Settings → Permissions
+- [ ] Diagnostics opens Settings → Diagnostics
+- [ ] setup card disappears when Runtime + assistant model are ready
+
 ## Core lifecycle
 
 - [ ] main window opens and closes correctly
@@ -19,6 +29,13 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] Background Mode works
 - [ ] optional Start with Windows setting persists
 - [ ] Global Pause blocks new actions
+- [ ] Global Pause remains enabled after quitting and reopening AURA
+- [ ] While paused, Vision capture/analysis is rejected
+- [ ] While paused, Routine and Director preset execution is rejected
+- [ ] While paused, OBS scene/source/audio changes are rejected
+- [ ] While paused, Start Streaming / Start Recording / Resume Recording are rejected
+- [ ] While paused, Stop Streaming / Stop Recording / Pause Recording remain available
+- [ ] Startup Automations do not fire while persisted Global Pause is enabled
 - [ ] resuming AURA restores normal execution
 
 ## Settings & permissions
@@ -52,6 +69,18 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] mouse action obeys Modify policy
 - [ ] media/audio actions work
 - [ ] sensitive/destructive system actions require the expected confirmation
+
+## Local state & diagnostics
+
+- [ ] Diagnostics Core self-test runs without error
+- [ ] `Atomic local storage` reports Pass
+- [ ] Memory / Project Memory / Routines stores report Pass
+- [ ] Vision History / Vision Preferences stores report Pass
+- [ ] Director presets store reports Pass
+- [ ] Saved Actions / Automations / Agent history stores report Pass
+- [ ] permission / Voice / desktop preference files report Pass
+- [ ] privacy-safe diagnostics can be copied
+- [ ] diagnostics output contains no prompts, memories, file paths, screenshots, audio or OBS password
 
 ## Memory & context
 
@@ -120,6 +149,24 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] changing permission from Allow to Ask/Block stops silent execution
 - [ ] Global Pause suspends scheduled execution
 
+## Diagnostics Center
+
+- [ ] Settings → Diagnostics opens
+- [ ] Run self-test completes without executing computer/OBS actions
+- [ ] Local Data check reports Pass/Warning/Fail coherently
+- [ ] Permission policy self-test reports Pass with safe policy
+- [ ] Saved Actions, Automations and Agent history stores are readable
+- [ ] model catalog check completes
+- [ ] candidate version/stage are correct
+- [ ] Managed Runtime readiness matches Models
+- [ ] selected assistant model readiness matches Models
+- [ ] Voice and Vision states match their workspaces
+- [ ] Agent failed/interrupted count matches run history
+- [ ] enabled Automation count matches Agents
+- [ ] permission guardrail state matches Settings → Permissions
+- [ ] Copy diagnostics works
+- [ ] copied diagnostics contain no prompts, memories, screenshots, audio, file paths or OBS passwords
+
 ## Privacy
 
 - [ ] Privacy page states Product telemetry Off
@@ -129,6 +176,8 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 
 ## Regression / release gates
 
+- [ ] `package-lock.json` exists and matches the candidate dependency set
+- [ ] locked dependencies install successfully with `npm ci`
 - [ ] `npm run release:check` passes
 - [ ] `npm run telemetry:check` passes
 - [ ] `npm run beta:source-check` passes

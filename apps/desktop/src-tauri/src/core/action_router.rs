@@ -1069,17 +1069,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
 
     if let Some(intent) = memory_request(input) {
         let permission = match &intent {
-            ActionIntent::MemoryList => PermissionClass::Read,
-            ActionIntent::MemoryRemember(_) => PermissionClass::Modify,
-            ActionIntent::MemoryForget(_) => PermissionClass::Destructive,
-            _ => unreachable!(),
+            ActionIntent::MemoryList => Some(PermissionClass::Read),
+            ActionIntent::MemoryRemember(_) => Some(PermissionClass::Modify),
+            ActionIntent::MemoryForget(_) => Some(PermissionClass::Destructive),
+            _ => None,
         };
 
-        return RouteResult::Action(RoutedAction {
-            intent,
-            permission,
-            decision: policy.decision_for(permission),
-        });
+        return match permission {
+            Some(permission) => RouteResult::Action(RoutedAction {
+                intent,
+                permission,
+                decision: policy.decision_for(permission),
+            }),
+            None => RouteResult::NoMatch,
+        };
     }
 
     if let Some(action) = system_request(input) {
@@ -1101,7 +1104,7 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("media_request should only produce media intents"),
+            Ok(_) => RouteResult::NoMatch,
             Err(message) => RouteResult::InvalidMedia(message),
         };
     }
@@ -1116,22 +1119,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("mouse_request should only produce mouse intents"),
+            Ok(_) => RouteResult::NoMatch,
             Err(message) => RouteResult::InvalidMouse(message),
         };
     }
 
     if let Some(keyboard) = keyboard_request(input) {
         return match keyboard {
-            Ok(intent) => {
-                let permission = permission_for_keyboard(&intent)
-                    .expect("keyboard intent should have a permission class");
-
-                RouteResult::Action(RoutedAction {
+            Ok(intent) => match permission_for_keyboard(&intent) {
+                Some(permission) => RouteResult::Action(RoutedAction {
                     intent,
                     permission,
                     decision: policy.decision_for(permission),
-                })
+                }),
+                None => RouteResult::NoMatch,
             }
             Err(message) => RouteResult::InvalidKeyboard(message),
         };
@@ -1417,6 +1418,14 @@ mod tests {
                 ..
             }) if text == "Hello AURA"
         ));
+    }
+
+    #[test]
+    fn keyboard_permission_fails_closed_for_non_keyboard_intents() {
+        assert_eq!(
+            permission_for_keyboard(&ActionIntent::MemoryList),
+            None
+        );
     }
 
 

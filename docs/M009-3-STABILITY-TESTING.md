@@ -21,6 +21,16 @@ M009.3 repairs both annotations and expands pure regression coverage for:
 - invalid non-JSON planner output
 - case-insensitive Action alias collisions
 
+## Additional hardening findings
+
+Continued Beta audit found and fixed additional issues:
+
+- Action Router parsing no longer relies on runtime `unreachable!` / `expect()` assumptions; unexpected internal parser shapes now fail safely instead of panicking.
+- The Beta self-test finalization helper accidentally called itself recursively. The runtime command had duplicated inline finalization, so the UI path did not invoke that recursion, but Rust tests using the helper could stack-overflow once CI actually executed.
+- Runtime and tests now share one `finish_beta_self_test` implementation, so the tested logic is the production logic.
+- Unknown required self-test statuses now fail closed and count as failures.
+- Diagnostics renders every non-ready self-test as critical instead of allowing a visually green `Attention` state.
+- Stale Alpha fallback copy (`Desktop Foundation`, `0.2.0`, planned Model Router) was removed from Settings.
 ## Beta source safety checks
 
 `npm run beta:source-check` performs fast source-level release guards.
@@ -39,6 +49,91 @@ It fails on:
 
 These checks do not replace Rust tests or a security review. They are a cheap additional tripwire for Beta-critical invariants.
 
+## Global Pause survives restart
+
+Global Pause is a safety control for Agents and Automations, so Beta now persists it in desktop preferences.
+
+Startup order is:
+
+`load preferences → restore runtime paused state → recover interrupted Agent runs → pause Agent Engine → apply Automation permission policy → restore scheduler paused state → start scheduler`
+
+This prevents Startup Automations from firing during launch when the user had explicitly paused AURA before the previous shutdown/restart.
+
+Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
+
+If an existing desktop-preferences file is unreadable or invalid, AURA now fails closed with `paused=true` so Agents and Automations cannot silently resume from corrupted local state.
+## Local references fail loudly instead of degrading silently
+
+Beta no longer treats corrupted local context as an empty list in safety-sensitive paths.
+
+- Agent planning fails if Routines, Saved Actions or Director presets cannot be loaded.
+- Agent step validation and permission calculation use strict local-store reads.
+- Director preset Save/Delete first parse the existing store and never overwrite an invalid file.
+- Routine Save validates every referenced Director preset before persisting the Routine.
+- Routine execution resolves Director presets through a checked reader.
+- Chat routing distinguishes `no local match` from `local store invalid` and emits terminal failure events rather than falling through to another route.
+- Director preset loading is isolated from the main desktop bootstrap so a broken optional store surfaces an error without preventing the rest of AURA from loading.
+## Startup recovery failures are visible
+
+`recover_interrupted_runs` is no longer ignored during application setup. If Agent history cannot be read or updated, AURA emits an `agents.recovery_failed` lifecycle warning so the user can open Diagnostics and investigate the local store.
+## Global Pause closes direct-control bypasses
+
+The audit found that some direct UI commands bypassed the global paused state even though Chat, Agents, Automations and global shortcuts already respected it.
+
+Pause now blocks new execution through:
+
+- direct Vision capture and analysis
+- manual Routine execution
+- manual Director Mode preset execution
+- OBS Program/Preview scene changes
+- OBS source visibility and audio mutations
+- starting or resuming recording
+- starting streaming
+
+Safety exits remain available while paused:
+
+- stop streaming
+- stop recording
+- pause recording
+- disconnect OBS
+
+This lets the user stop an ongoing production action without first re-enabling AURA.
+## Permission corruption fails closed
+
+The persisted permission policy previously fell back to normal defaults when its JSON could not be read or parsed. Because normal defaults allow Read and Act, a corrupted file could unintentionally become less restrictive than the user's previous policy.
+
+Beta recovery now distinguishes first run from corruption:
+
+- missing policy file → normal recommended defaults
+- unreadable/invalid existing policy → fail-closed recovery policy
+- fail-closed policy → Read, Act, Modify, Sensitive and Destructive all require Ask
+
+This also prevents background Automations from continuing silently because unattended execution requires current Allow.
+## Crash-resistant local persistence
+
+The Beta audit found that several JSON stores still used direct whole-file writes. A process or OS interruption during a direct write could leave truncated local state.
+
+M009.3 now provides a shared atomic JSON persistence primitive:
+
+`serialize → write temp file in the same directory → flush/sync → rename over destination`
+
+It is used for:
+
+- Memory
+- Project Memory
+- Routines
+- Saved AURA Actions
+- Automations and Agent run state
+- Director Mode presets
+- Model Manager configuration
+- Vision preferences/history
+- permission policy
+- Voice preferences
+- desktop preferences
+
+The Beta self-test also performs a privacy-safe atomic write/read-back probe and validates the main user stores and configuration files for parse integrity.
+
+The source gate rejects a return to direct `fs::write` for these critical JSON stores.
 ## Independent Beta Quality workflow
 
 `.github/workflows/beta-quality.yml` runs on `ubuntu-latest` and performs:
@@ -67,6 +162,16 @@ npm run beta:quality
 ```
 
 `beta:quality` combines release metadata checks, source guards and the frontend production build.
+
+## In-app Beta Diagnostics
+
+The Public Beta candidate now includes **Settings → Diagnostics**.
+
+It gives testers a privacy-safe readiness snapshot for runtime, assistant model, Voice, Vision, OBS, permissions, Agents and Automations, plus a sanitized report that can be copied into bug reports.
+
+No prompts, memories, screenshots, audio, file paths or credentials are included in the copied report.
+
+The Diagnostics Center also exposes a local **Core self-test** that validates Local Data readability, permission sanitization, Saved Actions/Automations stores, Agent history, model catalog and runtime health without executing PC or OBS actions.
 
 ## Release gate
 

@@ -44,6 +44,24 @@ export type AppStatus = {
   localFirst: boolean;
 };
 
+export type BetaSelfTestCheck = {
+  id: string;
+  label: string;
+  status: "pass" | "warning" | "fail" | string;
+  required: boolean;
+  message: string;
+};
+
+export type BetaSelfTestReport = {
+  version: string;
+  ready: boolean;
+  passed: number;
+  warnings: number;
+  failed: number;
+  checks: BetaSelfTestCheck[];
+  completedAtMs: number;
+};
+
 export type CoreError = {
   id?: string;
   code: string;
@@ -65,7 +83,9 @@ export type LifecycleEventKind =
   | "autostart.disabled"
   | "startup.background"
   | "permissions.updated"
-  | "permissions.reset";
+  | "permissions.reset"
+  | "pause.persistence_failed"
+  | "agents.recovery_failed";
 
 export type LifecycleEvent = {
   kind: LifecycleEventKind;

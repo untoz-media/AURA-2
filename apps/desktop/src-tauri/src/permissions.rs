@@ -41,6 +41,16 @@ impl Default for PermissionPolicy {
 }
 
 impl PermissionPolicy {
+    pub fn fail_closed() -> Self {
+        Self {
+            read: PermissionDecision::Ask,
+            act: PermissionDecision::Ask,
+            modify: PermissionDecision::Ask,
+            destructive: PermissionDecision::Ask,
+            sensitive: PermissionDecision::Ask,
+        }
+    }
+
     pub fn decision_for(&self, class: PermissionClass) -> PermissionDecision {
         match class {
             PermissionClass::Read => self.read,
@@ -101,6 +111,20 @@ mod tests {
             policy.decision_for(PermissionClass::Act),
             PermissionDecision::Allow
         );
+    }
+
+    #[test]
+    fn fail_closed_policy_requires_confirmation_for_every_class() {
+        let policy = PermissionPolicy::fail_closed();
+        for class in [
+            PermissionClass::Read,
+            PermissionClass::Act,
+            PermissionClass::Modify,
+            PermissionClass::Sensitive,
+            PermissionClass::Destructive,
+        ] {
+            assert_eq!(policy.decision_for(class), PermissionDecision::Ask);
+        }
     }
 
     #[test]

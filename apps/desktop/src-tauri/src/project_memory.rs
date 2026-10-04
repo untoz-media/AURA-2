@@ -117,12 +117,7 @@ fn read_store(app: &AppHandle) -> Result<ProjectStore, String> {
 
 fn write_store(app: &AppHandle, store: &ProjectStore) -> Result<(), String> {
     let path = projects_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(store).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, store)
 }
 
 fn slugify(value: &str) -> String {

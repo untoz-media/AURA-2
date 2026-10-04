@@ -2,7 +2,7 @@
 
 AURA-2 is a Windows-first, local-first personal computer assistant. The Beta combines deterministic computer control with local AI, Voice, Vision, Memory, OBS Director Mode, Agents and Automations.
 
-> **Release status:** Beta hardening is in progress. This documentation is being prepared before the Public Beta is published.
+> **Release status:** `0.9.0-beta.1` is prepared as the Public Beta candidate. Publication is blocked until the M009.3 quality/build gates execute successfully.
 
 ## Start here
 
@@ -10,6 +10,7 @@ AURA-2 is a Windows-first, local-first personal computer assistant. The Beta com
 - [Beta Test Checklist](./BETA-TEST-CHECKLIST.md) — structured validation before release
 - [Known Issues](./BETA-KNOWN-ISSUES.md) — current limitations and release blockers
 - [Telemetry Policy](./TELEMETRY-POLICY.md) — what AURA does and does not send
+- [Beta Feedback](./BETA-FEEDBACK.md) — how to report bugs, request features and share diagnostics safely
 - [M009.3 Stability Testing](./M009-3-STABILITY-TESTING.md) — quality gates and CI status
 
 ## Beta principles
@@ -33,6 +34,12 @@ The desktop Model Manager is ready for multiple assistant models.
 - **AURA Vision** uses local SmolVLM2 500M for image/UI understanding.
 
 The AURA-2 product architecture, computer-control stack and agent system do not depend on an unrestricted model having direct access to Windows.
+
+## Current release blockers
+
+- #55 — GitHub Actions runner startup
+- #56 — npm dependency lockfile
+- #57 — private vulnerability reporting
 
 ## Public Beta gate
 

@@ -27,6 +27,9 @@ const staleCopy = [
   "Ready for M006.3 STT",
   "arrive later in M002",
   "Vision access will remain permission-based",
+  "M005 · LOCAL CONTEXT",
+  "M005.6 · PROJECT MEMORY",
+  "Scheduling and autonomous background tasks remain scoped to",
 ];
 
 for (const phrase of staleCopy) {
@@ -51,6 +54,44 @@ requireFragments("apps/desktop/src-tauri/src/permissions.rs", [
   "PermissionDecision::Allow",
   "self.destructive = PermissionDecision::Ask",
   "self.sensitive = PermissionDecision::Ask",
+  "pub fn fail_closed() -> Self",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "return PermissionPolicy::fail_closed();",
+  ".unwrap_or_else(|_| PermissionPolicy::fail_closed())",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "paused: bool",
+  "preferences.paused",
+  ".set_paused(preferences.paused)",
+  ".set_global_paused(app.handle(), preferences.paused)",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "fn fail_closed() -> Self",
+  "paused: true",
+  "DesktopPreferences::fail_closed()",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  'ensure_runtime_active(&state, "capturing the screen")',
+  'ensure_runtime_active(&state, "capturing the active window")',
+  'ensure_runtime_active(&state, "capturing a Vision region")',
+  'ensure_runtime_active(&state, "running Vision analysis")',
+  'ensure_runtime_active(&state, "running a Routine")',
+  'ensure_runtime_active(&state, "running a Director Mode preset")',
+  'ensure_runtime_active(&state, "changing the OBS Program scene")',
+  'ensure_runtime_active(&state, "changing OBS source visibility")',
+  'ensure_runtime_active(&state, "starting OBS recording")',
+  'ensure_runtime_active(&state, "resuming OBS recording")',
+  'ensure_runtime_active(&state, "starting OBS streaming")',
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  'if let Err(error) = recover_interrupted_runs(app.handle())',
+  '"agents.recovery_failed"',
 ]);
 
 requireFragments("apps/desktop/src-tauri/src/agents.rs", [
@@ -61,6 +102,137 @@ requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "AgentStep::LaunchApp { .. } | AgentStep::SwitchToApp { .. }",
   "Background automations cannot run sensitive routines.",
   "Background automations cannot run a sensitive Director preset.",
+  "Agent planner could not load Routines",
+  "Agent planner could not load Director presets",
+  "Agent planner could not load Saved Actions",
+  "validate_director_store(app)",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/integrations/director.rs", [
+  "Director presets file is invalid and was left unchanged",
+  "let mut presets = read_director_presets(app)?;",
+  "resolve_director_preset_command_checked",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/routines.rs", [
+  "resolve_routine_command_checked",
+  "resolve_director_preset_command_checked",
+  "does not exist. Fix the Routine before saving it.",
+  "preset: resolved.id",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/agents.rs", [
+  "routine: resolved.id",
+  "preset: resolved.id",
+  "This AURA Action is used by an Automation",
+  "Automation cannot be enabled because its Saved Action is no longer background-safe",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  '"workflowReferences"',
+  "validate_workflow_references(&app)",
+  "This Routine is still referenced by a Saved AURA Action",
+  "This Director Mode preset is still referenced by a Routine",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  '"routine.store_invalid"',
+  '"director.store_invalid"',
+  'validate_director_store(&app)?;',
+]);
+
+const actionRouter = fs.readFileSync("apps/desktop/src-tauri/src/core/action_router.rs", "utf8");
+const actionRouterRuntime = actionRouter.split("#[cfg(test)]")[0];
+for (const forbidden of ["unreachable!(", ".expect("]) {
+  if (actionRouterRuntime.includes(forbidden)) {
+    failures.push(`apps/desktop/src-tauri/src/core/action_router.rs: runtime parser still relies on ${forbidden}`);
+  }
+}
+
+const desktopLib = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
+if (/fn finish_beta_self_test\([^)]*\)[^{]*\{\s*finish_beta_self_test\(/s.test(desktopLib)) {
+  failures.push("apps/desktop/src-tauri/src/lib.rs: Beta self-test finisher is recursively calling itself");
+}
+if (!desktopLib.includes("finish_beta_self_test(checks)")) {
+  failures.push("apps/desktop/src-tauri/src/lib.rs: runtime Beta self-test is not using the tested finalization helper");
+}
+
+const settingsSource = fs.readFileSync("apps/desktop/src/Settings.tsx", "utf8");
+if (!settingsSource.includes('tone={!betaSelfTest.ready ? "critical"')) {
+  failures.push("apps/desktop/src/Settings.tsx: non-ready Beta self-test must render as critical");
+}
+
+const atomicStores = [
+  "apps/desktop/src-tauri/src/memory.rs",
+  "apps/desktop/src-tauri/src/project_memory.rs",
+  "apps/desktop/src-tauri/src/routines.rs",
+  "apps/desktop/src-tauri/src/agents.rs",
+  "apps/desktop/src-tauri/src/integrations/director.rs",
+  "apps/desktop/src-tauri/src/model_manager.rs",
+  "apps/desktop/src-tauri/src/vision_history.rs",
+];
+for (const file of atomicStores) {
+  const source = fs.readFileSync(file, "utf8");
+  if (!source.includes("write_json_atomic")) {
+    failures.push(`${file}: critical local state is not using atomic JSON persistence`);
+  }
+
+  const directWritePattern =
+    file.endsWith("model_manager.rs")
+      ? /std_fs::write\s*\(/
+      : /(?<!async_)fs::write\s*\(/;
+  if (directWritePattern.test(source)) {
+    failures.push(`${file}: critical local JSON store uses a direct file write instead of atomic persistence`);
+  }
+}
+
+const desktopPersistence = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
+for (const required of [
+  "storage::write_json_atomic(&path, policy)",
+  "storage::write_json_atomic(&path, preferences)",
+]) {
+  if (!desktopPersistence.includes(required)) {
+    failures.push(`apps/desktop/src-tauri/src/lib.rs: desktop state persistence guard missing: ${required}`);
+  }
+}
+
+const storageSource = fs.readFileSync("apps/desktop/src-tauri/src/storage.rs", "utf8");
+for (const required of ["file.sync_all()", "fs::rename(&temporary, path)"]) {
+  if (!storageSource.includes(required)) {
+    failures.push(`apps/desktop/src-tauri/src/storage.rs: atomic write invariant missing: ${required}`);
+  }
+}
+
+requireFragments("apps/desktop/src/Settings.tsx", [
+  "export type SettingsSection =",
+  '| "diagnostics";',
+  "AURA-2 Beta Diagnostics",
+  "Copy privacy-safe diagnostics",
+  "Run self-test",
+  "runBetaSelfTest",
+  "Telemetry: automatic product telemetry off",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "struct BetaSelfTestReport",
+  "fn run_beta_self_test(",
+  "run_beta_self_test,",
+  "Permission policy passes Core sanitization.",
+  "Saved Actions store loaded successfully",
+  "Automations store loaded successfully",
+]);
+
+requireFragments("apps/desktop/src/bridge/aura.ts", [
+  'invoke<BetaSelfTestReport>("run_beta_self_test")',
+]);
+
+requireFragments("apps/desktop/src/App.tsx", [
+  "visionRuntime={visionRuntime}",
+  "agentRuns={agentRuns}",
+  "automations={automations}",
+  "FIRST LOCAL SETUP",
+  "const localSetupReady = managedRuntimeReady && localAssistantReady;",
+  'openSettings("diagnostics")',
 ]);
 
 const agents = fs.readFileSync("apps/desktop/src-tauri/src/agents.rs", "utf8");
@@ -83,6 +255,36 @@ for (const testName of requiredAgentTests) {
   const prefix = agents.slice(Math.max(0, index - 80), index);
   if (!/\#\[test\]\s*$/.test(prefix.trimEnd())) {
     failures.push(`apps/desktop/src-tauri/src/agents.rs: ${testName} is not marked #[test]`);
+  }
+}
+
+const settingsSource = fs.readFileSync("apps/desktop/src/Settings.tsx", "utf8");
+const appSource = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
+const propsStart = settingsSource.indexOf("type Props = {");
+const propsEnd = settingsSource.indexOf("\n};", propsStart);
+const settingsMountStart = appSource.indexOf("\n            <Settings\n");
+const settingsMountEnd = appSource.indexOf("\n            />", settingsMountStart);
+
+if (propsStart < 0 || propsEnd < 0 || settingsMountStart < 0 || settingsMountEnd < 0) {
+  failures.push("Could not structurally validate Settings props wiring.");
+} else {
+  const propsBlock = settingsSource.slice(propsStart, propsEnd);
+  const settingsMount = appSource.slice(settingsMountStart, settingsMountEnd);
+  const requiredProps = [...propsBlock.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*)(?:\??):/gm)]
+    .map((match) => match[1]);
+  const passedProps = [...settingsMount.matchAll(/^\s+([A-Za-z][A-Za-z0-9]*)=/gm)]
+    .map((match) => match[1]);
+
+  for (const prop of requiredProps) {
+    if (!passedProps.includes(prop)) {
+      failures.push(`apps/desktop/src/App.tsx: Settings prop is not wired: ${prop}`);
+    }
+  }
+
+  for (const prop of passedProps) {
+    if (!requiredProps.includes(prop)) {
+      failures.push(`apps/desktop/src/App.tsx: unknown Settings prop is wired: ${prop}`);
+    }
   }
 }
 

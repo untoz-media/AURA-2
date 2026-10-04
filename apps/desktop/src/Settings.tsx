@@ -28,12 +28,17 @@ import type {
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
   VoicePreferences,
+  VisionRuntimeStatus,
+  AgentSnapshot,
+  AuraAutomation,
+  BetaSelfTestReport,
 } from "./bridge/types";
+import { runBetaSelfTest } from "./bridge/aura";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
 import { auraThemes, type AuraTheme } from "./theme";
 
-type SettingsSection =
+export type SettingsSection =
   | "general"
   | "appearance"
   | "privacy"
@@ -42,7 +47,8 @@ type SettingsSection =
   | "voice"
   | "overlay"
   | "shortcuts"
-  | "integrations";
+  | "integrations"
+  | "diagnostics";
 
 type Props = {
   activeSection: SettingsSection;
@@ -127,6 +133,9 @@ type Props = {
   onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
   onAudioTestStart: () => Promise<AudioInputSnapshot>;
   onAudioTestStop: () => Promise<AudioInputSnapshot>;
+  visionRuntime: VisionRuntimeStatus;
+  agentRuns: AgentSnapshot;
+  automations: AuraAutomation[];
 };
 
 const sections: Array<{
@@ -143,6 +152,7 @@ const sections: Array<{
   { id: "overlay", label: "Overlay", icon: "▱" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
   { id: "integrations", label: "Integrations", icon: "⌁" },
+  { id: "diagnostics", label: "Diagnostics", icon: "◫" },
 ];
 
 function SettingRow({
@@ -295,6 +305,9 @@ export default function Settings({
   onAudioSelect,
   onAudioTestStart,
   onAudioTestStop,
+  visionRuntime,
+  agentRuns,
+  automations,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -313,6 +326,10 @@ export default function Settings({
   const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
   const [ttsBusy, setTtsBusy] = useState<string | null>(null);
   const [voicePrefsBusy, setVoicePrefsBusy] = useState(false);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+  const [betaSelfTest, setBetaSelfTest] = useState<BetaSelfTestReport | null>(null);
+  const [betaSelfTestBusy, setBetaSelfTestBusy] = useState(false);
+  const [betaSelfTestError, setBetaSelfTestError] = useState<string | null>(null);
   const [wakePhraseDraft, setWakePhraseDraft] = useState(
     voicePreferences.wakePhrase,
   );
@@ -575,6 +592,79 @@ export default function Settings({
   const askPermissionCount = permissionDecisions.filter((decision) => decision === "ask").length;
   const blockedPermissionCount = permissionDecisions.filter((decision) => decision === "never").length;
   const modifyAlwaysAllowed = permissionPolicy.modify === "allow";
+  const activeAssistant = modelCatalog.activeModelId
+    ? modelCatalog.models.find((model) => model.id === modelCatalog.activeModelId)
+    : undefined;
+  const voiceSttModel = modelCatalog.models.find(
+    (model) => model.id === "voice-whisper-base",
+  );
+  const visionModel = modelCatalog.models.find(
+    (model) => model.id === "vision-smolvlm2-500m",
+  );
+  const failedAgentRuns = agentRuns.runs.filter((run) =>
+    ["failed", "interrupted"].includes(run.state),
+  ).length;
+  const activeAgentRuns = agentRuns.runs.filter((run) =>
+    ["queued", "running", "paused", "cancelling"].includes(run.state),
+  ).length;
+  const enabledAutomations = automations.filter((automation) => automation.enabled).length;
+  const betaCoreReady =
+    Boolean(appStatus?.version?.includes("0.9.0-beta.1")) &&
+    managedRuntimeStatus.state === "ready" &&
+    Boolean(activeAssistant?.installed) &&
+    permissionPolicy.sensitive !== "allow" &&
+    permissionPolicy.destructive !== "allow";
+
+  const diagnosticsReport = [
+    "AURA-2 Beta Diagnostics",
+    `Version: ${appStatus?.version ?? "unknown"}`,
+    `Stage: ${appStatus?.stage ?? "unknown"}`,
+    `Global pause: ${runtimeState.paused ? "on" : "off"}`,
+    `Background mode: ${runtimeState.backgroundEnabled ? "on" : "off"}`,
+    `Managed runtime: ${managedRuntimeStatus.state}`,
+    `Assistant model: ${activeAssistant?.name ?? "none selected"}`,
+    `Assistant model installed: ${activeAssistant?.installed ? "yes" : "no"}`,
+    `Model runtime: ${modelRuntimeStatus.state}`,
+    `Voice STT installed: ${voiceSttModel?.installed ? "yes" : "no"}`,
+    `Speech runtime: ${speechRuntime.state}`,
+    `TTS runtime: ${ttsRuntime.state}`,
+    `Vision model installed: ${visionModel?.installed ? "yes" : "no"}`,
+    `Vision runtime: ${visionRuntime.state}`,
+    `OBS: ${obsConnection.connected ? "connected" : "disconnected"}`,
+    `Agent runs: ${agentRuns.runs.length} total / ${activeAgentRuns} active / ${failedAgentRuns} failed-or-interrupted`,
+    `Automations: ${automations.length} total / ${enabledAutomations} enabled`,
+    `Core self-test: ${betaSelfTest ? `${betaSelfTest.passed} pass / ${betaSelfTest.warnings} warning / ${betaSelfTest.failed} fail` : "not run"}`,
+    ...(betaSelfTest
+      ? betaSelfTest.checks.map((check) => `Self-test ${check.id}: ${check.status}`)
+      : []),
+    `Permissions: read=${permissionPolicy.read}, act=${permissionPolicy.act}, modify=${permissionPolicy.modify}, sensitive=${permissionPolicy.sensitive}, destructive=${permissionPolicy.destructive}`,
+    "Telemetry: automatic product telemetry off",
+  ].join("\n");
+
+  async function copyDiagnosticsReport() {
+    try {
+      await navigator.clipboard.writeText(diagnosticsReport);
+      setDiagnosticsCopied(true);
+      window.setTimeout(() => setDiagnosticsCopied(false), 1800);
+    } catch {
+      setDiagnosticsCopied(false);
+    }
+  }
+
+  async function executeBetaSelfTest() {
+    setBetaSelfTestBusy(true);
+    setBetaSelfTestError(null);
+    try {
+      const report = await runBetaSelfTest();
+      setBetaSelfTest(report);
+    } catch (error) {
+      setBetaSelfTestError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setBetaSelfTestBusy(false);
+    }
+  }
 
   return (
     <section className="settings-layout">
@@ -643,8 +733,8 @@ export default function Settings({
               <SectionLabel>About</SectionLabel>
               <SettingRow
                 title={appStatus?.name ?? "AURA-2"}
-                description={appStatus?.stage ?? "Desktop Foundation"}
-                trailing={<Badge>{appStatus?.version ?? "0.2.0"}</Badge>}
+                description={appStatus?.stage ?? "M009 Public Beta candidate"}
+                trailing={<Badge>{appStatus?.version ?? "0.9.0-beta.1"}</Badge>}
               />
               <SettingRow
                 title="Execution model"
@@ -1048,8 +1138,8 @@ export default function Settings({
               />
               <SettingRow
                 title="Model Router"
-                description="Deterministic computer actions stay direct; AI reasoning will only be used when it is actually needed."
-                trailing={<Badge tone="planned">Planned</Badge>}
+                description="Deterministic commands stay direct; free-form requests fall back to the selected verified local assistant model."
+                trailing={<Badge tone="ready">Active</Badge>}
               />
             </Surface>
           </>
@@ -1650,6 +1740,215 @@ export default function Settings({
                 description="Shortcut editing and conflict detection are not configurable yet."
                 trailing={<Badge tone="planned">Planned</Badge>}
               />
+            </Surface>
+          </>
+        )}
+
+        {activeSection === "diagnostics" && (
+          <>
+            <header className="settings-header">
+              <span className="eyebrow">BETA READINESS</span>
+              <h2>Diagnostics</h2>
+              <p>Check AURA's local runtime and feature readiness without exposing personal content.</p>
+            </header>
+
+            <Surface className="settings-card diagnostics-hero-card">
+              <div className="diagnostics-hero">
+                <div>
+                  <span className="eyebrow">PUBLIC BETA CANDIDATE</span>
+                  <strong>{betaCoreReady ? "Core readiness looks healthy" : "Attention required before Beta testing"}</strong>
+                  <p>
+                    This panel reports technical state only. It never copies prompts, memories,
+                    screenshots, audio, file paths, OBS passwords or other private content.
+                  </p>
+                </div>
+                <Badge tone={betaCoreReady ? "ready" : "warning"}>
+                  {betaCoreReady ? "Ready to test" : "Check setup"}
+                </Badge>
+              </div>
+
+              <div className="diagnostics-grid">
+                <div className="diagnostics-item">
+                  <span>Build</span>
+                  <strong>{appStatus?.version ?? "Unknown"}</strong>
+                  <small>{appStatus?.stage ?? "Stage unavailable"}</small>
+                </div>
+                <div className="diagnostics-item">
+                  <span>Managed runtime</span>
+                  <strong>{managedRuntimeStatus.state}</strong>
+                  <small>
+                    {managedRuntimeStatus.state === "ready"
+                      ? `Python ${managedRuntimeStatus.pythonVersion ?? "ready"} · ${managedRuntimeStatus.cudaAvailable ? "CUDA" : "CPU"}`
+                      : managedRuntimeStatus.message}
+                  </small>
+                </div>
+                <div className="diagnostics-item">
+                  <span>Assistant</span>
+                  <strong>{activeAssistant?.name ?? "None selected"}</strong>
+                  <small>
+                    {activeAssistant?.installed
+                      ? `Installed · runtime ${modelRuntimeStatus.state}`
+                      : "Install and select an assistant model from Models."}
+                  </small>
+                </div>
+                <div className="diagnostics-item">
+                  <span>Voice</span>
+                  <strong>{voiceSttModel?.installed ? "STT installed" : "STT optional"}</strong>
+                  <small>Speech {speechRuntime.state} · TTS {ttsRuntime.state}</small>
+                </div>
+                <div className="diagnostics-item">
+                  <span>Vision</span>
+                  <strong>{visionModel?.installed ? "Model installed" : "Optional model not installed"}</strong>
+                  <small>Runtime {visionRuntime.state}</small>
+                </div>
+                <div className="diagnostics-item">
+                  <span>OBS</span>
+                  <strong>{obsConnection.connected ? "Connected" : "Optional · disconnected"}</strong>
+                  <small>
+                    {obsConnection.connected
+                      ? `OBS ${obsConnection.obsStudioVersion ?? "connected"} · WebSocket ${obsConnection.obsWebsocketVersion ?? "ready"}`
+                      : "Connect only when using Director Mode."}
+                  </small>
+                </div>
+              </div>
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Safety state</SectionLabel>
+              <SettingRow
+                title="Global Pause"
+                description="Suspends new work and pauses Agents/Automations at safe boundaries."
+                trailing={<Badge tone={runtimeState.paused ? "warning" : "ready"}>{runtimeState.paused ? "Paused" : "Running"}</Badge>}
+              />
+              <SettingRow
+                title="Permission guardrails"
+                description="Sensitive and Destructive permanent Allow must remain impossible."
+                trailing={
+                  <Badge
+                    tone={
+                      permissionPolicy.sensitive === "allow" ||
+                      permissionPolicy.destructive === "allow"
+                        ? "critical"
+                        : "ready"
+                    }
+                  >
+                    {permissionPolicy.sensitive === "allow" ||
+                    permissionPolicy.destructive === "allow"
+                      ? "Unsafe"
+                      : "Core enforced"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Agent recovery"
+                description="Recent failed/interrupted runs remain visible instead of disappearing after a failure or restart."
+                trailing={<Badge tone={failedAgentRuns > 0 ? "warning" : "ready"}>{failedAgentRuns} flagged</Badge>}
+              />
+              <SettingRow
+                title="Automations"
+                description="Enabled background Automations remain constrained by current Allow permissions."
+                trailing={<Badge tone="ready">{enabledAutomations} enabled</Badge>}
+              />
+              <SettingRow
+                title="Product telemetry"
+                description="The Public Beta candidate sends no automatic product telemetry to Untoz."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  betaSelfTest ? (
+                    <Badge tone={betaSelfTest.failed > 0 ? "critical" : betaSelfTest.warnings > 0 ? "warning" : "ready"}>
+                      {betaSelfTest.ready ? "Core passed" : "Attention"}
+                    </Badge>
+                  ) : (
+                    <Badge tone="planned">Not run</Badge>
+                  )
+                }
+              >
+                Core self-test
+              </SectionLabel>
+
+              <div className="diagnostics-self-test-heading">
+                <div>
+                  <strong>Validate local AURA Core state</strong>
+                  <p>
+                    Checks local storage readability, permission sanitization, persisted
+                    Actions/Automations, Agent history, model catalog and runtime health.
+                    It does not run computer actions or send data anywhere.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="settings-action-button"
+                  disabled={betaSelfTestBusy}
+                  onClick={() => void executeBetaSelfTest()}
+                >
+                  {betaSelfTestBusy ? "Running…" : betaSelfTest ? "Run again" : "Run self-test"}
+                </button>
+              </div>
+
+              {betaSelfTest && (
+                <>
+                  <div className="diagnostics-self-test-summary">
+                    <span><strong>{betaSelfTest.passed}</strong> passed</span>
+                    <span><strong>{betaSelfTest.warnings}</strong> warnings</span>
+                    <span><strong>{betaSelfTest.failed}</strong> failed</span>
+                  </div>
+                  <div className="diagnostics-self-test-list">
+                    {betaSelfTest.checks.map((check) => (
+                      <div className="diagnostics-check" key={check.id}>
+                        <div>
+                          <strong>{check.label}</strong>
+                          <span>{check.message}</span>
+                        </div>
+                        <Badge
+                          tone={
+                            check.status === "fail"
+                              ? "critical"
+                              : check.status === "warning"
+                                ? "warning"
+                                : "ready"
+                          }
+                        >
+                          {check.status === "pass"
+                            ? "Pass"
+                            : check.status === "warning"
+                              ? "Warning"
+                              : "Fail"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {betaSelfTestError && (
+                <p className="diagnostics-self-test-error">{betaSelfTestError}</p>
+              )}
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Beta bug report</SectionLabel>
+              <div className="diagnostics-report-card">
+                <div>
+                  <strong>Copy privacy-safe diagnostics</strong>
+                  <p>
+                    Copies version, runtime states, feature readiness, counts and permission
+                    decisions. Personal content and local paths are excluded.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="settings-action-button"
+                  onClick={() => void copyDiagnosticsReport()}
+                >
+                  {diagnosticsCopied ? "Copied" : "Copy diagnostics"}
+                </button>
+              </div>
+              <pre className="diagnostics-preview">{diagnosticsReport}</pre>
             </Surface>
           </>
         )}
@@ -2306,8 +2605,8 @@ export default function Settings({
             </Surface>
 
             <Surface className="settings-card">
-              <SectionLabel>Available & planned</SectionLabel>
-              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
+              <SectionLabel>Capabilities</SectionLabel>
+              <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">Ready</Badge>} />
               <SettingRow title="Future Skills" description="Modular app integrations built on the AURA Skills architecture." trailing={<Badge tone="planned">Later</Badge>} />
             </Surface>
           </>
@@ -2317,4 +2616,3 @@ export default function Settings({
   );
 }
 
-export type { SettingsSection };

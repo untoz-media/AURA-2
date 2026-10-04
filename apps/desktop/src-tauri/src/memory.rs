@@ -79,12 +79,7 @@ fn validate_content(value: &str) -> Result<String, String> {
 fn write_records(app: &AppHandle, records: &[MemoryRecord]) -> Result<(), String> {
     let path = memory_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(records).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, records)
 }
 
 fn read_records(app: &AppHandle) -> Result<Vec<MemoryRecord>, String> {

@@ -6,7 +6,7 @@ use crate::{
     integrations::{
         director::{
             find_director_preset_by_id, load_director_presets, preset_requires_sensitive_permission,
-            run_director_preset,
+            run_director_preset, validate_director_store,
         },
         obs::ObsController,
     },
@@ -14,7 +14,7 @@ use crate::{
     model_runtime::ModelRuntime,
     permissions::{PermissionClass, PermissionDecision, PermissionPolicy},
     routines::{
-        find_routine_by_id, list_routines, routine_requires_sensitive_permission, run_routine,
+        list_routines, routine_requires_sensitive_permission, run_routine,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -210,6 +210,7 @@ pub struct AutomationScheduler {
     permission_policy: Mutex<PermissionPolicy>,
     startup_fired: Mutex<HashSet<String>>,
     last_external_process: Mutex<Option<String>>,
+    last_scheduler_error: Mutex<Option<String>>,
 }
 
 impl Default for AutomationScheduler {
@@ -220,6 +221,7 @@ impl Default for AutomationScheduler {
             permission_policy: Mutex::new(PermissionPolicy::default()),
             startup_fired: Mutex::new(HashSet::new()),
             last_external_process: Mutex::new(None),
+            last_scheduler_error: Mutex::new(None),
         }
     }
 }
@@ -232,9 +234,13 @@ pub fn plan_goal(
     goal: &str,
 ) -> Result<AgentPlan, String> {
     let goal = validate_text(goal, "Agent goal", 1200)?;
-    let routines = list_routines(app).unwrap_or_default();
+    let routines = list_routines(app)
+        .map_err(|error| format!("Agent planner could not load Routines: {error}"))?;
+    validate_director_store(app)
+        .map_err(|error| format!("Agent planner could not load Director presets: {error}"))?;
     let presets = load_director_presets(app);
-    let actions = list_saved_actions(app).unwrap_or_default();
+    let actions = list_saved_actions(app)
+        .map_err(|error| format!("Agent planner could not load Saved Actions: {error}"))?;
 
     let routine_names = routines
         .iter()
@@ -545,6 +551,10 @@ impl AutomationScheduler {
             .last_external_process
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        *self
+            .last_scheduler_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 
         let handle = app.clone();
         thread::spawn(move || loop {
@@ -553,17 +563,39 @@ impl AutomationScheduler {
                 return;
             }
 
-            if let Err(error) = scheduler.tick(&handle) {
-                let _ = handle.emit(
-                    AUTOMATION_EVENT,
-                    AutomationEvent {
-                        automation_id: "scheduler".to_string(),
-                        automation_name: "Automation scheduler".to_string(),
-                        status: "error".to_string(),
-                        message: error,
-                        timestamp_ms: timestamp_ms(),
-                    },
-                );
+            match scheduler.tick(&handle) {
+                Ok(()) => {
+                    *scheduler
+                        .last_scheduler_error
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+                }
+                Err(error) => {
+                    let should_emit = {
+                        let mut last_error = scheduler
+                            .last_scheduler_error
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let changed = last_error.as_deref() != Some(error.as_str());
+                        if changed {
+                            *last_error = Some(error.clone());
+                        }
+                        changed
+                    };
+
+                    if should_emit {
+                        let _ = handle.emit(
+                            AUTOMATION_EVENT,
+                            AutomationEvent {
+                                automation_id: "scheduler".to_string(),
+                                automation_name: "Automation scheduler".to_string(),
+                                status: "error".to_string(),
+                                message: error,
+                                timestamp_ms: timestamp_ms(),
+                            },
+                        );
+                    }
+                }
             }
 
             thread::sleep(Duration::from_secs(2));
@@ -730,8 +762,58 @@ pub fn save_action(
     }
     validate_action_step(app, &request.step)?;
 
+    let normalized_step = match &request.step {
+        AgentStep::RunRoutine { routine } => {
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == routine.as_str()
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+                })
+                .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
+            AgentStep::RunRoutine {
+                routine: resolved.id,
+            }
+        }
+        AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
+            let resolved = find_director_preset_by_id(app, preset)
+                .or_else(|| {
+                    load_director_presets(app).into_iter().find(|item| {
+                        item.name.eq_ignore_ascii_case(preset)
+                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
+                    })
+                })
+                .ok_or_else(|| format!("Director preset “{preset}” was not found."))?;
+            AgentStep::DirectorPreset {
+                preset: resolved.id,
+            }
+        }
+        other => other.clone(),
+    };
+
     let aliases = sanitize_aliases(&request.aliases, &name, 12)?;
     let requested_id = request.id.as_deref();
+
+    if let Some(action_id) = requested_id {
+        let automations = read_automations(app)?;
+        if automations
+            .iter()
+            .any(|automation| automation.action_id == action_id)
+        {
+            let permission = permission_for_step(app, &normalized_step)?;
+            if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+                return Err(
+                    "This AURA Action is used by an Automation and cannot be changed to Modify, Sensitive or Destructive. Update or remove the Automation first."
+                        .to_string(),
+                );
+            }
+        }
+    }
 
     for existing in &actions {
         if requested_id == Some(existing.id.as_str()) {
@@ -760,7 +842,7 @@ pub fn save_action(
         name,
         description,
         aliases,
-        step: request.step,
+        step: normalized_step,
         updated_at_ms: timestamp_ms(),
     };
 
@@ -908,11 +990,23 @@ pub fn set_automation_enabled(
     enabled: bool,
 ) -> Result<AuraAutomation, String> {
     let mut automations = read_automations(app)?;
-    let automation = automations
-        .iter_mut()
-        .find(|automation| automation.id == automation_id)
+    let automation_index = automations
+        .iter()
+        .position(|automation| automation.id == automation_id)
         .ok_or_else(|| "Automation was not found.".to_string())?;
 
+    if enabled {
+        let action_id = automations[automation_index].action_id.clone();
+        let permission = saved_action_permission(app, &action_id)
+            .map_err(|error| format!("Automation cannot be enabled: {error}"))?;
+        if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+            return Err(format!(
+                "Automation cannot be enabled because its Saved Action is no longer background-safe ({permission:?})."
+            ));
+        }
+    }
+
+    let automation = &mut automations[automation_index];
     automation.enabled = enabled;
     automation.updated_at_ms = timestamp_ms();
     if enabled {
@@ -1089,12 +1183,14 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
                 .map_err(|error| error.to_string())
         }
         AgentStep::RunRoutine { routine } => {
-            let resolved = find_routine_by_id(app, routine)
-                .or_else(|| {
-                    list_routines(app).ok()?.into_iter().find(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == routine.as_str()
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
 
@@ -1114,6 +1210,8 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
@@ -1210,12 +1308,14 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
         AgentStep::LaunchApp { .. } | AgentStep::SwitchToApp { .. } => PermissionClass::Act,
         AgentStep::Wait { .. } => PermissionClass::Read,
         AgentStep::RunRoutine { routine } => {
-            let resolved = find_routine_by_id(app, routine)
-                .or_else(|| {
-                    list_routines(app).ok()?.into_iter().find(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == routine.as_str()
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
             if routine_requires_sensitive_permission(app, &resolved) {
@@ -1225,6 +1325,8 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
@@ -1291,13 +1393,13 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             resolve_app(target).map(|_| ())
         }
         AgentStep::RunRoutine { routine } => {
-            let exists = find_routine_by_id(app, routine).is_some()
-                || list_routines(app).ok().is_some_and(|items| {
-                    items.iter().any(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
-                });
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let exists = routines.iter().any(|item| {
+                item.id == routine.as_str()
+                    || item.name.eq_ignore_ascii_case(routine)
+                    || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+            });
             if exists {
                 Ok(())
             } else {
@@ -1305,6 +1407,8 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let exists = find_director_preset_by_id(app, preset).is_some()
                 || load_director_presets(app).iter().any(|item| {
                     item.name.eq_ignore_ascii_case(preset)
@@ -1569,11 +1673,7 @@ where
     T: Serialize + ?Sized,
 {
     let path = config_path(app, filename)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, value)
 }
 
 fn config_path(app: &AppHandle, filename: &str) -> Result<PathBuf, String> {

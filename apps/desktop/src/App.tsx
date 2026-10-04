@@ -217,6 +217,13 @@ function App() {
     void clearConversationControl();
   }
 
+  const activeAssistantModel = modelCatalog.activeModelId
+    ? modelCatalog.models.find((model) => model.id === modelCatalog.activeModelId)
+    : undefined;
+  const managedRuntimeReady = managedRuntimeStatus.state === "ready";
+  const localAssistantReady = Boolean(activeAssistantModel?.installed);
+  const localSetupReady = managedRuntimeReady && localAssistantReady;
+
   const runtimeLabel = runtimeState.paused
     ? "AURA paused"
     : status === "Working"
@@ -402,6 +409,69 @@ function App() {
                   <h1>How can I help?</h1>
                   <p>AI that lives on your computer.</p>
 
+                  {!localSetupReady && (
+                    <div className="beta-setup-card">
+                      <div className="beta-setup-heading">
+                        <div>
+                          <span className="chat-eyebrow">FIRST LOCAL SETUP</span>
+                          <strong>Finish setting up AURA on this PC</strong>
+                          <p>
+                            Computer Control can work without a language model, but local Chat,
+                            Agents and AI understanding need the AURA Runtime and an installed
+                            assistant model.
+                          </p>
+                        </div>
+                        <span className="beta-setup-progress">
+                          {[managedRuntimeReady, localAssistantReady].filter(Boolean).length}/2 ready
+                        </span>
+                      </div>
+
+                      <div className="beta-setup-steps">
+                        <button type="button" onClick={() => setView("models")}>
+                          <span className={managedRuntimeReady ? "complete" : ""}>
+                            {managedRuntimeReady ? "✓" : "1"}
+                          </span>
+                          <div>
+                            <strong>Install AURA Runtime</strong>
+                            <small>
+                              {managedRuntimeReady
+                                ? `Ready · Python ${managedRuntimeStatus.pythonVersion ?? "installed"}`
+                                : managedRuntimeStatus.state === "error"
+                                  ? "Runtime needs attention"
+                                  : "Private Python + local AI dependencies"}
+                            </small>
+                          </div>
+                        </button>
+
+                        <button type="button" onClick={() => setView("models")}>
+                          <span className={localAssistantReady ? "complete" : ""}>
+                            {localAssistantReady ? "✓" : "2"}
+                          </span>
+                          <div>
+                            <strong>Install & select an assistant</strong>
+                            <small>
+                              {localAssistantReady
+                                ? `${activeAssistantModel?.name ?? "Local model"} selected`
+                                : "AURA-1 is currently the available assistant profile"}
+                            </small>
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="beta-setup-actions">
+                        <button type="button" onClick={() => setView("models")}>
+                          Open Models
+                        </button>
+                        <button type="button" onClick={() => openSettings("permissions")}>
+                          Review permissions
+                        </button>
+                        <button type="button" onClick={() => openSettings("diagnostics")}>
+                          Diagnostics
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="chat-suggestions">
                     <button
                       type="button"
@@ -445,11 +515,7 @@ function App() {
                     <div>
                       <span>Local model</span>
                       <strong>
-                        {modelCatalog.activeModelId
-                          ? modelCatalog.models.find(
-                              (model) => model.id === modelCatalog.activeModelId,
-                            )?.name ?? modelCatalog.activeModelId
-                          : "Not selected"}
+                        {activeAssistantModel?.name ?? "Not selected"}
                       </strong>
                     </div>
                     <div>
@@ -723,6 +789,9 @@ function App() {
               onAudioSelect={selectAudioInput}
               onAudioTestStart={startAudioTest}
               onAudioTestStop={stopAudioTest}
+              visionRuntime={visionRuntime}
+              agentRuns={agentRuns}
+              automations={automations}
             />
           )}
         </div>
