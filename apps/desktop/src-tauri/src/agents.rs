@@ -325,7 +325,21 @@ impl AgentEngine {
             .values()
             .cloned()
             .collect::<Vec<_>>();
-        let history = read_run_history(app).unwrap_or_default();
+        let history = read_run_history(app)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|mut run| {
+                if matches!(run.state.as_str(), "queued" | "running" | "paused") {
+                    run.state = "interrupted".to_string();
+                    run.current_step = None;
+                    run.completed_at_ms = run.completed_at_ms.or(Some(timestamp_ms()));
+                    run.error = run.error.or(Some(
+                        "AURA closed before this Agent run completed.".to_string(),
+                    ));
+                }
+                run
+            })
+            .collect::<Vec<_>>();
 
         let mut by_id = HashMap::<String, AgentRun>::new();
         for run in history.into_iter().chain(active) {
@@ -1347,6 +1361,7 @@ fn update_run<F>(
         update(run);
         run.clone()
     };
+    let _ = append_run_history(app, &snapshot);
     emit_agent_event(app, &snapshot, message);
 }
 
