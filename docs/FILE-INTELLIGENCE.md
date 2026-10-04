@@ -61,9 +61,31 @@ For matches AURA may return:
 
 No file contents are opened.
 
+## Reveal in File Explorer
+
+AURA can reveal a path returned by File Intelligence without executing the file.
+
+Example:
+
+`Reveal file "C:\\Users\\…\\Documents\\report.pdf"`
+
+Before launching Explorer, AURA:
+
+1. requires an absolute existing path;
+2. canonicalizes the target;
+3. canonicalizes the allowed personal roots;
+4. verifies the target still lives under one of those roots;
+5. launches File Explorer with selection only.
+
+This prevents a symlink or manually supplied path from using the feature as an unrestricted filesystem launcher.
+
+Opening/executing the selected file is intentionally outside the V1 boundary.
+
 ## Permissions
 
-File Intelligence uses the **Read** permission class.
+Filename search uses the **Read** permission class.
+
+Reveal in Explorer uses the reversible **Act** permission class.
 
 If Read is:
 
