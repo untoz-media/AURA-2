@@ -11,6 +11,7 @@ It combines the complete Alpha milestones:
 - Voice
 - Vision
 - Agents & Automations
+- AURA Create local image generation
 
 with new Beta-readiness work.
 
@@ -31,6 +32,12 @@ with new Beta-readiness work.
 - atomic Beta/session state persistence
 - explicit zero-upload telemetry policy
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
+- named app window minimize/maximize/restore controls
+- local AURA Create text-to-image generation
+- pinned SafeTensors-only Create model manifest
+- Diffusers managed-runtime support
+- persistent image-generation worker with recovery
+- local PNG output + in-app preview
 
 ## Privacy
 
