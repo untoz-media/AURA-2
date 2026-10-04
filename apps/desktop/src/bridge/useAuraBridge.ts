@@ -357,6 +357,21 @@ export function useAuraBridge() {
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
   const [bridgeError, setBridgeError] = useState<CoreError | null>(null);
+  const [uiVisible, setUiVisible] = useState(
+    () => document.visibilityState !== "hidden",
+  );
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setUiVisible(document.visibilityState !== "hidden");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -981,7 +996,7 @@ export function useAuraBridge() {
   }, [audioInput.testing, audioInput.pushToTalk]);
 
   useEffect(() => {
-    if (runtimeState.paused) {
+    if (runtimeState.paused || !uiVisible) {
       return;
     }
 
@@ -1005,7 +1020,7 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [runtimeState.paused]);
+  }, [runtimeState.paused, uiVisible]);
 
   const refreshObsRuntime = useCallback(async () => {
     if (!obsConnection.connected) {
@@ -1907,6 +1922,8 @@ export function useAuraBridge() {
   }, []);
 
   useEffect(() => {
+    if (!uiVisible) return;
+
     let cancelled = false;
 
     const updateRuntime = async () => {
@@ -1932,13 +1949,14 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [status]);
+  }, [status, uiVisible]);
 
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsRuntime(DEFAULT_OBS_RUNTIME);
       return;
     }
+    if (!uiVisible) return;
 
     let cancelled = false;
 
@@ -1980,13 +1998,14 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [obsConnection.connected]);
+  }, [obsConnection.connected, uiVisible]);
 
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsScenes(DEFAULT_OBS_SCENES);
       return;
     }
+    if (!uiVisible) return;
 
     let cancelled = false;
 
@@ -2014,13 +2033,14 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [obsConnection.connected]);
+  }, [obsConnection.connected, uiVisible]);
 
   useEffect(() => {
     if (!obsConnection.connected || !obsRuntime.currentProgramScene) {
       setObsSources(DEFAULT_OBS_SOURCES);
       return;
     }
+    if (!uiVisible) return;
 
     let cancelled = false;
 
@@ -2049,13 +2069,14 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [obsConnection.connected, obsRuntime.currentProgramScene]);
+  }, [obsConnection.connected, obsRuntime.currentProgramScene, uiVisible]);
 
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsAudio(DEFAULT_OBS_AUDIO);
       return;
     }
+    if (!uiVisible) return;
 
     let cancelled = false;
 
@@ -2083,13 +2104,14 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [obsConnection.connected]);
+  }, [obsConnection.connected, uiVisible]);
 
   useEffect(() => {
     if (!obsConnection.connected) {
       setObsHealth(null);
       return;
     }
+    if (!uiVisible) return;
 
     let cancelled = false;
 
@@ -2113,7 +2135,7 @@ export function useAuraBridge() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [obsConnection.connected]);
+  }, [obsConnection.connected, uiVisible]);
 
   const submitCommand = useCallback(async (
     text: string,
