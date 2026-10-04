@@ -63,6 +63,7 @@ function App() {
     directorLastRun,
     memory,
     currentApp,
+    appSkillCatalog,
     recentFiles,
     routines,
     routineLastRun,
@@ -667,6 +668,7 @@ function App() {
           {view === "computer" && (
             <Computer
               currentApp={currentApp}
+              appSkillCatalog={appSkillCatalog}
               runtimeState={runtimeState}
               obsConnection={obsConnection}
               obsRuntime={obsRuntime}
