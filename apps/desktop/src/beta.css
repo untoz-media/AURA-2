@@ -133,10 +133,26 @@
   background: var(--aura-surface-2);
 }
 
-.beta-recovery-banner div {
+.beta-recovery-copy {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+}
+
+.beta-recovery-kicker {
+  color: var(--aura-accent) !important;
+  font-size: var(--text-3xs) !important;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.beta-recovery-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .beta-recovery-banner strong {
@@ -155,8 +171,13 @@
   }
 
   .beta-welcome-actions,
-  .beta-recovery-banner {
+  .beta-recovery-banner,
+  .beta-recovery-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .beta-recovery-actions {
+    width: 100%;
   }
 }
