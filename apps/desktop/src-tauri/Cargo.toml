@@ -19,7 +19,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 futures-util = "0.3"
 fs2 = "0.4"
 cpal = "0.18.2"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
 obws = "0.15.0"
 tokio = { version = "1", features = ["sync", "time", "fs", "io-util"] }
 tauri = { version = "2", features = ["tray-icon"] }
