@@ -121,12 +121,7 @@ fn read_routines(app: &AppHandle) -> Result<Vec<UserRoutine>, String> {
 
 fn write_routines(app: &AppHandle, routines: &[UserRoutine]) -> Result<(), String> {
     let path = routines_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(routines).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, routines)
 }
 
 fn validate_text(value: &str, label: &str, max_chars: usize) -> Result<String, String> {
