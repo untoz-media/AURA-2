@@ -40,6 +40,7 @@ use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
+use computer::file_intelligence::{search_personal_files, summarize_file_search};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::recent_files::{
@@ -3481,7 +3482,65 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::ClipboardRead => {
+                        ActionIntent::FindPersonalFiles(query) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Searching personal folders for “{}”…",
+                                        query
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match search_personal_files(&worker_app, &query) {
+                                Ok(snapshot) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_file_search(&snapshot),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not search personal files: {error}"
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.file_search_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::FindPersonalFiles(query) => format!(
+                        "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
+                        query
+                    ),
+                    ActionIntent::ClipboardRead => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
