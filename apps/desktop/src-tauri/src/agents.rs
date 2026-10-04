@@ -990,11 +990,23 @@ pub fn set_automation_enabled(
     enabled: bool,
 ) -> Result<AuraAutomation, String> {
     let mut automations = read_automations(app)?;
-    let automation = automations
-        .iter_mut()
-        .find(|automation| automation.id == automation_id)
+    let automation_index = automations
+        .iter()
+        .position(|automation| automation.id == automation_id)
         .ok_or_else(|| "Automation was not found.".to_string())?;
 
+    if enabled {
+        let action_id = automations[automation_index].action_id.clone();
+        let permission = saved_action_permission(app, &action_id)
+            .map_err(|error| format!("Automation cannot be enabled: {error}"))?;
+        if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+            return Err(format!(
+                "Automation cannot be enabled because its Saved Action is no longer background-safe ({permission:?})."
+            ));
+        }
+    }
+
+    let automation = &mut automations[automation_index];
     automation.enabled = enabled;
     automation.updated_at_ms = timestamp_ms();
     if enabled {
