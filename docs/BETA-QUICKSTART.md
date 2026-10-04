@@ -55,6 +55,9 @@ Examples:
 - open Downloads
 - find in Notepad
 - undo in Notepad
+- new tab in Windows Terminal
+- command palette in Windows Terminal
+- scientific mode in Calculator
 - find file Artemis
 - read clipboard
 - what app am I using?
