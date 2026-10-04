@@ -36,8 +36,8 @@ use beta::{
 use computer::app_launcher::{launch_app, AppTarget};
 use computer::app_lifecycle::close_app;
 use computer::app_skills::{
-    app_skill_catalog, execute_browser_skill, execute_notepad_skill,
-    execute_personal_folder_skill, AppSkillCatalog,
+    app_skill_catalog, execute_browser_skill, execute_calculator_skill, execute_notepad_skill,
+    execute_personal_folder_skill, execute_terminal_skill, AppSkillCatalog,
 };
 use computer::audio::{execute_media_action, MediaAction};
 use computer::clipboard::{
@@ -3493,6 +3493,104 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::TerminalSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_terminal_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Windows Terminal skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.terminal_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::CalculatorSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_calculator_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Calculator skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.calculator_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::NotepadSkill(skill) => {
                             emit_core_event(
                                 &worker_app,
@@ -4930,6 +5028,14 @@ fn process_user_command(
                     ActionIntent::OpenPersonalFolder(skill) => format!(
                         "Opening {} in File Explorer requires confirmation under the current Act policy.",
                         skill.display_name()
+                    ),
+                    ActionIntent::TerminalSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
+                    ),
+                    ActionIntent::CalculatorSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
                     ),
                     ActionIntent::NotepadSkill(skill) => match skill.action.permission() {
                         PermissionClass::Modify => format!(
