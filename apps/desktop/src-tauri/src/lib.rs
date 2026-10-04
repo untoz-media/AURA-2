@@ -5870,11 +5870,16 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
+            let startup_health_degraded = beta_local_health_checks(app.handle())
+                .iter()
+                .any(|check| check.status == "failed");
+            let beta_safe_mode = beta_recovery_mode || startup_health_degraded;
+
             let _ = recover_interrupted_runs(app.handle());
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
 
-            set_paused_state(app.handle(), beta_recovery_mode);
+            set_paused_state(app.handle(), beta_safe_mode);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
 
@@ -5883,6 +5888,14 @@ pub fn run() {
                     app.handle(),
                     "beta.recovery_safe_mode",
                     "AURA recovered from an unclean session and started paused. Review the previous session, then resume AURA when ready.",
+                );
+            }
+
+            if startup_health_degraded {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.health_safe_mode",
+                    "AURA detected a local startup health failure and started paused before Agents or Automations could run. Review Beta & Diagnostics before resuming.",
                 );
             }
 
@@ -5917,7 +5930,7 @@ pub fn run() {
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
-                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, false, None::<&str>)?;
+                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, beta_safe_mode, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item =
