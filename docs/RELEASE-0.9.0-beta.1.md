@@ -34,6 +34,7 @@ with new Beta-readiness work.
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
 - named app window minimize/maximize/restore controls
 - bounded File Intelligence across personal Windows folders without content scanning
+- canonical-path-safe reveal in File Explorer without executing files
 - privacy-first Clipboard Intelligence for explicit text read/write/clear
 - voice privacy suppression for sensitive clipboard reads
 - local AURA Create text-to-image generation
