@@ -337,6 +337,26 @@ export default function Settings({
   );
   const [betaBusy, setBetaBusy] = useState<string | null>(null);
   const [betaExportPath, setBetaExportPath] = useState<string | null>(null);
+  const betaPrivacyInvariant =
+    !betaStatus.telemetryEnabled &&
+    !betaStatus.automaticCrashUploads &&
+    betaStatus.localDiagnosticsOnly;
+  const betaSnapshotIdentityValid = betaDiagnostics
+    ? betaDiagnostics.schemaVersion === 1 &&
+      betaDiagnostics.appName === (appStatus?.name ?? "AURA-2") &&
+      betaDiagnostics.appVersion === (appStatus?.version ?? betaDiagnostics.appVersion) &&
+      betaDiagnostics.channel === "beta" &&
+      !betaDiagnostics.telemetryEnabled
+    : null;
+  const betaCountersValid = betaDiagnostics
+    ? betaDiagnostics.activeAgentRuns <= betaDiagnostics.agentRunsTotal &&
+      betaDiagnostics.enabledAutomations <= betaDiagnostics.automations
+    : null;
+  const betaSelfCheckPassed =
+    betaDiagnostics !== null &&
+    betaPrivacyInvariant &&
+    betaSnapshotIdentityValid === true &&
+    betaCountersValid === true;
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -1605,6 +1625,108 @@ export default function Settings({
                 title="Automatic crash uploads"
                 description="Crash and diagnostics data stay on this computer unless you manually export a diagnostics file."
                 trailing={<Badge tone="ready">Off</Badge>}
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaSelfCheckPassed
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaSelfCheckPassed
+                        ? "Passed"
+                        : "Review"
+                      : "Not run"}
+                  </Badge>
+                }
+              >
+                Beta self-check
+              </SectionLabel>
+              <SettingRow
+                title="Privacy invariants"
+                description="Telemetry must remain off, automatic crash uploads disabled and diagnostics local-only."
+                trailing={
+                  <Badge tone={betaPrivacyInvariant ? "ready" : "warning"}>
+                    {betaPrivacyInvariant ? "Passed" : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Snapshot identity"
+                description="Validates diagnostics schema, product/version identity, Beta channel and the diagnostics telemetry flag."
+                trailing={
+                  <Badge
+                    tone={
+                      betaSnapshotIdentityValid === null
+                        ? "planned"
+                        : betaSnapshotIdentityValid
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaSnapshotIdentityValid === null
+                      ? "Run diagnostics"
+                      : betaSnapshotIdentityValid
+                        ? "Passed"
+                        : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Runtime counters"
+                description="Checks that active Agent runs and enabled Automations cannot exceed their recorded totals."
+                trailing={
+                  <Badge
+                    tone={
+                      betaCountersValid === null
+                        ? "planned"
+                        : betaCountersValid
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaCountersValid === null
+                      ? "Run diagnostics"
+                      : betaCountersValid
+                        ? "Passed"
+                        : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Overall Beta integrity"
+                description={
+                  betaDiagnostics
+                    ? betaSelfCheckPassed
+                      ? "Critical local Beta invariants are internally consistent."
+                      : "At least one critical Beta invariant needs review before release."
+                    : "Generate a diagnostics snapshot to complete the self-check."
+                }
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaSelfCheckPassed
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaSelfCheckPassed
+                        ? "Healthy"
+                        : "Needs review"
+                      : "Pending"}
+                  </Badge>
+                }
               />
             </Surface>
 
