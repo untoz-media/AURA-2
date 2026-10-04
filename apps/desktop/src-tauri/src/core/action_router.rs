@@ -56,6 +56,7 @@ pub enum ActionIntent {
     ClipboardRead,
     ClipboardWrite(String),
     ClipboardClear,
+    FindPersonalFiles(String),
     UserRoutine(String),
 }
 
@@ -366,6 +367,30 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn file_search_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "find file ",
+        "find files ",
+        "search file ",
+        "search files ",
+        "look for file ",
+        "look for files ",
+        "encontra ficheiro ",
+        "encontrar ficheiro ",
+        "procura ficheiro ",
+        "procurar ficheiro ",
+        "pesquisa ficheiro ",
+        "pesquisar ficheiro ",
+        "procura ficheiros ",
+        "pesquisa ficheiros ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let query = unwrap_text_quotes(value).trim();
+        (!query.is_empty()).then(|| ActionIntent::FindPersonalFiles(query.to_string()))
+    })
 }
 
 fn clipboard_request(input: &str) -> Option<ActionIntent> {
@@ -1187,6 +1212,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = file_search_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = clipboard_request(input) {
         let permission = permission_for_clipboard(&intent)
             .expect("clipboard intent should have a permission class");
@@ -1450,6 +1484,32 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn file_search_is_read_only_and_preserves_query_case() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Find file \"WorldUnited Final.psd\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindPersonalFiles(query),
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            }) if query == "WorldUnited Final.psd"
+        ));
+    }
+
+    #[test]
+    fn portuguese_file_search_routes_to_personal_search() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Procura ficheiro Artemis", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindPersonalFiles(query),
+                permission: PermissionClass::Read,
+                ..
+            }) if query == "Artemis"
         ));
     }
 
