@@ -24,7 +24,7 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const DEFAULT_DEFAULT_TTS_MODEL_ID: &str = "voice-piper-ptpt";
+const DEFAULT_TTS_MODEL_ID: &str = "voice-piper-ptpt";
 const TTS_RUNTIME_PACKAGE: &str = "piper-tts>=1.8,<2";
 const TTS_RUNTIME_SCRIPT: &str = include_str!("tts_runtime.py");
 
@@ -182,7 +182,7 @@ impl TtsRuntime {
         let voice_root = manager.installation_path(app, model_id)?;
         let voice_path = voice_root.join(relative_path);
         if !voice_path.exists() {
-            return Err("The installed Portuguese TTS voice is incomplete.".to_string());
+            return Err("The selected local TTS voice is incomplete.".to_string());
         }
 
         let mut process_guard = self
