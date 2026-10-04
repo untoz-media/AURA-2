@@ -1325,3 +1325,10 @@ input:focus-visible {
     max-width: 100%;
   }
 }
+
+
+.composer-attachment-chip:disabled,
+.composer-attachments-heading > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
