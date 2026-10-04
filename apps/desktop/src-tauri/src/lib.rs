@@ -2375,14 +2375,6 @@ fn process_user_command(
 
     match routed {
         RouteResult::Action(action) => {
-            if source == "voice" && matches!(&action.intent, ActionIntent::ClipboardRead) {
-                state
-                    .private_voice_command_ids
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .insert(id.clone());
-            }
-
             let decision = if let Some(permission) = approved_permission {
                 if permission != action.permission {
                     emit_core_event(
@@ -2408,6 +2400,17 @@ fn process_user_command(
             } else {
                 action.decision
             };
+
+            if source == "voice"
+                && decision == PermissionDecision::Allow
+                && matches!(&action.intent, ActionIntent::ClipboardRead)
+            {
+                state
+                    .private_voice_command_ids
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(id.clone());
+            }
 
             match decision {
             PermissionDecision::Allow => {
