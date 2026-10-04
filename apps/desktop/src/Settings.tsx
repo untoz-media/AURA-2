@@ -316,8 +316,11 @@ export default function Settings({
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
-  const ttsModel = modelCatalog.models.find(
-    (model) => model.id === "voice-piper-ptpt",
+  const ttsVoices = modelCatalog.models.filter(
+    (model) => model.role === "textToSpeech",
+  );
+  const ttsModel = ttsVoices.find(
+    (model) => model.id === voicePreferences.ttsVoiceId,
   );
 
   async function runVoiceModel(
@@ -1300,6 +1303,26 @@ export default function Settings({
                   Spoken replies are generated on-device. Automatic speech is used
                   only for commands that originated from Voice.
                 </p>
+
+                <label className="voice-device-field voice-tts-select">
+                  <span>Voice</span>
+                  <select
+                    value={voicePreferences.ttsVoiceId}
+                    disabled={voicePrefsBusy || ttsBusy !== null}
+                    onChange={(event) =>
+                      void updateVoicePreference({
+                        ttsVoiceId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="voice-piper-ptpt">
+                      Tugão · Português (Portugal)
+                    </option>
+                    <option value="voice-piper-engb-alan">
+                      Alan · English (UK)
+                    </option>
+                  </select>
+                </label>
 
                 {ttsModel &&
                   (ttsModel.state === "downloading" ||
