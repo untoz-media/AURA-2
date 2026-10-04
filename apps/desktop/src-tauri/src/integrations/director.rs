@@ -253,6 +253,20 @@ fn write_presets(app: &AppHandle, presets: &[DirectorPreset]) -> Result<(), Stri
     crate::storage::write_json_atomic(&path, presets)
 }
 
+pub fn validate_director_store(app: &AppHandle) -> Result<usize, String> {
+    let path = presets_path(app)?;
+    if !path.exists() {
+        return Ok(0);
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read Director presets: {error}"))?;
+    let presets = serde_json::from_str::<Vec<DirectorPreset>>(&content)
+        .map_err(|error| format!("Director presets file is invalid: {error}"))?;
+
+    Ok(presets.len())
+}
+
 pub fn load_director_presets(app: &AppHandle) -> Vec<DirectorPreset> {
     let Ok(path) = presets_path(app) else {
         return Vec::new();
