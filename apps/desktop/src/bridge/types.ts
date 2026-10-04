@@ -883,6 +883,7 @@ export type DiagnosticsSnapshot = {
   activeModelId?: string | null;
   installedModelIds: string[];
   managedRuntimeState: string;
+  createImageRuntimeState: string;
   agentRunsTotal: number;
   activeAgentRuns: number;
   savedActions: number;
