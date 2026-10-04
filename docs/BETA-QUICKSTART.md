@@ -81,8 +81,12 @@ AURA accepts up to eight files per drop and creates temporary local metadata con
 
 From the drop tray you can:
 
+- **Inspect** one accepted file.
+- **Inspect all** files in the temporary batch.
 - **Reveal** an accepted file in File Explorer.
 - **Use in Vision** for supported raster images.
+
+Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. PDFs, Office files, video, audio and archives remain metadata-only.
 
 Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
 
