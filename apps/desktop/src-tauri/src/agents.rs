@@ -545,6 +545,10 @@ impl AutomationScheduler {
     }
 
     fn tick(&self, app: &AppHandle) -> Result<(), String> {
+        if self.paused.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
         let mut automations = read_automations(app)?;
         if automations.is_empty() {
             return Ok(());
@@ -605,28 +609,24 @@ impl AutomationScheduler {
                 continue;
             }
 
-            let result = if self.paused.load(Ordering::SeqCst) {
-                Err("AURA is paused; background automation was skipped.".to_string())
-            } else {
-                let permission = saved_action_permission(app, &automation.action_id);
-                let policy = self
-                    .permission_policy
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .clone();
+            let permission = saved_action_permission(app, &automation.action_id);
+            let policy = self
+                .permission_policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
 
-                match permission {
-                    Ok(permission)
-                        if policy.decision_for(permission) == PermissionDecision::Allow =>
-                    {
-                        execute_saved_action(app, &automation.action_id, true)
-                    }
-                    Ok(permission) => Err(format!(
-                        "Background automation cannot run because {:?} permission is not Allow.",
-                        permission
-                    )),
-                    Err(error) => Err(error),
+            let result = match permission {
+                Ok(permission)
+                    if policy.decision_for(permission) == PermissionDecision::Allow =>
+                {
+                    execute_saved_action(app, &automation.action_id, true)
                 }
+                Ok(permission) => Err(format!(
+                    "Background automation cannot run because {:?} permission is not Allow.",
+                    permission
+                )),
+                Err(error) => Err(error),
             };
             automation.last_run_at_ms = Some(now);
             automation.last_result = Some(match &result {
