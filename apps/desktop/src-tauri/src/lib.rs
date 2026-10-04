@@ -970,13 +970,19 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
         .background_enabled
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let _ = save_preferences(
+    if let Err(error) = save_preferences(
         app,
         &DesktopPreferences {
             background_enabled,
             paused,
         },
-    );
+    ) {
+        let message = format!(
+            "AURA is {} for this session, but the Pause state could not be saved for the next restart: {error}",
+            if paused { "paused" } else { "resumed" }
+        );
+        emit_lifecycle_event(app, "pause.persistence_failed", &message);
+    }
 
     emit_runtime_state(app)
 }
