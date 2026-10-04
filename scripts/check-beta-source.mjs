@@ -89,6 +89,11 @@ requireFragments("apps/desktop/src-tauri/src/lib.rs", [
   'ensure_runtime_active(&state, "starting OBS streaming")',
 ]);
 
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  'if let Err(error) = recover_interrupted_runs(app.handle())',
+  '"agents.recovery_failed"',
+]);
+
 requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "const MAX_PLAN_STEPS: usize = 12;",
   "const MAX_WAIT_MS: u64 = 30_000;",
