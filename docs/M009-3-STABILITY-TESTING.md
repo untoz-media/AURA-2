@@ -49,6 +49,17 @@ It fails on:
 
 These checks do not replace Rust tests or a security review. They are a cheap additional tripwire for Beta-critical invariants.
 
+## Permission corruption fails closed
+
+The persisted permission policy previously fell back to normal defaults when its JSON could not be read or parsed. Because normal defaults allow Read and Act, a corrupted file could unintentionally become less restrictive than the user's previous policy.
+
+Beta recovery now distinguishes first run from corruption:
+
+- missing policy file → normal recommended defaults
+- unreadable/invalid existing policy → fail-closed recovery policy
+- fail-closed policy → Read, Act, Modify, Sensitive and Destructive all require Ask
+
+This also prevents background Automations from continuing silently because unattended execution requires current Allow.
 ## Crash-resistant local persistence
 
 The Beta audit found that several JSON stores still used direct whole-file writes. A process or OS interruption during a direct write could leave truncated local state.
