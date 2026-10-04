@@ -18,6 +18,7 @@ import DirectorMode from "./DirectorMode";
 import Vision from "./Vision";
 import Agents from "./Agents";
 import BetaWelcome from "./BetaWelcome";
+import DropTray from "./DropTray";
 import "./beta.css";
 import {
   applyAuraTheme,
@@ -64,6 +65,8 @@ function App() {
     memory,
     currentApp,
     appSkillCatalog,
+    dropIntake,
+    dropHover,
     recentFiles,
     routines,
     routineLastRun,
@@ -109,6 +112,9 @@ function App() {
     refreshObsHealth,
     refreshDirectorPresets,
     refreshMemories,
+    clearDropIntakeControl,
+    revealDroppedFileControl,
+    stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
     saveRoutineControl,
@@ -833,6 +839,18 @@ function App() {
           )}
         </div>
       </section>
+
+      <DropTray
+        snapshot={dropIntake}
+        hovering={dropHover}
+        paused={runtimeState.paused}
+        onClear={clearDropIntakeControl}
+        onReveal={revealDroppedFileControl}
+        onUseVision={async (dropId) => {
+          await stageDroppedImageForVisionControl(dropId);
+          setView("vision");
+        }}
+      />
 
       {betaStatus.refreshedAtMs > 0 && !betaStatus.onboardingComplete && (
         <BetaWelcome
