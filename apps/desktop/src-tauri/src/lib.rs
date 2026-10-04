@@ -71,7 +71,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex,
@@ -840,6 +840,212 @@ fn set_autostart_state(
 
 fn emit_voice_capture_event(app: &tauri::AppHandle, event: VoiceCaptureEvent) {
     let _ = app.emit("aura:voice-capture", event);
+}
+
+#[derive(Clone, Copy)]
+enum VisionQueryTarget {
+    Screen,
+    ActiveWindow,
+}
+
+fn emit_vision_event(app: &tauri::AppHandle, event: VisionEvent) {
+    let _ = app.emit("aura:vision-event", event);
+}
+
+fn store_last_vision_capture(app: &tauri::AppHandle, capture: VisionCapture) -> VisionCapture {
+    let session = app.state::<VisionSession>();
+    let mut current = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    if let Some(previous) = current.replace(capture.clone()) {
+        if previous.path != capture.path {
+            remove_capture(&previous.path);
+        }
+    }
+
+    capture
+}
+
+fn vision_query_target(text: &str) -> Option<VisionQueryTarget> {
+    let normalized = text
+        .trim()
+        .trim_matches(|character: char| {
+            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
+        })
+        .to_lowercase();
+
+    let active_window_phrases = [
+        "active window",
+        "current window",
+        "this window",
+        "janela ativa",
+        "janela actual",
+        "janela atual",
+        "esta janela",
+        "what's wrong here",
+        "what is wrong here",
+        "onde devo clicar",
+        "onde clico",
+        "where do i click",
+    ];
+
+    if active_window_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+    {
+        return Some(VisionQueryTarget::ActiveWindow);
+    }
+
+    let screen_phrases = [
+        "my screen",
+        "the screen",
+        "screen right now",
+        "meu ecrã",
+        "meu ecra",
+        "no ecrã",
+        "no ecra",
+        "look at my screen",
+        "olha para o meu ecrã",
+        "olha para o meu ecra",
+        "what do you see",
+        "o que vês",
+        "o que ves",
+    ];
+
+    screen_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+        .then_some(VisionQueryTarget::Screen)
+}
+
+fn vision_prompt(user_text: &str) -> String {
+    format!(
+        "You are AURA Vision, a local PC visual understanding component. Analyze only what is visibly present in the screenshot. Read visible UI text when possible, identify relevant controls and describe likely interface state, but do not claim hidden information and do not say that you clicked anything. User request: {}",
+        user_text.trim()
+    )
+}
+
+fn analyze_capture_internal(
+    app: &tauri::AppHandle,
+    capture: &VisionCapture,
+    prompt: &str,
+) -> Result<VisionAnalysisPayload, String> {
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "analyzing",
+            message: "Analyzing the screenshot locally…".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let manager = app.state::<ModelManager>();
+    let runtime = app.state::<VisionRuntime>();
+    let result = runtime.analyze(app, &manager, Path::new(&capture.path), prompt);
+
+    match result {
+        Ok(VisionAnalysisResult {
+            text,
+            prompt,
+            completed_at_ms,
+        }) => {
+            let history = match record_vision_analysis(app, capture, &prompt, &text) {
+                Ok(history) => history,
+                Err(error) => {
+                    remove_capture(&capture.path);
+                    emit_vision_event(
+                        app,
+                        VisionEvent {
+                            phase: "historyError",
+                            message: format!("Vision analysis completed, but history could not be updated: {error}"),
+                            capture: Some(capture.clone()),
+                            analysis: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                    vision_history_snapshot(app)?
+                }
+            };
+
+            emit_vision_event(
+                app,
+                VisionEvent {
+                    phase: "completed",
+                    message: "Local visual analysis complete.".to_string(),
+                    capture: Some(capture.clone()),
+                    analysis: Some(text.clone()),
+                    timestamp_ms: completed_at_ms,
+                },
+            );
+
+            Ok(VisionAnalysisPayload {
+                capture: capture.clone(),
+                prompt,
+                analysis: text,
+                completed_at_ms,
+                history,
+            })
+        }
+        Err(error) => {
+            let preferences = vision_history::load_preferences(app);
+            if !preferences.history_enabled {
+                remove_capture(&capture.path);
+            }
+
+            emit_vision_event(
+                app,
+                VisionEvent {
+                    phase: "error",
+                    message: error.clone(),
+                    capture: Some(capture.clone()),
+                    analysis: None,
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            Err(error)
+        }
+    }
+}
+
+fn capture_for_vision_query(
+    app: &tauri::AppHandle,
+    target: VisionQueryTarget,
+) -> Result<VisionCapture, String> {
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "capturing",
+            message: match target {
+                VisionQueryTarget::Screen => "Capturing the Windows desktop…".to_string(),
+                VisionQueryTarget::ActiveWindow => "Capturing the active window…".to_string(),
+            },
+            capture: None,
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let capture = match target {
+        VisionQueryTarget::Screen => capture_full_screen(app),
+        VisionQueryTarget::ActiveWindow => capture_active_window(app),
+    }?;
+
+    let capture = store_last_vision_capture(app, capture);
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "captured",
+            message: "Screenshot captured locally.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+    Ok(capture)
 }
 
 fn process_voice_capture(
