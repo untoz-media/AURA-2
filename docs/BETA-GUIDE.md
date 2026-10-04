@@ -147,6 +147,10 @@ Open **Settings → Diagnostics** to review AURA's Beta readiness without exposi
 
 The Diagnostics Center shows:
 
+It also includes **Run self-test**, which asks AURA Core to validate local state without executing computer actions. The self-test checks Local Data readability, permission sanitization, Saved Actions, Automations, Agent history, the model catalog and runtime health.
+
+Voice, TTS and Vision are optional Beta capabilities: an unavailable optional runtime can produce a warning without failing the required Core checks.
+
 - AURA build/version
 - Managed Runtime state
 - selected assistant model readiness
