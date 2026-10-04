@@ -21,6 +21,7 @@ import {
   ingestDroppedFiles,
   clearDropIntake,
   revealDroppedFile,
+  inspectDroppedFile,
   stageDroppedImageForVision,
   listenToFileDrop,
   getRecentFilesContext,
@@ -1464,6 +1465,20 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const inspectDroppedFileControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const inspection = await inspectDroppedFile(dropId);
+      setActivity(inspection.summary);
+      return inspection;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.inspect_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   const stageDroppedImageForVisionControl = useCallback(async (dropId: string) => {
     try {
       setBridgeError(null);
@@ -2659,6 +2674,7 @@ export function useAuraBridge() {
     ingestDroppedFilesControl,
     clearDropIntakeControl,
     revealDroppedFileControl,
+    inspectDroppedFileControl,
     stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
