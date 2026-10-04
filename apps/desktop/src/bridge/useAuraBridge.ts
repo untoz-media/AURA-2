@@ -17,6 +17,12 @@ import {
   getMemories,
   getCurrentAppContext,
   getAppSkillCatalog,
+  getDropIntake,
+  ingestDroppedFiles,
+  clearDropIntake,
+  revealDroppedFile,
+  stageDroppedImageForVision,
+  listenToFileDrop,
   getRecentFilesContext,
   getModelCatalog,
   getModelRuntimeStatus,
@@ -139,6 +145,7 @@ import type {
   MemoryCreateResult,
   CurrentAppInfo,
   AppSkillCatalog,
+  DropIntakeSnapshot,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
@@ -227,6 +234,13 @@ const DEFAULT_MEMORY: MemorySnapshot = {
 
 const DEFAULT_APP_SKILLS: AppSkillCatalog = {
   skills: [],
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_DROP_INTAKE: DropIntakeSnapshot = {
+  items: [],
+  rejectedCount: 0,
+  truncated: false,
   refreshedAtMs: 0,
 };
 
@@ -349,6 +363,9 @@ export function useAuraBridge() {
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
   const [appSkillCatalog, setAppSkillCatalog] =
     useState<AppSkillCatalog>(DEFAULT_APP_SKILLS);
+  const [dropIntake, setDropIntake] =
+    useState<DropIntakeSnapshot>(DEFAULT_DROP_INTAKE);
+  const [dropHover, setDropHover] = useState(false);
   const [recentFiles, setRecentFiles] =
     useState<RecentFilesSnapshot>(DEFAULT_RECENT_FILES);
   const [modelCatalog, setModelCatalog] =
@@ -1402,6 +1419,66 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const ingestDroppedFilesControl = useCallback(async (paths: string[]) => {
+    try {
+      setBridgeError(null);
+      const snapshot = await ingestDroppedFiles(paths);
+      setDropIntake(snapshot);
+
+      if (snapshot.items.length > 0) {
+        setActivity(
+          `Received ${snapshot.items.length} local file${snapshot.items.length === 1 ? "" : "s"} through Drag & Drop.`,
+        );
+      } else {
+        setActivity("No supported local files were accepted from that drop.");
+      }
+
+      return snapshot;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.intake_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const clearDropIntakeControl = useCallback(async () => {
+    const snapshot = await clearDropIntake();
+    setDropIntake(snapshot);
+    setDropHover(false);
+    setActivity("Dropped-file session cleared.");
+    return snapshot;
+  }, []);
+
+  const revealDroppedFileControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const message = await revealDroppedFile(dropId);
+      setActivity(message);
+      return message;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.reveal_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const stageDroppedImageForVisionControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const capture = await stageDroppedImageForVision(dropId);
+      setVisionCapture(capture);
+      setActivity("Dropped image staged locally for AURA Vision.");
+      return capture;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.vision_stage_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   const refreshCurrentApp = useCallback(async () => {
     const [context, skills] = await Promise.all([
       getCurrentAppContext(),
@@ -1411,6 +1488,43 @@ export function useAuraBridge() {
     setAppSkillCatalog(skills);
     return context;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    getDropIntake()
+      .then((snapshot) => {
+        if (!cancelled) setDropIntake(snapshot);
+      })
+      .catch(() => {
+        // Drop intake is optional UI context; keep an empty safe default.
+      });
+
+    listenToFileDrop(
+      (paths) => {
+        if (!cancelled) {
+          void ingestDroppedFilesControl(paths);
+        }
+      },
+      (active) => {
+        if (!cancelled) setDropHover(active);
+      },
+    ).then((cleanup) => {
+      if (cancelled) {
+        cleanup();
+      } else {
+        unlisten = cleanup;
+      }
+    }).catch(() => {
+      // Native drop events remain optional if the current window does not expose them.
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [ingestDroppedFilesControl]);
 
   const refreshRecentFiles = useCallback(async () => {
     const snapshot = await getRecentFilesContext();
@@ -2494,6 +2608,8 @@ export function useAuraBridge() {
     memory,
     currentApp,
     appSkillCatalog,
+    dropIntake,
+    dropHover,
     recentFiles,
     routines,
     routineLastRun,
@@ -2540,6 +2656,10 @@ export function useAuraBridge() {
     refreshDirectorPresets,
     refreshMemories,
     refreshCurrentApp,
+    ingestDroppedFilesControl,
+    clearDropIntakeControl,
+    revealDroppedFileControl,
+    stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
     saveRoutineControl,
