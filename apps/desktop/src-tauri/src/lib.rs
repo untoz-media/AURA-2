@@ -5682,7 +5682,8 @@ pub fn run() {
         )
         .setup(|app| {
             let beta_runtime = app.state::<BetaSessionRuntime>();
-            let _ = begin_beta_session(app.handle(), &beta_runtime);
+            let beta_recovery_mode =
+                begin_beta_session(app.handle(), &beta_runtime).unwrap_or(true);
 
             let preferences = load_preferences(app.handle());
             let voice_preferences = load_voice_preferences(app.handle());
@@ -5718,9 +5719,18 @@ pub fn run() {
             let _ = recover_interrupted_runs(app.handle());
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
-            app.state::<AutomationScheduler>().set_paused(false);
+
+            set_paused_state(app.handle(), beta_recovery_mode);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
+
+            if beta_recovery_mode {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.recovery_safe_mode",
+                    "AURA recovered from an unclean session and started paused. Review the previous session, then resume AURA when ready.",
+                );
+            }
 
             if voice_preferences.wake_word_enabled {
                 let generation = app
