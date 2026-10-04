@@ -325,21 +325,7 @@ impl AgentEngine {
             .values()
             .cloned()
             .collect::<Vec<_>>();
-        let history = read_run_history(app)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|mut run| {
-                if matches!(run.state.as_str(), "queued" | "running" | "paused") {
-                    run.state = "interrupted".to_string();
-                    run.current_step = None;
-                    run.completed_at_ms = run.completed_at_ms.or(Some(timestamp_ms()));
-                    run.error = run.error.or(Some(
-                        "AURA closed before this Agent run completed.".to_string(),
-                    ));
-                }
-                run
-            })
-            .collect::<Vec<_>>();
+        let history = read_run_history(app).unwrap_or_default();
 
         let mut by_id = HashMap::<String, AgentRun>::new();
         for run in history.into_iter().chain(active) {
@@ -394,6 +380,7 @@ impl AgentEngine {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(run.id.clone(), control.clone());
 
+        let _ = append_run_history(&app, &run);
         emit_agent_event(&app, &run, "Agent queued.");
 
         let runs = Arc::clone(&self.runs);
@@ -416,7 +403,12 @@ impl AgentEngine {
         Ok(run)
     }
 
-    pub fn pause(&self, run_id: &str, paused: bool) -> Result<AgentRun, String> {
+    pub fn pause(
+        &self,
+        app: &AppHandle,
+        run_id: &str,
+        paused: bool,
+    ) -> Result<AgentRun, String> {
         let controls = self
             .controls
             .lock()
@@ -438,7 +430,16 @@ impl AgentEngine {
         if !matches!(run.state.as_str(), "completed" | "failed" | "cancelled") {
             run.state = if paused { "paused" } else { "running" }.to_string();
         }
-        Ok(run.clone())
+        let snapshot = run.clone();
+        drop(runs);
+
+        let _ = append_run_history(app, &snapshot);
+        emit_agent_event(
+            app,
+            &snapshot,
+            if paused { "Agent paused." } else { "Agent resumed." },
+        );
+        Ok(snapshot)
     }
 
     pub fn cancel(&self, app: &AppHandle, run_id: &str) -> Result<AgentRun, String> {
@@ -827,8 +828,16 @@ pub fn save_automation(
 
     let name = validate_text(&request.name, "Automation name", 80)?;
     let actions = read_actions(app)?;
-    if !actions.iter().any(|action| action.id == request.action_id) {
-        return Err("Automation references an AURA Action that does not exist.".to_string());
+    let action = actions
+        .iter()
+        .find(|action| action.id == request.action_id)
+        .ok_or_else(|| "Automation references an AURA Action that does not exist.".to_string())?;
+    let permission = permission_for_step(app, &action.step)?;
+    if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+        return Err(
+            "Background automations can only use AURA Actions classified as Read or Act."
+                .to_string(),
+        );
     }
     validate_trigger(&request.trigger)?;
 
@@ -1489,6 +1498,32 @@ fn append_run_history(app: &AppHandle, run: &AgentRun) -> Result<(), String> {
 
 fn read_run_history(app: &AppHandle) -> Result<Vec<AgentRun>, String> {
     read_json_or_default(app, RUN_HISTORY_FILENAME)
+}
+
+pub fn recover_interrupted_runs(app: &AppHandle) -> Result<(), String> {
+    let mut history = read_run_history(app)?;
+    let now = timestamp_ms();
+    let mut changed = false;
+
+    for run in &mut history {
+        if matches!(
+            run.state.as_str(),
+            "queued" | "running" | "paused" | "cancelling"
+        ) {
+            run.state = "interrupted".to_string();
+            run.current_step = None;
+            run.completed_at_ms = Some(now);
+            run.error = Some(
+                "AURA closed before this Agent run reached a terminal state.".to_string(),
+            );
+            changed = true;
+        }
+    }
+
+    if changed {
+        write_json(app, RUN_HISTORY_FILENAME, &history)?;
+    }
+    Ok(())
 }
 
 fn read_actions(app: &AppHandle) -> Result<Vec<SavedAuraAction>, String> {
