@@ -45,8 +45,8 @@ use core::{
 };
 use integrations::director::{
     delete_director_preset, find_director_preset_by_id, load_director_presets,
-    preset_requires_sensitive_permission, resolve_director_preset_command, run_director_preset,
-    validate_director_store,
+    preset_requires_sensitive_permission, resolve_director_preset_command,
+    resolve_director_preset_command_checked, run_director_preset, validate_director_store,
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
@@ -64,7 +64,8 @@ use project_memory::{
 };
 use routines::{
     delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
-    routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
+    resolve_routine_command_checked, routine_requires_sensitive_permission, run_routine,
+    save_routine, RoutineRunResult,
     SaveRoutineRequest, UserRoutine,
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
@@ -613,38 +614,45 @@ fn route_user_routine(
     app: &AppHandle,
     text: &str,
     policy: &PermissionPolicy,
-) -> Option<RouteResult> {
-    let routine = resolve_routine_command(app, text)?;
+) -> Result<Option<RouteResult>, String> {
+    let Some(routine) = resolve_routine_command_checked(app, text)? else {
+        return Ok(None);
+    };
+
+    validate_director_store(app)?;
     let permission = if routine_requires_sensitive_permission(app, &routine) {
         PermissionClass::Sensitive
     } else {
         PermissionClass::Act
     };
 
-    Some(RouteResult::Action(RoutedAction {
+    Ok(Some(RouteResult::Action(RoutedAction {
         intent: ActionIntent::UserRoutine(routine.id),
         permission,
         decision: policy.decision_for(permission),
-    }))
+    })))
 }
 
 fn route_director_preset(
     app: &AppHandle,
     text: &str,
     policy: &PermissionPolicy,
-) -> Option<RouteResult> {
-    let preset = resolve_director_preset_command(app, text)?;
+) -> Result<Option<RouteResult>, String> {
+    let Some(preset) = resolve_director_preset_command_checked(app, text)? else {
+        return Ok(None);
+    };
+
     let permission = if preset_requires_sensitive_permission(&preset) {
         PermissionClass::Sensitive
     } else {
         PermissionClass::Act
     };
 
-    Some(RouteResult::Action(RoutedAction {
+    Ok(Some(RouteResult::Action(RoutedAction {
         intent: ActionIntent::DirectorPreset(preset.id),
         permission,
         decision: policy.decision_for(permission),
-    }))
+    })))
 }
 
 #[cfg(test)]
@@ -2719,8 +2727,10 @@ fn process_user_command(
         .clone();
 
     let base_route = route_command(&text, &policy);
-    let routine_route = route_user_routine(&app, &text, &policy);
-    let director_route = route_director_preset(&app, &text, &policy);
+    let routine_route = route_user_routine(&app, &text, &policy)
+        .map_err(|error| format!("Could not route local Routine: {error}"))?;
+    let director_route = route_director_preset(&app, &text, &policy)
+        .map_err(|error| format!("Could not route Director Mode preset: {error}"))?;
 
     let routed = match routine_route {
         Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
