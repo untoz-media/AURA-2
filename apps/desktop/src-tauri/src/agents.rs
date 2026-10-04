@@ -1126,7 +1126,7 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
             let resolved = routines
                 .into_iter()
                 .find(|item| {
-                    item.id == *routine
+                    item.id == routine.as_str()
                         || item.name.eq_ignore_ascii_case(routine)
                         || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
@@ -1251,7 +1251,7 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
             let resolved = routines
                 .into_iter()
                 .find(|item| {
-                    item.id == *routine
+                    item.id == routine.as_str()
                         || item.name.eq_ignore_ascii_case(routine)
                         || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
@@ -1334,7 +1334,7 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             let routines = list_routines(app)
                 .map_err(|error| format!("Could not load Routines: {error}"))?;
             let exists = routines.iter().any(|item| {
-                item.id == *routine
+                item.id == routine.as_str()
                     || item.name.eq_ignore_ascii_case(routine)
                     || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
             });
