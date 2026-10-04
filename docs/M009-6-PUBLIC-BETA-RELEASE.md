@@ -23,6 +23,7 @@ M009.6 prepares the first Public Beta without bypassing the unresolved stability
 - [ ] installer SHA-256 is produced
 - [ ] critical Beta checklist is completed on Windows
 - [ ] M009.3 is marked complete
+- [ ] `package-lock.json` is generated and committed from a real npm resolution
 
 Do not mark M009.6 complete and do not create the Public Beta tag while any blocking validation item remains open.
 
@@ -61,16 +62,17 @@ Once all blockers are cleared:
 
 1. merge the approved stacked PR chain
 2. confirm `main` reports `0.9.0-beta.1` everywhere
-3. run/re-run Beta Quality on the final commit
-4. run/re-run Windows Build on the final commit
-5. download and verify installer + SHA-256
-6. complete smoke tests on the exact installer artifact
-7. mark M009.3 complete
-8. run `npm run beta:release-gate`
-9. create tag `aura-v0.9.0-beta.1` on the validated commit
-10. create the GitHub pre-release using `RELEASE-0.9.0-beta.1.md`
-11. attach or surface the exact validated Windows installer/checksum artifact
-12. mark M009.6 and M009 complete
+3. confirm `package-lock.json` exists and install with the locked dependency set
+4. run/re-run Beta Quality on the final commit
+5. run/re-run Windows Build on the final commit
+6. download and verify installer + SHA-256
+7. complete smoke tests on the exact installer artifact
+8. mark M009.3 complete
+9. run `npm run beta:release-gate`
+10. create tag `aura-v0.9.0-beta.1` on the validated commit
+11. create the GitHub pre-release using `RELEASE-0.9.0-beta.1.md`
+12. attach or surface the exact validated Windows installer/checksum artifact
+13. mark M009.6 and M009 complete
 
 ## Rollback rule
 
