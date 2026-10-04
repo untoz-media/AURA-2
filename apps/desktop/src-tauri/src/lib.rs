@@ -5194,18 +5194,22 @@ fn get_create_image_runtime_status(
 }
 
 #[tauri::command]
-fn generate_create_image(
+async fn generate_create_image(
     app: AppHandle,
-    state: State<'_, RuntimeState>,
-    runtime: State<'_, ImageRuntime>,
-    manager: State<'_, ModelManager>,
     request: ImageGenerationRequest,
 ) -> Result<ImageGenerationResult, String> {
-    if runtime_snapshot(&state).paused {
-        return Err("AURA is paused. Resume it before generating an image.".to_string());
-    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RuntimeState>();
+        if runtime_snapshot(&state).paused {
+            return Err("AURA is paused. Resume it before generating an image.".to_string());
+        }
 
-    runtime.generate(&app, &manager, request)
+        let runtime = app.state::<ImageRuntime>();
+        let manager = app.state::<ModelManager>();
+        runtime.generate(&app, &manager, request)
+    })
+    .await
+    .map_err(|error| format!("AURA Create worker task failed: {error}"))?
 }
 
 #[tauri::command]
