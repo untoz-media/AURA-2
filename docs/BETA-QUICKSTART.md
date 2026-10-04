@@ -83,10 +83,11 @@ From the drop tray you can:
 
 - **Inspect** one accepted file.
 - **Inspect all** files in the temporary batch.
+- **Analyze with AURA** to pass bounded temporary file context to the selected local model.
 - **Reveal** an accepted file in File Explorer.
 - **Use in Vision** for supported raster images.
 
-Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. PDFs, Office files, video, audio and archives remain metadata-only.
+Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Analyze with AURA uses a smaller turn-only model-context budget capped at 6,000 characters total. It does not expose filesystem paths or persist attachment content in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
 
 Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
 
