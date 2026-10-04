@@ -2,7 +2,7 @@
 
 AURA-2 is a Windows-first, local-first personal computer assistant. The Beta combines deterministic computer control with local AI, Voice, Vision, Memory, OBS Director Mode, Agents and Automations.
 
-> **Release status:** Beta hardening is in progress. This documentation is being prepared before the Public Beta is published.
+> **Release status:** `0.9.0-beta.1` is prepared as the Public Beta candidate. Publication is blocked until the M009.3 quality/build gates execute successfully.
 
 ## Start here
 
