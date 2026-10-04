@@ -113,6 +113,8 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 
 See `docs/BETA-GUIDE.md` for the tester guide.
 
+For bugs and feature requests, see `docs/BETA-FEEDBACK.md` and use the structured GitHub issue forms.
+
 ## Known limitations
 
 - dedicated AURA-2 checkpoint is not defined yet
