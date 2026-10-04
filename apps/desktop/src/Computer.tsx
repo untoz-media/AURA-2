@@ -160,6 +160,31 @@ export default function Computer({
           <span>No file contents</span>
           <span>No symlink traversal</span>
         </div>
+
+        <div className="file-intelligence-recent">
+          <span>Recent file shortcuts</span>
+          <div>
+            {[
+              ["Latest video", "Latest video"],
+              ["Latest image", "Latest image"],
+              ["Latest download", "Latest download"],
+              ["Recent documents", "Recent documents"],
+            ].map(([label, command]) => (
+              <button
+                key={command}
+                type="button"
+                className="feature-secondary-button"
+                disabled={runtimeState.paused}
+                onClick={() => void onCommand(command)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <small>
+            Ranked by filesystem modified time. AURA does not infer which app created or exported the file.
+          </small>
+        </div>
       </div>
 
       <div className="feature-section">
