@@ -26,6 +26,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Local Beta build artifacts
+artifacts/
+
 # Local AURA data
 .local/
 data/runtime/
