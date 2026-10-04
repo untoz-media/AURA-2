@@ -1317,7 +1317,7 @@ export function useAuraBridge() {
   }, []);
 
   const runAuraActionControl = useCallback(async (actionId: string) => {
-    const result = await runAuraAction(actionId);
+    const result = await runAuraAction(actionId, true);
     setActivity(result);
     return result;
   }, []);
