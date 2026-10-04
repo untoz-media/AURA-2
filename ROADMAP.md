@@ -110,12 +110,14 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M009 — AURA-2 Beta
 
-- [ ] Installer
-- [ ] Settings and permissions UI
-- [ ] Stability testing
-- [ ] Telemetry policy
-- [ ] Beta documentation
-- [ ] Public Beta release
+**Status: Beta Candidate — AURA-2 0.9.0-beta.1**
+
+- [x] **M009.1** — Installer
+- [x] **M009.2** — Settings and permissions UI
+- [ ] **M009.3** — Stability testing — Windows installer CI gate pending
+- [x] **M009.4** — Telemetry policy
+- [x] **M009.5** — Beta documentation
+- [ ] **M009.6** — Public Beta release — publish only after a verified Windows build
 
 ## M010 — AURA-2
 
