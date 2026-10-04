@@ -99,7 +99,7 @@ AURA-2/
 - Computer Control
 - App Skills
 - File Intelligence
-- Clipboard Intelligence
+- Clipboard Intelligence ✅
 - Drag & Drop actions
 - AURA Memory
 - Agent Mode
@@ -243,6 +243,28 @@ Current runtime behavior:
 
 The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
 
+
+### Clipboard Intelligence
+
+AURA can now interact with Windows text clipboard data through explicit commands and Computer workspace controls.
+
+Privacy rules:
+
+- clipboard reading is Sensitive and requires confirmation by default
+- clipboard writing is Modify and requires confirmation by default
+- clearing the clipboard is Destructive and requires confirmation
+- AURA does not poll or monitor clipboard changes in the background
+- clipboard text is never added to Beta diagnostics
+- voice-triggered clipboard reads are shown visually but are not spoken aloud by TTS
+- large clipboard reads are bounded before being returned to the conversation
+
+Examples:
+
+- `Read clipboard`
+- `Copy to clipboard Hello AURA`
+- `Clear clipboard`
+- `Lê o clipboard`
+- `Copia para o clipboard Olá`
 
 ### AURA Create
 
