@@ -92,4 +92,8 @@ Actions on dropped files resolve the opaque ID back inside Core.
 
 Inspect is a Read-class action. Only allowlisted UTF-8 text/code formats may return a bounded preview (64 KiB / 12,000 characters), while image inspection may return dimensions. Complex binary formats remain metadata-only. Inspect never returns the canonical path.
 
+Analyze with AURA adds a separate ephemeral context-attachment path. The frontend submits only opaque drop IDs. Core resolves and re-inspects them, then builds a model-only context capped at 6,000 characters. This context is not placed inside the visible user message and is not persisted in model conversation history.
+
+Attachment requests bypass deterministic action routing, user Routines and Director presets. Attached text is marked as untrusted data before it reaches the model, providing a hard product boundary between file content and computer actions.
+
 Image handoff to Vision always creates a cache copy first so Vision cleanup cannot delete the user's original file.
