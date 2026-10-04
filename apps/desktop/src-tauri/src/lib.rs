@@ -42,7 +42,8 @@ use computer::recent_files::{
 };
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{
-    list_windows, summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo,
+    list_windows, set_app_window_state, summarize_windows, switch_to_app, CurrentAppAwareness,
+    CurrentAppInfo,
 };
 use core::{
     action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
@@ -2481,6 +2482,73 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::SetAppWindowState { target, action } => {
+                            let display_name = target.display_name();
+                            let gerund = action.gerund();
+                            let completed = action.completed_verb();
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("{} {}…", gerund, display_name),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match set_app_window_state(target, action) {
+                                Ok(window) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!(
+                                                "{} {} — {}.",
+                                                completed,
+                                                display_name,
+                                                window.title
+                                            ),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not {} {}: {}",
+                                        action.verb(),
+                                        display_name,
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.window_state_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::ListWindows => {
                             emit_core_event(
                                 &worker_app,
@@ -4274,6 +4342,11 @@ fn process_user_command(
                     ),
                     ActionIntent::SwitchToApp(target) => format!(
                         "Switching to {} requires confirmation under the current permission policy.",
+                        target.display_name()
+                    ),
+                    ActionIntent::SetAppWindowState { target, action } => format!(
+                        "{} {} requires confirmation under the current permission policy.",
+                        action.gerund(),
                         target.display_name()
                     ),
                     ActionIntent::ListWindows => {
