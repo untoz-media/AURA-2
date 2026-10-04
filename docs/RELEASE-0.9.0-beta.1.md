@@ -25,6 +25,10 @@ with new Beta-readiness work.
 - permission review entry point
 - local previous-session recovery detection
 - local diagnostics snapshot/export
+- diagnostics schema v2 with structured subsystem health checks
+- automatic startup health report with degraded-state Chat warning
+- crash recovery safe mode that starts AURA paused after an unclean session
+- atomic Beta/session state persistence
 - explicit zero-upload telemetry policy
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
 
@@ -32,7 +36,7 @@ with new Beta-readiness work.
 
 0.9.0-beta.1 does not implement usage telemetry or automatic crash uploads.
 
-Diagnostics are generated and exported locally only when requested.
+Diagnostics stay local. A lightweight health report is generated automatically at startup, while JSON export only happens when explicitly requested. No diagnostics are uploaded automatically.
 
 ## Release status
 
