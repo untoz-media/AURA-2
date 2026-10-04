@@ -24,6 +24,12 @@ const MODEL_CONFIG_FILENAME: &str = "model-manager.json";
 const INSTALL_MARKER_FILENAME: &str = "install.json";
 const MODEL_HEADROOM_BYTES: u64 = 1_000_000_000;
 
+const PIPER_PTPT_FILES: &[&str] = &[
+    "pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx",
+    "pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx.json",
+    "pt/pt_PT/tugão/medium/MODEL_CARD",
+];
+
 const WHISPER_BASE_FILES: &[&str] = &[
     "added_tokens.json",
     "config.json",
@@ -117,6 +123,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             license: Some("Apache-2.0"),
             estimated_size_bytes: Some(295_000_000),
             files: WHISPER_BASE_FILES,
+            availability_message: None,
+        },
+        ModelDefinition {
+            id: "voice-piper-ptpt",
+            name: "AURA Voice TTS",
+            subtitle: "Piper Tugão · Portuguese (Portugal) · Local",
+            description: "Local text-to-speech for AURA Voice using the pt_PT-tugão-medium Piper voice.",
+            generation: "Voice",
+            role: "textToSpeech",
+            selectable: false,
+            source_repo: Some("rhasspy/piper-voices"),
+            source_revision: Some("main"),
+            license: Some("MIT voice model · Piper runtime GPL-3.0"),
+            estimated_size_bytes: Some(63_300_000),
+            files: PIPER_PTPT_FILES,
             availability_message: None,
         },
     ]
