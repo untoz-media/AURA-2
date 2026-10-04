@@ -17,6 +17,12 @@ M009.6 prepares the first Public Beta without bypassing the unresolved stability
 
 ## Blocking validation
 
+Tracked release blockers:
+
+- **#55** — GitHub-hosted Actions jobs fail before step 1
+- **#56** — generate and commit `package-lock.json`
+- **#57** — enable GitHub private vulnerability reporting
+
 - [ ] Beta Quality workflow executes and passes
 - [ ] Rust Core tests execute and pass on Windows
 - [ ] NSIS build executes and succeeds
@@ -24,6 +30,7 @@ M009.6 prepares the first Public Beta without bypassing the unresolved stability
 - [ ] critical Beta checklist is completed on Windows
 - [ ] M009.3 is marked complete
 - [ ] `package-lock.json` is generated and committed from a real npm resolution
+- [ ] GitHub private vulnerability reporting is enabled and verified
 
 Do not mark M009.6 complete and do not create the Public Beta tag while any blocking validation item remains open.
 
