@@ -1285,7 +1285,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M006 In Progress · Voice",
+        stage: "M006 Complete · Voice · 0.6.0-alpha.1",
         local_first: true,
     }
 }
