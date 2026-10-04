@@ -1,6 +1,8 @@
 use crate::computer::{
     app_launcher::AppTarget,
-    app_skills::{BrowserSkill, BrowserSkillAction, PersonalFolderSkill},
+    app_skills::{
+        BrowserSkill, BrowserSkillAction, NotepadSkill, NotepadSkillAction, PersonalFolderSkill,
+    },
     audio::MediaAction,
     file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
     keyboard::KeyboardShortcut,
@@ -62,6 +64,7 @@ pub enum ActionIntent {
     FindRecentPersonalFiles(RecentFileQuery),
     RevealPersonalPath(String),
     BrowserSkill(BrowserSkill),
+    NotepadSkill(NotepadSkill),
     OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
 }
@@ -374,6 +377,41 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn notepad_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "new note in notepad"
+        | "new document in notepad"
+        | "nova nota no bloco de notas"
+        | "novo documento no bloco de notas" => Some(NotepadSkillAction::NewNote),
+
+        "find in notepad"
+        | "open find in notepad"
+        | "procurar no bloco de notas"
+        | "abre a pesquisa no bloco de notas" => Some(NotepadSkillAction::Find),
+
+        "select all in notepad"
+        | "select everything in notepad"
+        | "seleciona tudo no bloco de notas"
+        | "seleccionar tudo no bloco de notas" => Some(NotepadSkillAction::SelectAll),
+
+        "undo in notepad"
+        | "undo notepad"
+        | "desfazer no bloco de notas"
+        | "desfaz no bloco de notas" => Some(NotepadSkillAction::Undo),
+
+        "redo in notepad"
+        | "redo notepad"
+        | "refazer no bloco de notas"
+        | "refaz no bloco de notas" => Some(NotepadSkillAction::Redo),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::NotepadSkill(NotepadSkill { action }))
 }
 
 fn personal_folder_skill_request(input: &str) -> Option<ActionIntent> {
@@ -1492,6 +1530,19 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = notepad_skill_request(input) {
+        let ActionIntent::NotepadSkill(skill) = &intent else {
+            unreachable!("notepad parser returns NotepadSkill intents only");
+        };
+        let permission = skill.action.permission();
+
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = personal_folder_skill_request(input) {
         let permission = PermissionClass::Act;
         return RouteResult::Action(RoutedAction {
@@ -1805,6 +1856,60 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_notepad_navigation_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Find in Notepad", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Find,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Seleciona tudo no bloco de notas", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::SelectAll,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn notepad_edit_skills_use_modify_confirmation() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Undo in Notepad", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Undo,
+                }),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Refaz no bloco de notas", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Redo,
+                }),
+                permission: PermissionClass::Modify,
+                ..
+            })
         ));
     }
 
