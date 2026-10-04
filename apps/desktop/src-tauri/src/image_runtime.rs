@@ -225,7 +225,23 @@ impl ImageRuntime {
                 let running = process_guard
                     .as_mut()
                     .ok_or_else(|| "AURA Create runtime is no longer available.".to_string())?;
-                read_envelope(&mut running.stdout)?
+                match read_envelope(&mut running.stdout) {
+                    Ok(envelope) => envelope,
+                    Err(error) => {
+                        if let Some(mut failed) = process_guard.take() {
+                            let _ = failed.child.kill();
+                            let _ = failed.child.wait();
+                        }
+                        self.set_status(ImageRuntimeStatus {
+                            state: "error".to_string(),
+                            model_id: IMAGE_MODEL_ID.to_string(),
+                            last_error: Some(error.clone()),
+                            refreshed_at_ms: timestamp_ms(),
+                            ..ImageRuntimeStatus::default()
+                        });
+                        return Err(error);
+                    }
+                }
             };
 
             if envelope.id.as_deref() != Some(request_id.as_str()) {
@@ -363,7 +379,21 @@ impl ImageRuntime {
         };
 
         loop {
-            let envelope = read_envelope(&mut process.stdout)?;
+            let envelope = match read_envelope(&mut process.stdout) {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    let _ = process.child.kill();
+                    let _ = process.child.wait();
+                    self.set_status(ImageRuntimeStatus {
+                        state: "error".to_string(),
+                        model_id: IMAGE_MODEL_ID.to_string(),
+                        last_error: Some(error.clone()),
+                        refreshed_at_ms: timestamp_ms(),
+                        ..ImageRuntimeStatus::default()
+                    });
+                    return Err(error);
+                }
+            };
             match envelope.kind.as_str() {
                 "ready" => {
                     process.device = envelope.device;
@@ -379,9 +409,19 @@ impl ImageRuntime {
                     return Ok(process);
                 }
                 "fatal" | "error" => {
-                    return Err(envelope
+                    let message = envelope
                         .message
-                        .unwrap_or_else(|| "AURA Create runtime failed to initialize.".to_string()));
+                        .unwrap_or_else(|| "AURA Create runtime failed to initialize.".to_string());
+                    let _ = process.child.kill();
+                    let _ = process.child.wait();
+                    self.set_status(ImageRuntimeStatus {
+                        state: "error".to_string(),
+                        model_id: IMAGE_MODEL_ID.to_string(),
+                        last_error: Some(message.clone()),
+                        refreshed_at_ms: timestamp_ms(),
+                        ..ImageRuntimeStatus::default()
+                    });
+                    return Err(message);
                 }
                 _ => {}
             }
