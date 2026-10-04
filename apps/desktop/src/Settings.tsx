@@ -342,7 +342,7 @@ export default function Settings({
     !betaStatus.automaticCrashUploads &&
     betaStatus.localDiagnosticsOnly;
   const betaSnapshotIdentityValid = betaDiagnostics
-    ? betaDiagnostics.schemaVersion === 1 &&
+    ? betaDiagnostics.schemaVersion === 2 &&
       betaDiagnostics.appName === (appStatus?.name ?? "AURA-2") &&
       betaDiagnostics.appVersion === (appStatus?.version ?? betaDiagnostics.appVersion) &&
       betaDiagnostics.channel === "beta" &&
@@ -352,11 +352,19 @@ export default function Settings({
     ? betaDiagnostics.activeAgentRuns <= betaDiagnostics.agentRunsTotal &&
       betaDiagnostics.enabledAutomations <= betaDiagnostics.automations
     : null;
+  const betaBackendHealthValid = betaDiagnostics
+    ? betaDiagnostics.healthStatus === "healthy" &&
+      betaDiagnostics.healthChecks.every((check) => check.status === "passed")
+    : null;
+  const betaPassedHealthChecks = betaDiagnostics
+    ? betaDiagnostics.healthChecks.filter((check) => check.status === "passed").length
+    : 0;
   const betaSelfCheckPassed =
     betaDiagnostics !== null &&
     betaPrivacyInvariant &&
     betaSnapshotIdentityValid === true &&
-    betaCountersValid === true;
+    betaCountersValid === true &&
+    betaBackendHealthValid === true;
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -1702,6 +1710,27 @@ export default function Settings({
                 }
               />
               <SettingRow
+                title="Subsystem health"
+                description="Checks local storage, session state, permission safety floors, model metadata and Agent/Automation stores independently."
+                trailing={
+                  <Badge
+                    tone={
+                      betaBackendHealthValid === null
+                        ? "planned"
+                        : betaBackendHealthValid
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaBackendHealthValid === null
+                      ? "Run diagnostics"
+                      : betaBackendHealthValid
+                        ? "Passed"
+                        : "Degraded"}
+                  </Badge>
+                }
+              />
+              <SettingRow
                 title="Overall Beta integrity"
                 description={
                   betaDiagnostics
@@ -1758,6 +1787,23 @@ export default function Settings({
                   <div><span>Agent runs</span><strong>{betaDiagnostics.activeAgentRuns} active · {betaDiagnostics.agentRunsTotal} recorded</strong></div>
                   <div><span>Saved Actions</span><strong>{betaDiagnostics.savedActions}</strong></div>
                   <div><span>Automations</span><strong>{betaDiagnostics.enabledAutomations}/{betaDiagnostics.automations} enabled</strong></div>
+                  <div><span>Health</span><strong>{betaPassedHealthChecks}/{betaDiagnostics.healthChecks.length} checks passed</strong></div>
+                </div>
+              )}
+
+              {betaDiagnostics && (
+                <div className="beta-health-check-list">
+                  {betaDiagnostics.healthChecks.map((check) => (
+                    <div className="beta-health-check" key={check.id}>
+                      <div>
+                        <strong>{check.label}</strong>
+                        <span>{check.detail}</span>
+                      </div>
+                      <Badge tone={check.status === "passed" ? "ready" : "critical"}>
+                        {check.status === "passed" ? "Passed" : "Failed"}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
               )}
 
