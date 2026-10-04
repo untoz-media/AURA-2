@@ -35,7 +35,7 @@ use beta::{
 };
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
-use computer::app_skills::execute_browser_skill;
+use computer::app_skills::{execute_browser_skill, execute_personal_folder_skill};
 use computer::audio::{execute_media_action, MediaAction};
 use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
@@ -3490,6 +3490,58 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::OpenPersonalFolder(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Opening {} in File Explorer…",
+                                        skill.display_name()
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_personal_folder_skill(&worker_app, skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("File Explorer skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.folder_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::BrowserSkill(skill) => {
                             emit_core_event(
                                 &worker_app,
@@ -4822,6 +4874,10 @@ fn process_user_command(
                     ActionIntent::BrowserSkill(skill) => format!(
                         "Running {} requires confirmation under the current Act policy.",
                         skill.summary()
+                    ),
+                    ActionIntent::OpenPersonalFolder(skill) => format!(
+                        "Opening {} in File Explorer requires confirmation under the current Act policy.",
+                        skill.display_name()
                     ),
                     ActionIntent::ClipboardRead => {
                         "The clipboard can contain passwords, tokens or private text. Confirm before AURA reads it."
