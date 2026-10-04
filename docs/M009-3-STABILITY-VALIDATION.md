@@ -87,7 +87,11 @@ Session recovery is conservative:
 - after an unclean/recovered session, AURA starts paused and keeps Agents/Automations paused until the user explicitly resumes it;
 - the main Chat workspace surfaces a Recovery Safe Mode banner with direct access to diagnostics and an explicit Resume AURA action.
 
-Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary. Settings → Beta & Diagnostics also computes an in-app integrity self-check covering the privacy invariants, diagnostics identity/schema and internal Agent/Automation counter consistency.
+Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary.
+
+Diagnostics schema v2 adds structured local health checks. The health report probes configuration/local-data writeability and validates the active session marker, Beta preferences, permission safety floor, model catalog, Agent run store, Saved Actions store, Automation store, managed-runtime state, privacy boundary and aggregate runtime counters. Each check is reported independently as Passed/Failed so one damaged subsystem no longer makes the entire diagnostic snapshot unavailable.
+
+The desktop runs this health report automatically during startup without uploading anything. Settings → Beta & Diagnostics shows the full per-subsystem report, and Chat surfaces a local warning when the overall health state is degraded.
 
 ## Existing recovery systems
 
