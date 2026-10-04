@@ -116,7 +116,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M009.2** — Settings & permissions UI
 - [ ] **M009.3** — Stability testing
 - [x] **M009.4** — Telemetry policy
-- [ ] **M009.5** — Beta documentation
+- [x] **M009.5** — Beta documentation
 - [ ] **M009.6** — Public Beta release
 
 ## M010 — AURA-2
