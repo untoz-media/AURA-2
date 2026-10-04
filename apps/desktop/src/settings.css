@@ -1253,6 +1253,42 @@
   line-height: 1.45;
 }
 
+.beta-health-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 4px 0 12px;
+}
+
+.beta-health-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-1);
+}
+
+.beta-health-check > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.beta-health-check strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.beta-health-check span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
 .beta-diagnostics-path {
   margin: 10px 0 0;
   padding: 9px 10px;
