@@ -75,6 +75,7 @@ function formatSize(bytes?: number) {
 function captureLabel(capture: VisionCapture) {
   if (capture.kind === "activeWindow") return "Active window";
   if (capture.kind === "region") return "Selected region";
+  if (capture.kind === "droppedImage") return "Dropped image";
   return "Full screen";
 }
 
