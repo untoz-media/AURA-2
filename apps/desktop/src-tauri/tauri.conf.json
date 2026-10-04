@@ -52,6 +52,21 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Untoz",
+    "category": "Utility",
+    "copyright": "© 2026 Untoz. All rights reserved.",
+    "shortDescription": "Local-first personal AI assistant for Windows.",
+    "longDescription": "AURA-2 is a local-first personal AI assistant for Windows with computer control, voice, vision, memory, agents and automations.",
+    "useLocalToolsDir": true,
+    "windows": {
+      "allowDowngrades": false,
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "startMenuFolder": "Untoz"
+      }
+    }
   }
 }
