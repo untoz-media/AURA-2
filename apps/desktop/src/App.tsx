@@ -676,6 +676,10 @@ function App() {
               onRecentFilesRefresh={refreshRecentFiles}
               onCommand={async (value) => {
                 const normalized = value.toLowerCase();
+                const isPublishedAppSkill = appSkillCatalog.skills.some(
+                  (skill) => skill.command.toLowerCase() === normalized,
+                );
+
                 if (
                   value === "Read clipboard" ||
                   normalized.startsWith("find file ") ||
@@ -685,12 +689,7 @@ function App() {
                   normalized.startsWith("ultimo ") ||
                   normalized.startsWith("última ") ||
                   normalized.startsWith("ultima ") ||
-                  normalized.startsWith("new tab in ") ||
-                  normalized.startsWith("next tab in ") ||
-                  normalized.startsWith("previous tab in ") ||
-                  normalized.startsWith("reload ") ||
-                  normalized.startsWith("focus address bar in ") ||
-                  normalized.startsWith("reopen closed tab in ")
+                  isPublishedAppSkill
                 ) {
                   setView("chat");
                 }
