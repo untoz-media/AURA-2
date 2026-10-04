@@ -100,7 +100,7 @@ AURA-2/
 - App Skills ✅
 - File Intelligence ✅
 - Clipboard Intelligence ✅
-- Drag & Drop actions
+- Drag & Drop actions ✅
 - AURA Memory
 - Agent Mode
 - AURA Automations
@@ -163,7 +163,7 @@ https://github.com/untoz-media/AURA-1
 
 AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, named window state control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, local image generation through AURA Create, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local health diagnostics and an explicit zero-telemetry policy.
 
-The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. APIs, architecture and product behaviour may still change during the Beta cycle.
+The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. Drag & Drop intake is now included in the candidate and remains subject to the same Windows smoke gate. APIs, architecture and product behaviour may still change during the Beta cycle.
 
 ---
 
@@ -245,6 +245,32 @@ The desktop now includes a Managed Runtime installer that can prepare a private 
 
 
 
+
+
+
+### Drag & Drop Actions
+
+AURA now accepts local files dropped onto the main desktop window through Tauri's native drag/drop events.
+
+Drag & Drop V1 is intentionally an **intake layer**, not automatic execution.
+
+Current behavior:
+
+- up to 8 files accepted per drop
+- files are canonicalized locally before entering the temporary registry
+- directories are rejected
+- duplicate canonical paths are deduplicated
+- React receives an opaque drop id + safe metadata, not the real filesystem path
+- the canonical path remains inside an in-memory Core registry
+- nothing is opened, executed, uploaded, remembered or analyzed automatically
+- the temporary drop session can be dismissed without modifying the original files
+- any accepted file can be revealed explicitly in File Explorer
+- PNG/JPEG/WebP/GIF/BMP images can be staged explicitly for AURA Vision
+- Vision works from a normalized PNG copy in AURA's cache, never from the original image
+- Vision image import is bounded to 40 MB and the existing 24-million-pixel capture limit
+- dropped-file paths/content are not added to Beta diagnostics
+
+The drop tray classifies metadata as image, video, audio, document, archive or other, but V1 does not inspect file contents for non-image files.
 
 ### App Skills
 
