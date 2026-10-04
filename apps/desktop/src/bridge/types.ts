@@ -83,7 +83,8 @@ export type LifecycleEventKind =
   | "autostart.disabled"
   | "startup.background"
   | "permissions.updated"
-  | "permissions.reset";
+  | "permissions.reset"
+  | "pause.persistence_failed";
 
 export type LifecycleEvent = {
   kind: LifecycleEventKind;
