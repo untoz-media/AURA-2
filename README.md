@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M008 Agents & Automations complete · AURA-2 0.8.0-alpha.1 · pre-Beta
+> **Current stage:** M009.1 Beta Installer complete · AURA-2 0.8.0-alpha.1 · Beta hardening
 
 ---
 
@@ -139,8 +139,8 @@ Explicit Windows screenshot/region capture, active-window understanding, local m
 ### M008 — Agents & Automations ✅
 Local multi-step planning, deterministic Agent execution, reusable AURA Actions, event triggers, schedules, background status and failure recovery.
 
-### M009 — AURA-2 Beta
-Public testing release.
+### M009 — AURA-2 Beta 🚧
+Beta hardening is underway. M009.1 now provides a repeatable Windows NSIS installer path, synchronized release metadata and SHA-256 build artifacts.
 
 ### M010 — AURA-2
 Stable next-generation release.
@@ -159,9 +159,9 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M008 — Agents & Automations** as **0.8.0-alpha.1**. The current Alpha combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, live task status and permission-aware background execution.
+AURA-2 has entered **M009 — AURA-2 Beta** hardening on top of **0.8.0-alpha.1**. M009.1 adds the Beta installer/release packaging path: explicit per-user NSIS setup, downgrade protection, an embedded WebView2 bootstrapper, synchronized release metadata checks and SHA-256 installer artifacts.
 
-APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
+The next Beta work focuses on Settings & Permissions UI, stability testing, telemetry policy, Beta documentation and the Public Beta release.
 
 ---
 
