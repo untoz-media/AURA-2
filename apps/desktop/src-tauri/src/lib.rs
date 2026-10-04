@@ -11,6 +11,7 @@ mod permissions;
 mod project_memory;
 mod routines;
 mod speech_runtime;
+mod storage;
 mod tts_runtime;
 mod vision_capture;
 mod vision_history;
