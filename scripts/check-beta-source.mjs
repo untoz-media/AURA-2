@@ -27,6 +27,9 @@ const staleCopy = [
   "Ready for M006.3 STT",
   "arrive later in M002",
   "Vision access will remain permission-based",
+  "M005 · LOCAL CONTEXT",
+  "M005.6 · PROJECT MEMORY",
+  "Scheduling and autonomous background tasks remain scoped to",
 ];
 
 for (const phrase of staleCopy) {
@@ -97,6 +100,36 @@ for (const testName of requiredAgentTests) {
   const prefix = agents.slice(Math.max(0, index - 80), index);
   if (!/\#\[test\]\s*$/.test(prefix.trimEnd())) {
     failures.push(`apps/desktop/src-tauri/src/agents.rs: ${testName} is not marked #[test]`);
+  }
+}
+
+const settingsSource = fs.readFileSync("apps/desktop/src/Settings.tsx", "utf8");
+const appSource = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
+const propsStart = settingsSource.indexOf("type Props = {");
+const propsEnd = settingsSource.indexOf("\n};", propsStart);
+const settingsMountStart = appSource.indexOf("\n            <Settings\n");
+const settingsMountEnd = appSource.indexOf("\n            />", settingsMountStart);
+
+if (propsStart < 0 || propsEnd < 0 || settingsMountStart < 0 || settingsMountEnd < 0) {
+  failures.push("Could not structurally validate Settings props wiring.");
+} else {
+  const propsBlock = settingsSource.slice(propsStart, propsEnd);
+  const settingsMount = appSource.slice(settingsMountStart, settingsMountEnd);
+  const requiredProps = [...propsBlock.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*)(?:\??):/gm)]
+    .map((match) => match[1]);
+  const passedProps = [...settingsMount.matchAll(/^\s+([A-Za-z][A-Za-z0-9]*)=/gm)]
+    .map((match) => match[1]);
+
+  for (const prop of requiredProps) {
+    if (!passedProps.includes(prop)) {
+      failures.push(`apps/desktop/src/App.tsx: Settings prop is not wired: ${prop}`);
+    }
+  }
+
+  for (const prop of passedProps) {
+    if (!requiredProps.includes(prop)) {
+      failures.push(`apps/desktop/src/App.tsx: unknown Settings prop is wired: ${prop}`);
+    }
   }
 }
 
