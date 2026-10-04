@@ -2107,25 +2107,7 @@ fn run_beta_self_test(
         )
     });
 
-    let passed = checks.iter().filter(|check| check.status == "pass").count();
-    let warnings = checks
-        .iter()
-        .filter(|check| check.status == "warning")
-        .count();
-    let failed = checks.iter().filter(|check| check.status == "fail").count();
-    let ready = checks
-        .iter()
-        .all(|check| !check.required || check.status != "fail");
-
-    BetaSelfTestReport {
-        version: env!("CARGO_PKG_VERSION"),
-        ready,
-        passed,
-        warnings,
-        failed,
-        checks,
-        completed_at_ms: unix_timestamp_ms(),
-    }
+    finish_beta_self_test(checks)
 }
 
 #[tauri::command]
