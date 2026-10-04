@@ -1420,6 +1420,14 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn keyboard_permission_fails_closed_for_non_keyboard_intents() {
+        assert_eq!(
+            permission_for_keyboard(&ActionIntent::MemoryList),
+            None
+        );
+    }
+
 
     #[test]
     fn source_visibility_does_not_override_window_discovery() {
