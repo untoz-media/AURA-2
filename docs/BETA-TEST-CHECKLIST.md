@@ -142,6 +142,8 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 
 ## Regression / release gates
 
+- [ ] `package-lock.json` exists and matches the candidate dependency set
+- [ ] locked dependencies install successfully with `npm ci`
 - [ ] `npm run release:check` passes
 - [ ] `npm run telemetry:check` passes
 - [ ] `npm run beta:source-check` passes
