@@ -133,6 +133,17 @@
   background: var(--aura-surface-2);
 }
 
+.beta-health-alert {
+  border-color: rgba(255, 112, 112, .34);
+  background:
+    linear-gradient(180deg, rgba(255, 112, 112, .055), transparent),
+    var(--aura-surface-2);
+}
+
+.beta-health-alert .beta-recovery-kicker {
+  color: #ffaaaa !important;
+}
+
 .beta-recovery-copy {
   display: flex;
   min-width: 0;
