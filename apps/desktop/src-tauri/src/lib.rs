@@ -4536,10 +4536,11 @@ fn pause_agent_run(
 
 #[tauri::command]
 fn cancel_agent_run(
+    app: AppHandle,
     engine: State<'_, AgentEngine>,
     run_id: String,
 ) -> Result<AgentRun, String> {
-    engine.cancel(&run_id)
+    engine.cancel(&app, &run_id)
 }
 
 #[tauri::command]
