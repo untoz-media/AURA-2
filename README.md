@@ -98,7 +98,7 @@ AURA-2/
 - AURA Voice
 - Computer Control
 - App Skills
-- File Intelligence
+- File Intelligence ✅
 - Clipboard Intelligence ✅
 - Drag & Drop actions
 - AURA Memory
@@ -243,6 +243,32 @@ Current runtime behavior:
 
 The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
 
+
+### File Intelligence
+
+AURA can now perform bounded filename/metadata search across the user's personal Windows libraries without scanning the whole machine or reading file contents.
+
+Current V1 boundary:
+
+- Desktop
+- Documents
+- Downloads
+- Pictures
+- Videos
+- Music
+- maximum recursion depth: 4
+- maximum scanned entries: 8,000
+- maximum returned results: 20
+- symlinks are not followed
+- hidden dot-prefixed entries are skipped
+- only names and filesystem metadata are inspected
+- file contents are never opened by the search engine
+
+Examples:
+
+- `Find file Artemis`
+- `Search files WorldUnited`
+- `Procura ficheiro thumbnail`
 
 ### Clipboard Intelligence
 
