@@ -198,11 +198,15 @@ fn finish_beta_self_test(checks: Vec<BetaSelfTestCheck>) -> BetaSelfTestReport {
         .iter()
         .filter(|check| check.status == "warning")
         .count();
-    let failed = checks.iter().filter(|check| check.status == "fail").count();
+    let failed = checks
+        .iter()
+        .filter(|check| !matches!(check.status, "pass" | "warning"))
+        .count();
 
-    let ready = checks.iter().filter(|check| check.required).all(|check| {
-        matches!(check.status, "pass" | "warning")
-    });
+    let ready = checks
+        .iter()
+        .filter(|check| check.required)
+        .all(|check| matches!(check.status, "pass" | "warning"));
 
     BetaSelfTestReport {
         version: env!("CARGO_PKG_VERSION"),
@@ -266,7 +270,7 @@ mod beta_self_test_tests {
         assert!(!report.ready);
         assert_eq!(report.passed, 0);
         assert_eq!(report.warnings, 0);
-        assert_eq!(report.failed, 0);
+        assert_eq!(report.failed, 1);
     }
 }
 
