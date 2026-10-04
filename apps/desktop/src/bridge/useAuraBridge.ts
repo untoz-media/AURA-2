@@ -16,6 +16,7 @@ import {
   getDirectorPresets,
   getMemories,
   getCurrentAppContext,
+  getAppSkillCatalog,
   getRecentFilesContext,
   getModelCatalog,
   getModelRuntimeStatus,
@@ -137,6 +138,7 @@ import type {
   MemorySnapshot,
   MemoryCreateResult,
   CurrentAppInfo,
+  AppSkillCatalog,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
@@ -220,6 +222,11 @@ const DEFAULT_OBS_AUDIO: ObsAudioInputList = {
 
 const DEFAULT_MEMORY: MemorySnapshot = {
   records: [],
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_APP_SKILLS: AppSkillCatalog = {
+  skills: [],
   refreshedAtMs: 0,
 };
 
@@ -340,6 +347,8 @@ export function useAuraBridge() {
     useState<DirectorPresetRunResult | null>(null);
   const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
+  const [appSkillCatalog, setAppSkillCatalog] =
+    useState<AppSkillCatalog>(DEFAULT_APP_SKILLS);
   const [recentFiles, setRecentFiles] =
     useState<RecentFilesSnapshot>(DEFAULT_RECENT_FILES);
   const [modelCatalog, setModelCatalog] =
@@ -1075,13 +1084,19 @@ export function useAuraBridge() {
     let cancelled = false;
 
     const updateCurrentApp = async () => {
-      try {
-        const context = await getCurrentAppContext();
-        if (!cancelled) {
-          setCurrentApp(context);
-        }
-      } catch {
-        // Current-app awareness is contextual; keep the last valid snapshot.
+      const [context, skills] = await Promise.allSettled([
+        getCurrentAppContext(),
+        getAppSkillCatalog(),
+      ]);
+
+      if (cancelled) return;
+
+      if (context.status === "fulfilled") {
+        setCurrentApp(context.value);
+      }
+
+      if (skills.status === "fulfilled") {
+        setAppSkillCatalog(skills.value);
       }
     };
 
@@ -1388,8 +1403,12 @@ export function useAuraBridge() {
   }, []);
 
   const refreshCurrentApp = useCallback(async () => {
-    const context = await getCurrentAppContext();
+    const [context, skills] = await Promise.all([
+      getCurrentAppContext(),
+      getAppSkillCatalog(),
+    ]);
     setCurrentApp(context);
+    setAppSkillCatalog(skills);
     return context;
   }, []);
 
@@ -2474,6 +2493,7 @@ export function useAuraBridge() {
     directorLastRun,
     memory,
     currentApp,
+    appSkillCatalog,
     recentFiles,
     routines,
     routineLastRun,
