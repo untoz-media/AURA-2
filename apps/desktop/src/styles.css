@@ -1221,3 +1221,107 @@ input:focus-visible {
     padding-right: 18px;
   }
 }
+
+
+.composer-attachments {
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-1);
+}
+
+.composer-attachments-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.composer-attachments-heading > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+  font-weight: 600;
+}
+
+.composer-attachments-heading > button {
+  border: 0;
+  padding: 0;
+  color: var(--aura-text-4);
+  background: transparent;
+  font-size: var(--text-3xs);
+  cursor: pointer;
+}
+
+.composer-attachments-heading > button:hover {
+  color: var(--aura-text-2);
+}
+
+.composer-attachment-chips,
+.chat-message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer-attachment-chip {
+  min-width: 0;
+  max-width: 240px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 8px;
+  color: var(--aura-text-3);
+  background: var(--aura-surface-2);
+  cursor: pointer;
+}
+
+.composer-attachment-chip strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-3xs);
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment-chip > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+}
+
+.chat-message-attachments {
+  margin: 6px 0 2px;
+}
+
+.chat-message-attachments > span {
+  min-width: 0;
+  max-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 7px;
+  color: var(--aura-text-4);
+  background: var(--aura-bg-1);
+  font-size: var(--text-3xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-message-attachments > span > span {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 620px) {
+  .composer-attachment-chip,
+  .chat-message-attachments > span {
+    max-width: 100%;
+  }
+}
