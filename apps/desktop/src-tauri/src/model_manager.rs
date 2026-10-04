@@ -1353,12 +1353,8 @@ fn read_config(app: &AppHandle) -> Result<ModelManagerConfig, String> {
 fn write_config(app: &AppHandle, config: &ModelManagerConfig) -> Result<(), String> {
     let path = model_config_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        std_fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
-    std_fs::write(path, content).map_err(|error| format!("Could not save Model Manager config: {error}"))
+    crate::storage::write_json_atomic(&path, config)
+        .map_err(|error| format!("Could not save Model Manager config: {error}"))
 }
 
 fn model_config_path(app: &AppHandle) -> Result<PathBuf, String> {
