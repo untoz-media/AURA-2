@@ -76,6 +76,23 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Start a new conversation and confirm chat context clears without deleting the model.
 - [ ] Remove a model and confirm active-model state remains valid.
 
+## F.5 AURA Create
+
+- [ ] Confirm `AURA Create · Image` appears as a feature-specific downloadable model.
+- [ ] Confirm the model download can start, pause, resume and complete verification.
+- [ ] Confirm repairing the managed runtime upgrades it for Diffusers and leaves model files intact.
+- [ ] Generate a 512×512 square image.
+- [ ] Generate one landscape and one portrait image.
+- [ ] Confirm a fixed seed is reproducible for the same prompt/settings.
+- [ ] Confirm the generated PNG is saved locally and previewed in Create.
+- [ ] Confirm no prompt or generated-image data appears in exported Beta diagnostics.
+- [ ] Remove the Create model and confirm the resident image worker stops cleanly.
+- [ ] Re-download/reinstall and confirm generation works again.
+- [ ] On CUDA hardware, verify generation reports CUDA/CPU-offload mode without crashing.
+- [ ] On a CPU-only validation path, verify generation either completes or fails with a clear local error.
+- [ ] Force-kill the Python image worker in a disposable test and confirm the next request can start a fresh worker.
+- [ ] Confirm Video mode remains clearly marked planned and does not simulate generation.
+
 ## G. Voice
 
 - [ ] Select a microphone.
