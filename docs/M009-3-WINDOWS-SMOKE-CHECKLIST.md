@@ -31,8 +31,11 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 
 - [ ] Force-close AURA while it is running.
 - [ ] Relaunch and confirm Previous session reports Recovered.
+- [ ] Confirm AURA starts in the paused state after the unclean exit.
+- [ ] Confirm no Agent/Automation action executes until AURA is explicitly resumed.
 - [ ] Confirm no crash report is uploaded.
 - [ ] Confirm interrupted Agent runs are recovered as interrupted/failed rather than left running.
+- [ ] Resume AURA manually and confirm normal execution returns.
 - [ ] Relaunch after a normal exit and confirm the recovery warning clears.
 
 ## D. Permissions and safety
