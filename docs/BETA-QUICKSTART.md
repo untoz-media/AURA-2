@@ -50,6 +50,8 @@ Examples:
 - minimize Brave
 - maximize OBS
 - restore Brave
+- new tab in Brave
+- focus address bar in Brave
 - find file Artemis
 - read clipboard
 - what app am I using?
