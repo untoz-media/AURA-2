@@ -192,6 +192,39 @@ fn beta_self_test_check(
     }
 }
 
+fn finish_beta_self_test(checks: Vec<BetaSelfTestCheck>) -> BetaSelfTestReport {
+    finish_beta_self_test(checks)
+}
+
+#[cfg(test)]
+mod beta_self_test_tests {
+    use super::*;
+
+    #[test]
+    fn required_failure_blocks_beta_readiness() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "pass", true, "ok"),
+            beta_self_test_check("policy", "Policy", "fail", true, "unsafe"),
+        ]);
+
+        assert!(!report.ready);
+        assert_eq!(report.passed, 1);
+        assert_eq!(report.failed, 1);
+    }
+
+    #[test]
+    fn optional_warning_does_not_block_beta_readiness() {
+        let report = finish_beta_self_test(vec![
+            beta_self_test_check("storage", "Storage", "pass", true, "ok"),
+            beta_self_test_check("vision", "Vision", "warning", false, "optional"),
+        ]);
+
+        assert!(report.ready);
+        assert_eq!(report.warnings, 1);
+        assert_eq!(report.failed, 0);
+    }
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
