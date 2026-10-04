@@ -736,7 +736,15 @@ export type AgentRun = {
   id: string;
   planId: string;
   goal: string;
-  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled" | string;
+  state:
+    | "queued"
+    | "running"
+    | "paused"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "interrupted"
+    | string;
   currentStep?: number | null;
   completedSteps: number;
   totalSteps: number;
