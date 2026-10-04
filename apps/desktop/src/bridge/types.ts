@@ -374,6 +374,24 @@ export type AppSkillCatalog = {
   refreshedAtMs: number;
 };
 
+export type DroppedFileItem = {
+  id: string;
+  name: string;
+  kind: "image" | "video" | "audio" | "document" | "archive" | "other" | string;
+  extension?: string | null;
+  sizeBytes: number;
+  modifiedAtMs: number;
+  canUseVision: boolean;
+  canReveal: boolean;
+};
+
+export type DropIntakeSnapshot = {
+  items: DroppedFileItem[];
+  rejectedCount: number;
+  truncated: boolean;
+  refreshedAtMs: number;
+};
+
 export type RecentFileItem = {
   name: string;
   modifiedAtMs: number;
