@@ -1218,7 +1218,7 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
 }
 
 fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
-    let should_speak = {
+    let (voice_terminal, should_speak) = {
         let state = app.state::<RuntimeState>();
         let mut voice_ids = state
             .voice_command_ids
@@ -1226,18 +1226,26 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let is_voice = voice_ids.contains(&event.id);
-        if matches!(
+        let terminal = matches!(
             event.kind,
             "command.completed" | "command.failed" | "command.cancelled"
-        ) {
+        );
+
+        if terminal {
             voice_ids.remove(&event.id);
         }
-        is_voice && matches!(event.kind, "command.completed" | "command.failed")
+
+        (
+            is_voice && terminal,
+            is_voice && matches!(event.kind, "command.completed" | "command.failed"),
+        )
     };
 
-    if should_speak {
+    if voice_terminal {
         let app_for_tts = app.clone();
         let text = event.message.clone();
+        let cancelled = event.kind == "command.cancelled";
+
         thread::spawn(move || {
             let manager = app_for_tts.state::<ModelManager>();
             let tts = app_for_tts.state::<TtsRuntime>();
@@ -1247,7 +1255,8 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
-            if preferences.auto_speak {
+
+            if should_speak && preferences.auto_speak {
                 let _ = tts.speak(
                     &app_for_tts,
                     &manager,
@@ -1257,8 +1266,10 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 );
             }
 
-            if preferences.conversation_mode {
+            if !cancelled && preferences.conversation_mode {
                 start_conversation_follow_up(app_for_tts.clone(), false);
+            } else {
+                resume_wake_monitor_if_enabled(app_for_tts.clone());
             }
         });
     }
