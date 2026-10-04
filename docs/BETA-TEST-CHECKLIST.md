@@ -63,6 +63,18 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] media/audio actions work
 - [ ] sensitive/destructive system actions require the expected confirmation
 
+## Local state & diagnostics
+
+- [ ] Diagnostics Core self-test runs without error
+- [ ] `Atomic local storage` reports Pass
+- [ ] Memory / Project Memory / Routines stores report Pass
+- [ ] Vision History / Vision Preferences stores report Pass
+- [ ] Director presets store reports Pass
+- [ ] Saved Actions / Automations / Agent history stores report Pass
+- [ ] permission / Voice / desktop preference files report Pass
+- [ ] privacy-safe diagnostics can be copied
+- [ ] diagnostics output contains no prompts, memories, file paths, screenshots, audio or OBS password
+
 ## Memory & context
 
 - [ ] create and delete a memory
