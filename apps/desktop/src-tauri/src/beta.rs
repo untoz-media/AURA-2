@@ -58,6 +58,35 @@ pub struct SetBetaPreferencesRequest {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticCheck {
+    pub id: String,
+    pub label: String,
+    pub status: String,
+    pub detail: String,
+}
+
+impl DiagnosticCheck {
+    pub fn passed(id: &str, label: &str, detail: impl Into<String>) -> Self {
+        Self {
+            id: id.to_string(),
+            label: label.to_string(),
+            status: "passed".to_string(),
+            detail: detail.into(),
+        }
+    }
+
+    pub fn failed(id: &str, label: &str, detail: impl Into<String>) -> Self {
+        Self {
+            id: id.to_string(),
+            label: label.to_string(),
+            status: "failed".to_string(),
+            detail: detail.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiagnosticsSnapshot {
     pub schema_version: u32,
     pub app_name: String,
@@ -77,6 +106,8 @@ pub struct DiagnosticsSnapshot {
     pub automations: usize,
     pub enabled_automations: usize,
     pub telemetry_enabled: bool,
+    pub health_status: String,
+    pub health_checks: Vec<DiagnosticCheck>,
     pub generated_at_ms: u64,
 }
 
@@ -145,6 +176,151 @@ pub fn save_preferences(
     };
     write_json(&preferences_path(app)?, &preferences)?;
     status(app, runtime)
+}
+
+pub fn local_health_checks(app: &AppHandle) -> Vec<DiagnosticCheck> {
+    vec![
+        writable_directory_check(
+            "config-storage",
+            "Configuration storage",
+            app.path()
+                .app_config_dir()
+                .map_err(|error| error.to_string()),
+        ),
+        writable_directory_check(
+            "local-data-storage",
+            "Local data storage",
+            app.path()
+                .app_local_data_dir()
+                .map_err(|error| error.to_string()),
+        ),
+        session_marker_health_check(app),
+        beta_preferences_health_check(app),
+    ]
+}
+
+fn writable_directory_check(
+    id: &str,
+    label: &str,
+    directory: Result<PathBuf, String>,
+) -> DiagnosticCheck {
+    let directory = match directory {
+        Ok(directory) => directory,
+        Err(_) => {
+            return DiagnosticCheck::failed(
+                id,
+                label,
+                "AURA could not resolve this local storage directory.",
+            );
+        }
+    };
+
+    if fs::create_dir_all(&directory).is_err() {
+        return DiagnosticCheck::failed(
+            id,
+            label,
+            "AURA could not create or access this local storage directory.",
+        );
+    }
+
+    let probe = directory.join(format!(
+        ".aura-beta-health-{}-{}.tmp",
+        std::process::id(),
+        timestamp_ms()
+    ));
+    let result = (|| -> Result<(), ()> {
+        let mut file = File::create(&probe).map_err(|_| ())?;
+        file.write_all(b"AURA-2 beta health probe").map_err(|_| ())?;
+        file.sync_all().map_err(|_| ())?;
+        drop(file);
+        fs::remove_file(&probe).map_err(|_| ())?;
+        Ok(())
+    })();
+
+    if result.is_ok() {
+        DiagnosticCheck::passed(
+            id,
+            label,
+            "Local storage is writable and the health probe was cleaned up.",
+        )
+    } else {
+        let _ = fs::remove_file(&probe);
+        DiagnosticCheck::failed(
+            id,
+            label,
+            "AURA could not complete a local read/write health probe.",
+        )
+    }
+}
+
+fn session_marker_health_check(app: &AppHandle) -> DiagnosticCheck {
+    let path = match session_path(app) {
+        Ok(path) => path,
+        Err(_) => {
+            return DiagnosticCheck::failed(
+                "session-marker",
+                "Session marker",
+                "AURA could not resolve the Beta session marker.",
+            );
+        }
+    };
+
+    match fs::read_to_string(path) {
+        Ok(content) if serde_json::from_str::<SessionMarker>(&content).is_ok() => {
+            DiagnosticCheck::passed(
+                "session-marker",
+                "Session marker",
+                "The active Beta session marker is readable and valid.",
+            )
+        }
+        Ok(_) => DiagnosticCheck::failed(
+            "session-marker",
+            "Session marker",
+            "The active Beta session marker is corrupt or invalid.",
+        ),
+        Err(_) => DiagnosticCheck::failed(
+            "session-marker",
+            "Session marker",
+            "The active Beta session marker could not be read.",
+        ),
+    }
+}
+
+fn beta_preferences_health_check(app: &AppHandle) -> DiagnosticCheck {
+    let path = match preferences_path(app) {
+        Ok(path) => path,
+        Err(_) => {
+            return DiagnosticCheck::failed(
+                "beta-preferences",
+                "Beta preferences",
+                "AURA could not resolve the Beta preferences store.",
+            );
+        }
+    };
+
+    if !path.exists() {
+        return DiagnosticCheck::passed(
+            "beta-preferences",
+            "Beta preferences",
+            "No persisted Beta preferences exist yet; safe defaults are active.",
+        );
+    }
+
+    match fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<BetaPreferences>(&content).ok())
+    {
+        Some(_) => DiagnosticCheck::passed(
+            "beta-preferences",
+            "Beta preferences",
+            "Persisted Beta preferences are readable and valid.",
+        ),
+        None => DiagnosticCheck::failed(
+            "beta-preferences",
+            "Beta preferences",
+            "Persisted Beta preferences are corrupt or unreadable.",
+        ),
+    }
 }
 
 pub fn export_diagnostics(
@@ -318,7 +494,7 @@ mod tests {
     #[test]
     fn diagnostics_schema_is_explicitly_versioned() {
         let snapshot = DiagnosticsSnapshot {
-            schema_version: 1,
+            schema_version: 2,
             app_name: "AURA-2".to_string(),
             app_version: "0.9.0-beta.1".to_string(),
             channel: "beta".to_string(),
@@ -336,10 +512,16 @@ mod tests {
             automations: 0,
             enabled_automations: 0,
             telemetry_enabled: false,
+            health_status: "healthy".to_string(),
+            health_checks: vec![DiagnosticCheck::passed(
+                "privacy",
+                "Privacy invariants",
+                "No telemetry is enabled.",
+            )],
             generated_at_ms: 1,
         };
 
-        assert_eq!(snapshot.schema_version, 1);
+        assert_eq!(snapshot.schema_version, 2);
         assert!(!snapshot.telemetry_enabled);
 
         let serialized = serde_json::to_string(&snapshot).expect("serialize diagnostics");
