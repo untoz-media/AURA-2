@@ -156,6 +156,44 @@ struct AppStatus {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct BetaSelfTestCheck {
+    id: &'static str,
+    label: &'static str,
+    status: &'static str,
+    required: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BetaSelfTestReport {
+    version: &'static str,
+    ready: bool,
+    passed: usize,
+    warnings: usize,
+    failed: usize,
+    checks: Vec<BetaSelfTestCheck>,
+    completed_at_ms: u64,
+}
+
+fn beta_self_test_check(
+    id: &'static str,
+    label: &'static str,
+    status: &'static str,
+    required: bool,
+    message: impl Into<String>,
+) -> BetaSelfTestCheck {
+    BetaSelfTestCheck {
+        id,
+        label,
+        status,
+        required,
+        message: message.into(),
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
     paused: bool,
     background_enabled: bool,
@@ -1713,6 +1751,302 @@ fn get_app_status() -> AppStatus {
         version: env!("CARGO_PKG_VERSION"),
         stage: "M009 Public Beta candidate · 0.9.0-beta.1",
         local_first: true,
+    }
+}
+
+#[tauri::command]
+fn run_beta_self_test(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    engine: State<'_, AgentEngine>,
+    managed_runtime: State<'_, ManagedRuntimeSetup>,
+    manager: State<'_, ModelManager>,
+    model_runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
+    vision: State<'_, VisionRuntime>,
+) -> BetaSelfTestReport {
+    let mut checks = Vec::new();
+
+    let local_data_check = match app.path().app_local_data_dir() {
+        Ok(root) => match fs::read_dir(&root) {
+            Ok(_) => beta_self_test_check(
+                "localData",
+                "Local data",
+                "pass",
+                true,
+                "AURA Local Data is available and readable.",
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => beta_self_test_check(
+                "localData",
+                "Local data",
+                "warning",
+                true,
+                "AURA Local Data has not been created yet.",
+            ),
+            Err(error) => beta_self_test_check(
+                "localData",
+                "Local data",
+                "fail",
+                true,
+                format!("AURA Local Data could not be read: {error}"),
+            ),
+        },
+        Err(error) => beta_self_test_check(
+            "localData",
+            "Local data",
+            "fail",
+            true,
+            format!("AURA could not resolve its Local Data directory: {error}"),
+        ),
+    };
+    checks.push(local_data_check);
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    let sanitized_policy = policy.clone().sanitized();
+    checks.push(if sanitized_policy == policy {
+        beta_self_test_check(
+            "permissionPolicy",
+            "Permission policy",
+            "pass",
+            true,
+            "Permission policy passes Core sanitization.",
+        )
+    } else {
+        beta_self_test_check(
+            "permissionPolicy",
+            "Permission policy",
+            "fail",
+            true,
+            "Persisted permission policy contained an unsafe permanent Allow value.",
+        )
+    });
+
+    checks.push(match list_saved_actions(&app) {
+        Ok(actions) => beta_self_test_check(
+            "savedActions",
+            "Saved Actions store",
+            "pass",
+            true,
+            format!("Saved Actions store loaded successfully ({} actions).", actions.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "savedActions",
+            "Saved Actions store",
+            "fail",
+            true,
+            format!("Saved Actions store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match list_automations(&app) {
+        Ok(automations) => beta_self_test_check(
+            "automations",
+            "Automations store",
+            "pass",
+            true,
+            format!("Automations store loaded successfully ({} automations).", automations.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "automations",
+            "Automations store",
+            "fail",
+            true,
+            format!("Automations store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match engine.snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "agentHistory",
+            "Agent history",
+            "pass",
+            true,
+            format!("Agent run history loaded successfully ({} runs).", snapshot.runs.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "agentHistory",
+            "Agent history",
+            "fail",
+            true,
+            format!("Agent run history failed to load: {error}"),
+        ),
+    });
+
+    let catalog = manager.catalog(&app);
+    match catalog {
+        Ok(catalog) => {
+            checks.push(beta_self_test_check(
+                "modelCatalog",
+                "Model catalog",
+                "pass",
+                true,
+                format!("Model catalog loaded successfully ({} entries).", catalog.models.len()),
+            ));
+
+            let assistant = catalog
+                .active_model_id
+                .as_deref()
+                .and_then(|active_id| catalog.models.iter().find(|model| model.id == active_id));
+
+            checks.push(match assistant {
+                Some(model) if model.installed => beta_self_test_check(
+                    "assistantModel",
+                    "Assistant model",
+                    "pass",
+                    false,
+                    format!("{} is installed and selected.", model.name),
+                ),
+                _ => beta_self_test_check(
+                    "assistantModel",
+                    "Assistant model",
+                    "warning",
+                    false,
+                    "No installed assistant model is currently selected.",
+                ),
+            });
+        }
+        Err(error) => {
+            checks.push(beta_self_test_check(
+                "modelCatalog",
+                "Model catalog",
+                "fail",
+                true,
+                format!("Model catalog failed to load: {error}"),
+            ));
+            checks.push(beta_self_test_check(
+                "assistantModel",
+                "Assistant model",
+                "warning",
+                false,
+                "Assistant readiness could not be checked because the model catalog failed.",
+            ));
+        }
+    }
+
+    let managed = managed_runtime.status(&app);
+    checks.push(match managed.state.as_str() {
+        "ready" => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "pass",
+            false,
+            "Managed AI Runtime is installed and verified.",
+        ),
+        "error" | "needsRepair" => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "warning",
+            false,
+            format!("Managed AI Runtime needs attention: {}", managed.message),
+        ),
+        state => beta_self_test_check(
+            "managedRuntime",
+            "Managed AI Runtime",
+            "warning",
+            false,
+            format!("Managed AI Runtime state: {state}."),
+        ),
+    });
+
+    let model_status = model_runtime.status();
+    checks.push(if model_status.state == "error" {
+        beta_self_test_check(
+            "modelRuntime",
+            "Assistant runtime",
+            "warning",
+            false,
+            "Assistant runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "modelRuntime",
+            "Assistant runtime",
+            "pass",
+            false,
+            format!("Assistant runtime state: {}.", model_status.state),
+        )
+    });
+
+    let speech_status = speech.status();
+    checks.push(if speech_status.state == "error" {
+        beta_self_test_check(
+            "speechRuntime",
+            "Voice STT runtime",
+            "warning",
+            false,
+            "Voice STT runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "speechRuntime",
+            "Voice STT runtime",
+            "pass",
+            false,
+            format!("Voice STT runtime state: {}.", speech_status.state),
+        )
+    });
+
+    let tts_status = tts.status(&app, &manager);
+    checks.push(if tts_status.state == "error" {
+        beta_self_test_check(
+            "ttsRuntime",
+            "Voice TTS runtime",
+            "warning",
+            false,
+            "Voice TTS runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "ttsRuntime",
+            "Voice TTS runtime",
+            "pass",
+            false,
+            format!("Voice TTS runtime state: {}.", tts_status.state),
+        )
+    });
+
+    let vision_status = vision.status();
+    checks.push(if vision_status.state == "error" {
+        beta_self_test_check(
+            "visionRuntime",
+            "Vision runtime",
+            "warning",
+            false,
+            "Vision runtime currently reports an error.",
+        )
+    } else {
+        beta_self_test_check(
+            "visionRuntime",
+            "Vision runtime",
+            "pass",
+            false,
+            format!("Vision runtime state: {}.", vision_status.state),
+        )
+    });
+
+    let passed = checks.iter().filter(|check| check.status == "pass").count();
+    let warnings = checks
+        .iter()
+        .filter(|check| check.status == "warning")
+        .count();
+    let failed = checks.iter().filter(|check| check.status == "fail").count();
+    let ready = checks
+        .iter()
+        .all(|check| !check.required || check.status != "fail");
+
+    BetaSelfTestReport {
+        version: env!("CARGO_PKG_VERSION"),
+        ready,
+        passed,
+        warnings,
+        failed,
+        checks,
+        completed_at_ms: unix_timestamp_ms(),
     }
 }
 
@@ -5760,6 +6094,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
+            run_beta_self_test,
             get_runtime_state,
             get_voice_preferences,
             set_voice_preferences,
