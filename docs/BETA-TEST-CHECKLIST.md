@@ -12,6 +12,16 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] SHA-256 matches the published checksum
 - [ ] downgrade protection rejects an older installer over a newer build
 
+## First-run setup
+
+- [ ] fresh install shows First Local Setup card when Runtime/model are missing
+- [ ] Runtime readiness step updates when Managed Runtime becomes Ready
+- [ ] assistant step updates after installing/selecting AURA-1
+- [ ] Models button opens Models
+- [ ] Review permissions opens Settings → Permissions
+- [ ] Diagnostics opens Settings → Diagnostics
+- [ ] setup card disappears when Runtime + assistant model are ready
+
 ## Core lifecycle
 
 - [ ] main window opens and closes correctly
