@@ -373,7 +373,7 @@ export async function listenToFileDrop(
   hover?: (active: boolean) => void,
 ): Promise<UnlistenFn> {
   return getCurrentWindow().onDragDropEvent((event) => {
-    if (event.payload.type === "over") {
+    if (event.payload.type === "enter" || event.payload.type === "over") {
       hover?.(true);
       return;
     }
