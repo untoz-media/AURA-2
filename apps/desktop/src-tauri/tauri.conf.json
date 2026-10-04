@@ -47,11 +47,30 @@
     "targets": [
       "nsis"
     ],
+    "publisher": "Untoz",
+    "category": "Productivity",
+    "copyright": "© 2026 Untoz. All rights reserved.",
+    "shortDescription": "A local-first personal AI assistant for Windows.",
+    "longDescription": "AURA-2 is a local-first personal AI assistant for Windows with computer control, Voice, Vision, Agents, Automations and OBS Director Mode.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "compression": "lzma",
+        "startMenuFolder": "Untoz",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    }
   }
 }
