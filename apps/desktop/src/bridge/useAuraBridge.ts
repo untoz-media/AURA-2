@@ -20,6 +20,8 @@ import {
   getModelCatalog,
   getModelRuntimeStatus,
   getManagedRuntimeStatus,
+  getCreateImageRuntimeStatus,
+  generateCreateImage,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -141,6 +143,9 @@ import type {
   ModelRuntimeStatus,
   ChatMessage,
   ManagedRuntimeStatus,
+  ImageRuntimeStatus,
+  ImageGenerationRequest,
+  ImageGenerationResult,
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
@@ -294,6 +299,12 @@ const DEFAULT_MODEL_RUNTIME: ModelRuntimeStatus = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_IMAGE_RUNTIME: ImageRuntimeStatus = {
+  state: "stopped",
+  modelId: "create-tiny-sd",
+  refreshedAtMs: 0,
+};
+
 const DEFAULT_MANAGED_RUNTIME: ManagedRuntimeStatus = {
   state: "notInstalled",
   progressPercent: 0,
@@ -337,6 +348,10 @@ export function useAuraBridge() {
     useState<ModelRuntimeStatus>(DEFAULT_MODEL_RUNTIME);
   const [managedRuntimeStatus, setManagedRuntimeStatus] =
     useState<ManagedRuntimeStatus>(DEFAULT_MANAGED_RUNTIME);
+  const [imageRuntimeStatus, setImageRuntimeStatus] =
+    useState<ImageRuntimeStatus>(DEFAULT_IMAGE_RUNTIME);
+  const [lastGeneratedImage, setLastGeneratedImage] =
+    useState<ImageGenerationResult | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [routines, setRoutines] = useState<UserRoutine[]>([]);
   const [routineLastRun, setRoutineLastRun] =
@@ -591,6 +606,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Runtime remains stopped until a selected model is used.
+      });
+
+    getCreateImageRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setImageRuntimeStatus(runtime);
+      })
+      .catch(() => {
+        // AURA Create remains stopped until local image generation is used.
       });
 
     getManagedRuntimeStatus()
@@ -1225,10 +1248,12 @@ export function useAuraBridge() {
       setActivity(runtime.message);
 
       if (action === "repair" || action === "remove") {
-        const modelRuntime = await getModelRuntimeStatus().catch(
-          () => DEFAULT_MODEL_RUNTIME,
-        );
+        const [modelRuntime, imageRuntime] = await Promise.all([
+          getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME),
+          getCreateImageRuntimeStatus().catch(() => DEFAULT_IMAGE_RUNTIME),
+        ]);
         setModelRuntimeStatus(modelRuntime);
+        setImageRuntimeStatus(imageRuntime);
       }
 
       return runtime;
@@ -1279,8 +1304,16 @@ export function useAuraBridge() {
       setModelCatalog(catalog);
 
       if (operation === "activate" || operation === "remove") {
-        const runtime = await getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME);
+        const [runtime, imageRuntime] = await Promise.all([
+          getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME),
+          getCreateImageRuntimeStatus().catch(() => DEFAULT_IMAGE_RUNTIME),
+        ]);
         setModelRuntimeStatus(runtime);
+        setImageRuntimeStatus(imageRuntime);
+
+        if (operation === "remove" && modelId === "create-tiny-sd") {
+          setLastGeneratedImage(null);
+        }
       }
 
       const model = catalog.models.find((item) => item.id === modelId);
@@ -1305,6 +1338,48 @@ export function useAuraBridge() {
       const message = String(error);
       setBridgeError({
         code: `models.${operation}_failed`,
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const refreshImageRuntime = useCallback(async () => {
+    const runtime = await getCreateImageRuntimeStatus();
+    setImageRuntimeStatus(runtime);
+    return runtime;
+  }, []);
+
+  const generateImageControl = useCallback(async (
+    request: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult> => {
+    try {
+      setBridgeError(null);
+      setStatus("Working");
+      setActivity("AURA Create is generating an image locally…");
+
+      const result = await generateCreateImage(request);
+      setLastGeneratedImage(result);
+
+      const runtime = await getCreateImageRuntimeStatus().catch(
+        () => DEFAULT_IMAGE_RUNTIME,
+      );
+      setImageRuntimeStatus(runtime);
+      setStatus("Idle");
+      setActivity(
+        `Image generated locally · ${result.width}×${result.height} · seed ${result.seed}.`,
+      );
+      return result;
+    } catch (error) {
+      const message = String(error);
+      const runtime = await getCreateImageRuntimeStatus().catch(
+        () => DEFAULT_IMAGE_RUNTIME,
+      );
+      setImageRuntimeStatus(runtime);
+      setStatus("Idle");
+      setBridgeError({
+        code: "create.image_generation_failed",
         message,
       });
       setActivity(message);
@@ -2420,6 +2495,8 @@ export function useAuraBridge() {
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
+    imageRuntimeStatus,
+    lastGeneratedImage,
     chatMessages,
     pendingConfirmation,
     bridgeError,
@@ -2488,6 +2565,8 @@ export function useAuraBridge() {
     refreshModelRuntime,
     refreshManagedRuntime,
     runManagedRuntimeAction,
+    refreshImageRuntime,
+    generateImageControl,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
