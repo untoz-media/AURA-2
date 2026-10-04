@@ -11,6 +11,9 @@ mod project_memory;
 mod routines;
 mod speech_runtime;
 mod tts_runtime;
+mod vision_capture;
+mod vision_history;
+mod vision_runtime;
 
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use computer::app_launcher::launch_app;
@@ -54,6 +57,16 @@ use routines::{
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
+use vision_capture::{
+    capture_active_window, capture_full_screen, capture_region, cursor_position, region_from_points,
+    remove_capture, CaptureRect, VisionCapture,
+};
+use vision_history::{
+    clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
+    save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
+    VisionHistorySnapshot, VisionPreferences,
+};
+use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -89,6 +102,12 @@ struct RuntimeState {
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
     conversation_active: AtomicBool,
+}
+
+#[derive(Default)]
+struct VisionSession {
+    last_capture: Mutex<Option<VisionCapture>>,
+    region_start: Mutex<Option<(i32, i32)>>,
 }
 
 impl Default for RuntimeState {
@@ -215,6 +234,35 @@ struct VoiceCaptureEvent {
     message: String,
     text: Option<String>,
     timestamp_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionEvent {
+    phase: &'static str,
+    message: String,
+    capture: Option<VisionCapture>,
+    analysis: Option<String>,
+    timestamp_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionAnalysisPayload {
+    capture: VisionCapture,
+    prompt: String,
+    analysis: String,
+    completed_at_ms: u64,
+    history: VisionHistorySnapshot,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionRegionRequest {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 }
 
 #[derive(Deserialize)]
