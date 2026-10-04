@@ -120,6 +120,19 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] changing permission from Allow to Ask/Block stops silent execution
 - [ ] Global Pause suspends scheduled execution
 
+## Diagnostics Center
+
+- [ ] Settings → Diagnostics opens
+- [ ] candidate version/stage are correct
+- [ ] Managed Runtime readiness matches Models
+- [ ] selected assistant model readiness matches Models
+- [ ] Voice and Vision states match their workspaces
+- [ ] Agent failed/interrupted count matches run history
+- [ ] enabled Automation count matches Agents
+- [ ] permission guardrail state matches Settings → Permissions
+- [ ] Copy diagnostics works
+- [ ] copied diagnostics contain no prompts, memories, screenshots, audio, file paths or OBS passwords
+
 ## Privacy
 
 - [ ] Privacy page states Product telemetry Off
