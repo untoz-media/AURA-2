@@ -300,8 +300,11 @@ pub fn find_routine_by_id(app: &AppHandle, routine_id: &str) -> Option<UserRouti
         .find(|routine| routine.id == routine_id)
 }
 
-pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRoutine> {
-    let routines = read_routines(app).ok()?;
+pub fn resolve_routine_command_checked(
+    app: &AppHandle,
+    input: &str,
+) -> Result<Option<UserRoutine>, String> {
+    let routines = read_routines(app)?;
     let normalized = normalize_phrase(input);
 
     let target = [
@@ -320,13 +323,17 @@ pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRouti
 
     let candidate = target.unwrap_or(normalized.as_str());
 
-    routines.into_iter().find(|routine| {
+    Ok(routines.into_iter().find(|routine| {
         normalize_phrase(&routine.name) == candidate
             || routine
                 .aliases
                 .iter()
                 .any(|alias| normalize_phrase(alias) == candidate)
-    })
+    }))
+}
+
+pub fn resolve_routine_command(app: &AppHandle, input: &str) -> Option<UserRoutine> {
+    resolve_routine_command_checked(app, input).ok().flatten()
 }
 
 pub fn routine_requires_sensitive_permission(app: &AppHandle, routine: &UserRoutine) -> bool {
