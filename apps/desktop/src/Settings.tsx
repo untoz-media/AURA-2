@@ -204,14 +204,14 @@ function PermissionSelect({
 }) {
   return (
     <select
-      className="permission-select"
+      className={`permission-select decision-${value}`}
       value={value}
       aria-label={label}
       onChange={(event) => onChange(event.target.value as PermissionDecision)}
     >
       {allowPermanent && <option value="allow">Allow</option>}
-      <option value="ask">Ask</option>
-      <option value="never">Never</option>
+      <option value="ask">Ask every time</option>
+      <option value="never">Block</option>
     </select>
   );
 }
@@ -570,6 +570,12 @@ export default function Settings({
     }
   }
 
+  const permissionDecisions = Object.values(permissionPolicy) as PermissionDecision[];
+  const allowedPermissionCount = permissionDecisions.filter((decision) => decision === "allow").length;
+  const askPermissionCount = permissionDecisions.filter((decision) => decision === "ask").length;
+  const blockedPermissionCount = permissionDecisions.filter((decision) => decision === "never").length;
+  const modifyAlwaysAllowed = permissionPolicy.modify === "allow";
+
   return (
     <section className="settings-layout">
       <aside className="settings-nav" aria-label="Settings sections">
@@ -691,26 +697,70 @@ export default function Settings({
         {activeSection === "privacy" && (
           <>
             <header className="settings-header">
-              <span className="eyebrow">AURA SETTINGS</span>
+              <span className="eyebrow">PRIVACY & SAFETY</span>
               <h2>Privacy</h2>
-              <p>Control what AURA can access and where processing happens.</p>
+              <p>See what stays on this PC, what needs permission and what is not connected to the cloud.</p>
             </header>
+
+            <Surface className="settings-card privacy-hero-card">
+              <div className="privacy-hero">
+                <div>
+                  <span className="eyebrow">DEFAULT MODE</span>
+                  <strong>Local-first by design</strong>
+                  <p>AURA keeps execution, memory, model inference and automation state on this computer unless a future cloud feature is explicitly configured.</p>
+                </div>
+                <Badge tone="ready">On-device first</Badge>
+              </div>
+
+              <div className="privacy-status-grid">
+                <div className="privacy-status-card">
+                  <span>Local AI</span>
+                  <strong>{managedRuntimeStatus.state === "ready" ? "Runtime ready" : "User controlled"}</strong>
+                  <p>The managed Python/AI runtime and downloaded models live in AURA Local Data.</p>
+                </div>
+                <div className="privacy-status-card">
+                  <span>Screen & Vision</span>
+                  <strong>{permissionPolicy.read === "never" ? "Blocked by policy" : "Permission-based"}</strong>
+                  <p>Vision captures are explicit and history remains local to the device.</p>
+                </div>
+                <div className="privacy-status-card">
+                  <span>Memory</span>
+                  <strong>Local storage</strong>
+                  <p>Memories, routines, saved actions and automation state are stored locally.</p>
+                </div>
+                <div className="privacy-status-card">
+                  <span>Cloud routing</span>
+                  <strong>Not configured</strong>
+                  <p>No cloud model is required for the normal local AURA workflow.</p>
+                </div>
+              </div>
+            </Surface>
+
             <Surface className="settings-card">
-              <SectionLabel>Processing</SectionLabel>
+              <SectionLabel>Privacy controls</SectionLabel>
               <SettingRow
-                title="Local-first processing"
-                description="Prefer local tools and models whenever the requested capability supports it."
-                trailing={<Badge tone="ready">Enabled</Badge>}
+                title="Screen access"
+                description="Screen and active-window understanding follow the current Read permission and explicit Vision capture flow."
+                trailing={
+                  <Badge tone={permissionPolicy.read === "never" ? "warning" : "ready"}>
+                    {permissionPolicy.read === "never" ? "Blocked" : "Permission-based"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Voice input"
+                description="Microphone capture is started by Push-to-Talk, Conversation Mode or the optional wake phrase you configure."
+                trailing={<Badge tone="ready">User controlled</Badge>}
+              />
+              <SettingRow
+                title="Background execution"
+                description="Agents and Automations remain constrained by the current permission policy, and Global Pause suspends execution."
+                trailing={<Badge tone={runtimeState.paused ? "warning" : "ready"}>{runtimeState.paused ? "Paused" : "Policy-bound"}</Badge>}
               />
               <SettingRow
                 title="Cloud assistance"
-                description="Optional cloud routing will require explicit configuration."
-                trailing={<Badge tone="planned">Not configured</Badge>}
-              />
-              <SettingRow
-                title="Screen access"
-                description="Vision access will remain permission-based."
-                trailing={<Badge tone="planned">M007</Badge>}
+                description="Optional cloud routing is not configured and is not required for local computer control."
+                trailing={<Badge tone="planned">Off</Badge>}
               />
             </Surface>
           </>
@@ -719,17 +769,51 @@ export default function Settings({
         {activeSection === "permissions" && (
           <>
             <header className="settings-header">
-              <span className="eyebrow">AURA SETTINGS</span>
-              <h2>Permissions</h2>
-              <p>Rules that will determine what AURA may do on your computer.</p>
+              <span className="eyebrow">AURA SAFETY CENTER</span>
+              <h2>Safety & Permissions</h2>
+              <p>Choose how much AURA may do automatically. Sensitive and destructive actions can never be permanently allowed.</p>
             </header>
+
+            <Surface className="settings-card permission-overview-card">
+              <div className="permission-hero">
+                <div>
+                  <span className="eyebrow">CURRENT POLICY</span>
+                  <strong>Core-enforced protection</strong>
+                  <p>The UI changes your policy, but the Rust Core validates it again before an action runs.</p>
+                </div>
+                <Badge tone="ready">Protected</Badge>
+              </div>
+
+              <div className="permission-summary-grid" aria-label="Permission policy summary">
+                <div className="permission-summary-item allowed">
+                  <strong>{allowedPermissionCount}</strong>
+                  <span>Allowed</span>
+                </div>
+                <div className="permission-summary-item ask">
+                  <strong>{askPermissionCount}</strong>
+                  <span>Ask every time</span>
+                </div>
+                <div className="permission-summary-item blocked">
+                  <strong>{blockedPermissionCount}</strong>
+                  <span>Blocked</span>
+                </div>
+              </div>
+
+              {modifyAlwaysAllowed && (
+                <div className="settings-callout warning">
+                  <strong>Modify is permanently allowed</strong>
+                  <span>AURA may type text, activate controls and change reversible application state without asking first.</span>
+                </div>
+              )}
+            </Surface>
+
             <Surface className="settings-card">
-              <SectionLabel trailing={<Badge tone="ready">Active</Badge>}>
+              <SectionLabel trailing={<Badge tone="ready">Live policy</Badge>}>
                 Action levels
               </SectionLabel>
               <SettingRow
                 title="Read"
-                description="Inspect allowed local and system information."
+                description="Inspect allowed app, window, memory and local system context."
                 trailing={
                   <PermissionSelect
                     value={permissionPolicy.read}
@@ -740,7 +824,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Act"
-                description="Open apps and perform reversible computer actions."
+                description="Open or focus apps and perform reversible computer actions."
                 trailing={
                   <PermissionSelect
                     value={permissionPolicy.act}
@@ -751,7 +835,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Modify"
-                description="Change application state, type text or activate controls."
+                description="Type text, activate controls and change application state."
                 trailing={
                   <PermissionSelect
                     value={permissionPolicy.modify}
@@ -762,7 +846,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Sensitive"
-                description="Session or privacy-sensitive actions. Permanent Allow is intentionally unavailable."
+                description="Privacy- or session-sensitive operations. Permanent Allow is blocked by the Core."
                 trailing={
                   <PermissionSelect
                     value={permissionPolicy.sensitive}
@@ -774,7 +858,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Destructive"
-                description="High-impact actions. Permanent Allow is intentionally unavailable."
+                description="High-impact actions. Permanent Allow is blocked by the Core."
                 trailing={
                   <PermissionSelect
                     value={permissionPolicy.destructive}
@@ -787,23 +871,51 @@ export default function Settings({
             </Surface>
 
             <Surface className="settings-card">
-              <SectionLabel>Policy</SectionLabel>
+              <SectionLabel>Hard guardrails</SectionLabel>
               <SettingRow
-                title="Safe defaults"
-                description="Read and Act are allowed; Modify, Sensitive and Destructive require confirmation."
+                title="Sensitive & destructive"
+                description="AURA Core rejects permanent Allow even if unsafe values are injected into persisted settings."
+                trailing={<Badge tone="ready">Core enforced</Badge>}
+              />
+              <SettingRow
+                title="Agent plans"
+                description="Plans are validated step by step, and higher-risk plans require explicit approval before execution."
+                trailing={<Badge tone="ready">Review required</Badge>}
+              />
+              <SettingRow
+                title="Background automations"
+                description="Unattended automations are limited to Read/Act actions whose current permission is still Allow."
+                trailing={<Badge tone="ready">Bounded</Badge>}
+              />
+              <SettingRow
+                title="Global Pause"
+                description="Pause AURA to suspend active Agents at safe boundaries and stop scheduled Automations from starting."
+                trailing={<Badge tone={runtimeState.paused ? "warning" : "ready"}>{runtimeState.paused ? "Paused" : "Available"}</Badge>}
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Policy management</SectionLabel>
+              <SettingRow
+                title="Restore safe defaults"
+                description="Read and Act become Allow. Modify, Sensitive and Destructive return to Ask every time."
                 trailing={
                   <button
                     type="button"
                     className="settings-action-button"
-                    onClick={() => void onResetPermissions()}
+                    onClick={() => {
+                      if (window.confirm("Restore AURA permission policy to the recommended safe defaults?")) {
+                        void onResetPermissions();
+                      }
+                    }}
                   >
-                    Reset
+                    Restore defaults
                   </button>
                 }
               />
               <SettingRow
                 title="Storage"
-                description="Permission policy is stored locally on this PC."
+                description="Permission policy is stored locally on this PC and revalidated when AURA starts."
                 trailing={<Badge tone="ready">Local</Badge>}
               />
             </Surface>
@@ -1133,7 +1245,7 @@ export default function Settings({
                 title="Push to talk"
                 description={
                   voiceCapture?.phase === "captured"
-                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for M006.3 STT.`
+                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for local speech recognition.`
                     : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released."
                 }
                 trailing={
@@ -1525,7 +1637,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Custom shortcuts"
-                description="Shortcut editing and conflict detection arrive later in M002."
+                description="Shortcut editing and conflict detection are not configurable yet."
                 trailing={<Badge tone="planned">Planned</Badge>}
               />
             </Surface>
