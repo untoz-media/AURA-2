@@ -987,7 +987,7 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
         AgentStep::DirectorPreset { preset } => {
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
-                    load_director_presets(app).ok()?.into_iter().find(|item| {
+                    load_director_presets(app).into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(preset)
                             || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
                     })
@@ -1057,6 +1057,7 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
                         item.name.eq_ignore_ascii_case(routine)
                             || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                     })
+                });
             if exists {
                 Ok(())
             } else {
@@ -1066,9 +1067,8 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
         AgentStep::DirectorPreset { preset } => {
             let exists = find_director_preset_by_id(app, preset).is_some()
                 || load_director_presets(app).iter().any(|item| {
-                        item.name.eq_ignore_ascii_case(preset)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
-                    })
+                    item.name.eq_ignore_ascii_case(preset)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
                 });
             if exists {
                 Ok(())
@@ -1090,7 +1090,9 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             let saved = resolve_saved_action(app, action)
                 .ok_or_else(|| format!("Saved AURA Action “{action}” was not found."))?;
             if matches!(saved.step, AgentStep::SavedAction { .. }) {
-                return Err("Saved AURA Actions cannot recursively call another saved Action.".to_string());
+                return Err(
+                    "Saved AURA Actions cannot recursively call another saved Action.".to_string(),
+                );
             }
             Ok(())
         }
@@ -1157,13 +1159,14 @@ fn resolve_saved_action(app: &AppHandle, value: &str) -> Option<SavedAuraAction>
 
 fn parse_planned_payload(raw: &str) -> Result<PlannedPayload, String> {
     let trimmed = raw.trim();
-    let cleaned = trimmed
+    let without_prefix = trimmed
         .strip_prefix("```json")
         .or_else(|| trimmed.strip_prefix("```"))
         .unwrap_or(trimmed)
-        .trim()
+        .trim();
+    let cleaned = without_prefix
         .strip_suffix("```")
-        .unwrap_or(trimmed)
+        .unwrap_or(without_prefix)
         .trim();
 
     if let Ok(payload) = serde_json::from_str::<PlannedPayload>(cleaned) {
