@@ -31,6 +31,13 @@ Get-FileHash .\AURA-2*.exe -Algorithm SHA256
 
 ## 4. First-run setup
 
+On a fresh install, the Chat home shows a **First Local Setup** card until the essential local AI setup is complete. It tracks:
+
+1. Managed AURA Runtime
+2. installed + selected assistant model
+
+The card links directly to Models, Permissions and Diagnostics and disappears automatically when both essential steps are ready.
+
 Recommended order:
 
 `Install AURA → review Permissions → install AURA Runtime → download/select AURA-1 → add Voice/Vision models as needed`
