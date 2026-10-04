@@ -221,26 +221,27 @@ impl ImageRuntime {
         }
 
         loop {
-            let envelope = {
+            let read_result = {
                 let running = process_guard
                     .as_mut()
                     .ok_or_else(|| "AURA Create runtime is no longer available.".to_string())?;
-                match read_envelope(&mut running.stdout) {
-                    Ok(envelope) => envelope,
-                    Err(error) => {
-                        if let Some(mut failed) = process_guard.take() {
-                            let _ = failed.child.kill();
-                            let _ = failed.child.wait();
-                        }
-                        self.set_status(ImageRuntimeStatus {
-                            state: "error".to_string(),
-                            model_id: IMAGE_MODEL_ID.to_string(),
-                            last_error: Some(error.clone()),
-                            refreshed_at_ms: timestamp_ms(),
-                            ..ImageRuntimeStatus::default()
-                        });
-                        return Err(error);
+                read_envelope(&mut running.stdout)
+            };
+            let envelope = match read_result {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    if let Some(mut failed) = process_guard.take() {
+                        let _ = failed.child.kill();
+                        let _ = failed.child.wait();
                     }
+                    self.set_status(ImageRuntimeStatus {
+                        state: "error".to_string(),
+                        model_id: IMAGE_MODEL_ID.to_string(),
+                        last_error: Some(error.clone()),
+                        refreshed_at_ms: timestamp_ms(),
+                        ..ImageRuntimeStatus::default()
+                    });
+                    return Err(error);
                 }
             };
 
