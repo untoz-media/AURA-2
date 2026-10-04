@@ -9,6 +9,9 @@ type Props = {
   snapshot: DropIntakeSnapshot;
   hovering: boolean;
   paused: boolean;
+  attachedIds: string[];
+  onToggleAttach: (dropId: string) => void;
+  onAttachAll: () => void;
   onClear: () => Promise<DropIntakeSnapshot>;
   onReveal: (dropId: string) => Promise<string>;
   onInspect: (dropId: string) => Promise<DroppedFileInspection>;
@@ -44,6 +47,9 @@ export default function DropTray({
   snapshot,
   hovering,
   paused,
+  attachedIds,
+  onToggleAttach,
+  onAttachAll,
   onClear,
   onReveal,
   onInspect,
@@ -138,6 +144,14 @@ export default function DropTray({
             <div className="drop-tray-heading-actions">
               <button
                 type="button"
+                className="feature-secondary-button"
+                disabled={paused || snapshot.items.length === 0 || analyzing}
+                onClick={onAttachAll}
+              >
+                Attach all to Chat
+              </button>
+              <button
+                type="button"
                 className="feature-primary-button"
                 disabled={paused || snapshot.items.length === 0 || analyzing}
                 onClick={() => void analyzeAll()}
@@ -189,6 +203,7 @@ export default function DropTray({
               const inspection = inspections[item.id];
               const inspectionError = inspectionErrors[item.id];
               const busy = Boolean(busyIds[item.id]);
+              const attached = attachedIds.includes(item.id);
 
               return (
                 <article className="drop-file-card" key={item.id}>
@@ -210,6 +225,14 @@ export default function DropTray({
                     )}
                   </div>
                   <div className="drop-file-actions">
+                    <button
+                      type="button"
+                      className={attached ? "feature-primary-button" : "feature-secondary-button"}
+                      disabled={paused || analyzing}
+                      onClick={() => onToggleAttach(item.id)}
+                    >
+                      {attached ? "Attached" : "Attach to Chat"}
+                    </button>
                     {item.canInspect && (
                       <button
                         type="button"
@@ -295,10 +318,11 @@ export default function DropTray({
           <div className="drop-tray-privacy">
             <strong>Temporary session context</strong>
             <span>
-              File paths remain inside AURA Core memory. Inspect and Analyze use
-              only bounded allowlisted context. Attached file context is ephemeral
-              for that model turn and is not added to Memory, diagnostics, Agents
-              or Automations.
+              File paths remain inside AURA Core memory. Attach to Chat only adds
+              an opaque temporary reference to the next desktop message. Content is
+              read only when that message is submitted, remains bounded and
+              ephemeral for that model turn, and is not added to Memory,
+              diagnostics, Agents or Automations.
             </span>
           </div>
         </aside>
