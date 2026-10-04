@@ -66,6 +66,19 @@ Before retrying, check the Untoz organization:
 3. Verify there is no failed payment or payment-method warning.
 4. If billing is healthy and jobs still fail before step 1, contact GitHub Support and provide the failed run IDs.
 
+## Persistence hardening
+
+The Beta candidate now writes its Beta preference/session JSON through a temporary file, flushes it to disk, and only then replaces the active state file. This reduces the chance of a forced shutdown leaving a partially-written JSON document.
+
+Session recovery is conservative:
+
+- a missing session marker means no prior recovery condition;
+- a valid marker with `cleanExit: false` means recovered;
+- a corrupt/unreadable existing session marker is treated as an unclean prior exit rather than silently reported as clean;
+- marking a session clean now fails explicitly if the current marker is corrupt instead of masking the problem.
+
+Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary.
+
 ## Existing recovery systems
 
 The Beta candidate also includes:
