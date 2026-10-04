@@ -1710,7 +1710,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M007 Complete · Vision · 0.7.0-alpha.1",
+        stage: "M008 Complete · Agents & Automations · 0.8.0-alpha.1",
         local_first: true,
     }
 }
