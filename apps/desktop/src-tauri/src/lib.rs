@@ -45,8 +45,8 @@ use computer::clipboard::{
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
 use computer::drop_intake::{
-    inspect_drop, is_supported_vision_image, reveal_drop, DropIntakeSnapshot, DropIntakeState,
-    DroppedFileInspection,
+    build_drop_model_context, inspect_drop, is_supported_vision_image, reveal_drop,
+    DropIntakeSnapshot, DropIntakeState, DroppedFileInspection,
 };
 use computer::file_intelligence::{
     recent_personal_files, reveal_personal_path, search_personal_files,
@@ -313,6 +313,8 @@ struct CommandRequest {
     source: String,
     #[serde(default)]
     approval_id: Option<String>,
+    #[serde(default)]
+    drop_ids: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -1286,6 +1288,7 @@ fn process_voice_capture(
                         text: command_text.clone(),
                         source: "voice".to_string(),
                         approval_id: None,
+                        drop_ids: Vec::new(),
                     },
                 ) {
                     Ok(_) => emit_voice_capture_event(
@@ -1637,6 +1640,7 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
                         text: command,
                         source: "voice".to_string(),
                         approval_id: None,
+                        drop_ids: Vec::new(),
                     },
                 );
             }
@@ -2255,6 +2259,7 @@ fn resolve_confirmation(
             text: pending.command,
             source: pending.source,
             approval_id: Some(id),
+            drop_ids: Vec::new(),
         },
     )?;
 
@@ -2308,6 +2313,27 @@ fn process_user_command(
         };
         emit_core_error(&app, error);
         return Err("Unknown command source.".to_string());
+    }
+
+    let drop_ids = request.drop_ids.clone();
+    if drop_ids.len() > 8 {
+        let error = CoreError {
+            id: None,
+            code: "drop.context_too_many",
+            message: "AURA accepts at most 8 dropped-file attachments per request.".to_string(),
+        };
+        emit_core_error(&app, error);
+        return Err("Too many dropped-file context attachments.".to_string());
+    }
+
+    if !drop_ids.is_empty() && request.source != "desktop" {
+        let error = CoreError {
+            id: None,
+            code: "drop.context_invalid_source",
+            message: "Dropped-file context can only be attached from the main desktop UI.".to_string(),
+        };
+        emit_core_error(&app, error);
+        return Err("Dropped-file context is only available from the desktop UI.".to_string());
     }
 
     let source = request.source.clone();
@@ -2374,16 +2400,45 @@ fn process_user_command(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
-    let base_route = route_command(&text, &policy);
-    let routine_route = route_user_routine(&app, &text, &policy);
-    let director_route = route_director_preset(&app, &text, &policy);
+    if !drop_ids.is_empty()
+        && policy.decision_for(PermissionClass::Read) == PermissionDecision::Never
+    {
+        let error = CoreError {
+            id: Some(id.clone()),
+            code: "drop.context_blocked",
+            message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+        };
+        emit_core_error(&app, error);
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+                command: Some(text.clone()),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+        return Err("Dropped-file context is blocked by AURA's Read permission policy.".to_string());
+    }
 
-    let routed = match routine_route {
-        Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
-        _ => match director_route {
-            Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
-            _ => base_route,
-        },
+    // File attachments are reasoning context only. They never enter deterministic
+    // action/routine/director routing, so untrusted file content cannot trigger actions.
+    let routed = if !drop_ids.is_empty() {
+        RouteResult::NoMatch
+    } else {
+        let base_route = route_command(&text, &policy);
+        let routine_route = route_user_routine(&app, &text, &policy);
+        let director_route = route_director_preset(&app, &text, &policy);
+
+        match routine_route {
+            Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
+            _ => match director_route {
+                Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+                _ => base_route,
+            },
+        }
     };
 
     match routed {
@@ -5308,7 +5363,13 @@ fn process_user_command(
             );
         }
         RouteResult::NoMatch => {
-            if let Some(target) = vision_query_target(&text) {
+            let vision_target = if drop_ids.is_empty() {
+                vision_query_target(&text)
+            } else {
+                None
+            };
+
+            if let Some(target) = vision_target {
                 let read_decision = state
                     .permission_policy
                     .lock()
@@ -5395,6 +5456,7 @@ fn process_user_command(
                 let worker_app = app.clone();
                 let worker_id = id.clone();
                 let worker_text = text.clone();
+                let worker_drop_ids = drop_ids.clone();
     
                 thread::spawn(move || {
                     emit_core_event(
@@ -5411,59 +5473,93 @@ fn process_user_command(
     
                     let manager = worker_app.state::<ModelManager>();
                     let runtime = worker_app.state::<ModelRuntime>();
-                    let desktop_context = {
+                    let desktop_context = (|| -> Result<Option<String>, String> {
                         let awareness = worker_app.state::<CurrentAppAwareness>();
                         let foreground = awareness.snapshot().ok();
                         let recent = recent_files_snapshot(5).ok();
                         let project = summarize_active_project(&worker_app).ok().flatten();
-    
-                        if foreground.is_none() && recent.is_none() && project.is_none() {
-                            None
-                        } else {
-                            let mut summary = String::new();
-    
-                            if let Some(context) = foreground {
-                                summary.push_str(&format!(
-                                    "Current app: {}\nProcess: {}",
-                                    context.app_name, context.process_name
-                                ));
-    
-                                if let Some(title) = context.window_title.as_deref() {
-                                    summary.push_str(&format!("\nActive window title: {title}"));
-                                }
-    
-                                if context.context_source == "lastExternal" {
-                                    summary.push_str(
-                                        "\nContext source: last external window before AURA took focus",
-                                    );
-                                } else {
-                                    summary.push_str("\nContext source: foreground");
-                                }
+                        let drop_context = {
+                            let drops = worker_app.state::<DropIntakeState>();
+                            build_drop_model_context(&drops, &worker_drop_ids)?
+                        };
+
+                        let mut summary = String::new();
+
+                        if let Some(context) = foreground {
+                            summary.push_str(&format!(
+                                "Current app: {}\nProcess: {}",
+                                context.app_name, context.process_name
+                            ));
+
+                            if let Some(title) = context.window_title.as_deref() {
+                                summary.push_str(&format!("\nActive window title: {title}"));
                             }
-    
-                            if let Some(snapshot) = recent {
-                                if !snapshot.items.is_empty() {
-                                    if !summary.is_empty() {
-                                        summary.push_str("\n");
-                                    }
-                                    let names = snapshot
-                                        .items
-                                        .iter()
-                                        .map(|item| item.name.as_str())
-                                        .collect::<Vec<_>>()
-                                        .join(" · ");
-                                    summary.push_str(&format!("Recent files: {names}"));
-                                }
+
+                            if context.context_source == "lastExternal" {
+                                summary.push_str(
+                                    "\nContext source: last external window before AURA took focus",
+                                );
+                            } else {
+                                summary.push_str("\nContext source: foreground");
                             }
-    
-                            if let Some(project) = project {
+                        }
+
+                        if let Some(snapshot) = recent {
+                            if !snapshot.items.is_empty() {
                                 if !summary.is_empty() {
                                     summary.push_str("\n");
                                 }
-                                summary.push_str(&project);
+                                let names = snapshot
+                                    .items
+                                    .iter()
+                                    .map(|item| item.name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" · ");
+                                summary.push_str(&format!("Recent files: {names}"));
                             }
-    
-                            (!summary.is_empty()).then_some(summary)
+                        }
+
+                        if let Some(project) = project {
+                            if !summary.is_empty() {
+                                summary.push_str("\n");
+                            }
+                            summary.push_str(&project);
+                        }
+
+                        if let Some(drop_context) = drop_context {
+                            if !summary.is_empty() {
+                                summary.push_str("\n\n");
+                            }
+                            summary.push_str(&drop_context);
+                        }
+
+                        Ok((!summary.is_empty()).then_some(summary))
+                    })();
+
+                    let desktop_context = match desktop_context {
+                        Ok(context) => context,
+                        Err(error) => {
+                            let message = format!("Dropped-file context unavailable: {error}");
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.failed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: message.clone(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+                            emit_core_error(
+                                &worker_app,
+                                CoreError {
+                                    id: Some(worker_id),
+                                    code: "drop.context_failed",
+                                    message,
+                                },
+                            );
+                            return;
                         }
                     };
     
