@@ -2531,7 +2531,7 @@ export default function Settings({
             <Surface className="settings-card">
               <SectionLabel>Available & planned</SectionLabel>
               <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
-              <SettingRow title="Future Skills" description="Modular app integrations built on the AURA Skills architecture." trailing={<Badge tone="planned">Later</Badge>} />
+              <SettingRow title="App Skills" description="Contextual deterministic skills. Browser Skills V1 supports Brave and Chrome with focus verification." trailing={<Badge tone="ready">Beta</Badge>} />
             </Surface>
           </>
         )}
