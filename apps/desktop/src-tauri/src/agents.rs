@@ -1664,6 +1664,30 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn only_idempotent_app_steps_are_retried() {
+        assert!(step_is_retryable(&AgentStep::LaunchApp {
+            app: "brave".to_string()
+        }));
+        assert!(step_is_retryable(&AgentStep::SwitchToApp {
+            app: "obs".to_string()
+        }));
+        assert!(!step_is_retryable(&AgentStep::RunRoutine {
+            routine: "Editing".to_string()
+        }));
+        assert!(!step_is_retryable(&AgentStep::DirectorPreset {
+            preset: "Live".to_string()
+        }));
+    }
+
+    #[test]
+    fn startup_trigger_has_no_clock_schedule() {
+        assert_eq!(
+            initial_next_run(&AutomationTrigger::Startup, 123_000),
+            None
+        );
+    }
+
     fn action_alias_conflicts_are_case_insensitive() {
         let existing = SavedAuraAction {
             id: "action-1".to_string(),
