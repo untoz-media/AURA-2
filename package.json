@@ -15,6 +15,7 @@
     "beta:source-check": "node scripts/check-beta-source.mjs",
     "beta:quality": "npm run release:check && npm run telemetry:check && npm run beta:source-check && npm run frontend:build",
     "telemetry:check": "node scripts/check-telemetry-policy.mjs",
-    "beta:release-check": "node scripts/check-beta-release.mjs"
+    "beta:release-check": "node scripts/check-beta-release.mjs",
+    "beta:release-gate": "npm run beta:quality && npm run beta:release-check"
   }
 }
