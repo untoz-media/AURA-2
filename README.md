@@ -269,7 +269,11 @@ Current behavior:
 - allowlisted text/code formats can expose a temporary preview bounded to 64 KiB / 12,000 characters
 - image inspection can expose local dimensions without creating a Vision capture
 - **Inspect all** applies the same bounded rules across the temporary batch
-- **Analyze with AURA** sends opaque drop IDs to Core and gives the local model a separate ephemeral attachment context
+- **Attach to Chat** / **Attach all to Chat** adds selected opaque drop IDs to the next desktop message
+- attached files appear as removable chips above the composer and safe filename labels in the local chat UI
+- attachments are one-turn: after an accepted send they are automatically detached from the next message
+- sending attachments with an empty composer uses an explicit local "Analyze the attached local files." request
+- **Analyze with AURA** remains available as a one-click batch shortcut
 - model attachment context is capped to 6,000 characters total and never contains canonical filesystem paths
 - attachment requests bypass deterministic computer-action, Routine and Director routing
 - attached text is explicitly marked as untrusted data for prompt-injection resistance
