@@ -579,6 +579,19 @@ export function useAuraBridge() {
         setBridgeError(null);
 
         if (
+          event.kind === "command.completed" ||
+          event.kind === "command.failed"
+        ) {
+          window.setTimeout(() => {
+            void getTtsRuntimeStatus()
+              .then((runtime) => {
+                if (!cancelled) setTtsRuntime(runtime);
+              })
+              .catch(() => undefined);
+          }, 120);
+        }
+
+        if (
           ["command.completed", "command.failed", "command.cancelled"].includes(
             event.kind,
           )
@@ -694,6 +707,24 @@ export function useAuraBridge() {
       cleanupVoiceCapture?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (ttsRuntime.state !== "speaking") return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      void getTtsRuntimeStatus()
+        .then((runtime) => {
+          if (!cancelled) setTtsRuntime(runtime);
+        })
+        .catch(() => undefined);
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [ttsRuntime.state]);
 
   useEffect(() => {
     if (!audioInput.testing && !audioInput.pushToTalk) return;
