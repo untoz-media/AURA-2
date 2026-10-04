@@ -2442,6 +2442,7 @@ export function useAuraBridge() {
   const submitCommand = useCallback(async (
     text: string,
     source: "desktop" | "overlay" | "voice" = "desktop",
+    dropIds: string[] = [],
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return null;
@@ -2462,6 +2463,7 @@ export function useAuraBridge() {
       const ack = await submitAuraCommand({
         text: trimmed,
         source,
+        dropIds: dropIds.length > 0 ? dropIds : undefined,
       });
       setStatus(ack.status);
       return ack;
