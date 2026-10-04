@@ -61,6 +61,7 @@ pub struct AgentPlan {
     pub summary: String,
     pub steps: Vec<AgentStep>,
     pub requires_confirmation: bool,
+    pub blocked_by_policy: bool,
     pub highest_permission: PermissionClass,
     pub created_at_ms: u64,
 }
@@ -204,6 +205,7 @@ pub fn plan_goal(
     app: &AppHandle,
     manager: &ModelManager,
     runtime: &ModelRuntime,
+    policy: &PermissionPolicy,
     goal: &str,
 ) -> Result<AgentPlan, String> {
     let goal = validate_text(goal, "Agent goal", 1200)?;
@@ -267,17 +269,17 @@ Rules:
     }
 
     let highest_permission = highest_permission_for_steps(app, &payload.steps)?;
-    let policy = PermissionPolicy::default();
-    let requires_confirmation = payload.steps.iter().try_fold(false, |required, step| {
+    let mut requires_confirmation = false;
+    let mut blocked_by_policy = false;
+
+    for step in &payload.steps {
         let permission = permission_for_step(app, step)?;
-        Ok::<bool, String>(
-            required
-                || matches!(
-                    policy.decision_for(permission),
-                    PermissionDecision::Ask | PermissionDecision::Never
-                ),
-        )
-    })?;
+        match policy.decision_for(permission) {
+            PermissionDecision::Ask => requires_confirmation = true,
+            PermissionDecision::Never => blocked_by_policy = true,
+            PermissionDecision::Allow => {}
+        }
+    }
 
     Ok(AgentPlan {
         id: format!("plan-{}", timestamp_ms()),
@@ -285,6 +287,7 @@ Rules:
         summary: validate_text(&payload.summary, "Plan summary", 500)?,
         steps: payload.steps,
         requires_confirmation,
+        blocked_by_policy,
         highest_permission,
         created_at_ms: timestamp_ms(),
     })
@@ -511,7 +514,24 @@ impl AutomationScheduler {
                 continue;
             }
 
-            let result = execute_saved_action(app, &automation.action_id, true);
+            let result = if crate::automation_runtime_paused(app) {
+                Err("AURA is paused; background automation was skipped.".to_string())
+            } else {
+                let permission = saved_action_permission(app, &automation.action_id);
+                match permission {
+                    Ok(permission)
+                        if crate::background_permission_decision(app, permission)
+                            == PermissionDecision::Allow =>
+                    {
+                        execute_saved_action(app, &automation.action_id, true)
+                    }
+                    Ok(permission) => Err(format!(
+                        "Background automation cannot run because {:?} permission is not Allow.",
+                        permission
+                    )),
+                    Err(error) => Err(error),
+                }
+            };
             automation.last_run_at_ms = Some(now);
             automation.last_result = Some(match &result {
                 Ok(message) => message.clone(),
@@ -648,8 +668,28 @@ pub fn delete_action(app: &AppHandle, action_id: &str) -> Result<(), String> {
     write_actions(app, &actions)
 }
 
-pub fn run_saved_action(app: &AppHandle, action_id: &str) -> Result<String, String> {
+pub fn run_saved_action(
+    app: &AppHandle,
+    action_id: &str,
+    policy: &PermissionPolicy,
+) -> Result<String, String> {
+    let permission = saved_action_permission(app, action_id)?;
+    if policy.decision_for(permission) == PermissionDecision::Never {
+        return Err(format!(
+            "Saved AURA Action is blocked by the current {:?} permission policy.",
+            permission
+        ));
+    }
     execute_saved_action(app, action_id, false)
+}
+
+pub fn saved_action_permission(
+    app: &AppHandle,
+    action_id: &str,
+) -> Result<PermissionClass, String> {
+    let action = resolve_saved_action(app, action_id)
+        .ok_or_else(|| "Saved AURA Action was not found.".to_string())?;
+    permission_for_step(app, &action.step)
 }
 
 pub fn list_automations(app: &AppHandle) -> Result<Vec<AuraAutomation>, String> {
@@ -776,9 +816,7 @@ fn execute_agent_plan(
             run.current_step = Some(index);
         }, &format!("Running step {} of {}: {}", index + 1, plan.steps.len(), step_label(step)));
 
-        let permission = permission_for_step(app, step).unwrap_or(PermissionClass::Sensitive);
-        let retryable = matches!(permission, PermissionClass::Read | PermissionClass::Act);
-        let max_attempts = if retryable { 2 } else { 1 };
+        let max_attempts = if step_is_retryable(step) { 2 } else { 1 };
         let started_at_ms = timestamp_ms();
         let mut attempts = 0_u8;
         let mut outcome = Err("Agent step did not run.".to_string());
@@ -832,6 +870,13 @@ fn execute_agent_plan(
     }
 
     finish_run(app, runs, controls, run_id, "completed", None);
+}
+
+fn step_is_retryable(step: &AgentStep) -> bool {
+    matches!(
+        step,
+        AgentStep::LaunchApp { .. } | AgentStep::SwitchToApp { .. }
+    )
 }
 
 fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<String, String> {
