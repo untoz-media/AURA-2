@@ -53,6 +53,8 @@ Examples:
 - new tab in Brave
 - focus address bar in Brave
 - open Downloads
+- find in Notepad
+- undo in Notepad
 - find file Artemis
 - read clipboard
 - what app am I using?
