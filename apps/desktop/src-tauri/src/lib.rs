@@ -5840,6 +5840,32 @@ fn save_user_routine(
 
 #[tauri::command]
 fn delete_user_routine(app: AppHandle, routine_id: String) -> Result<(), String> {
+    let routines = list_routines(&app)?;
+    let routine = routines
+        .iter()
+        .find(|routine| routine.id == routine_id)
+        .ok_or_else(|| "Routine no longer exists.".to_string())?;
+
+    let actions = list_saved_actions(&app)?;
+    let referenced = actions.iter().any(|action| match &action.step {
+        AgentStep::RunRoutine { routine: reference } => {
+            reference == &routine.id
+                || reference.eq_ignore_ascii_case(&routine.name)
+                || routine
+                    .aliases
+                    .iter()
+                    .any(|alias| reference.eq_ignore_ascii_case(alias))
+        }
+        _ => false,
+    });
+
+    if referenced {
+        return Err(
+            "This Routine is still referenced by a Saved AURA Action. Update or delete that Action first."
+                .to_string(),
+        );
+    }
+
     delete_routine(&app, &routine_id)
 }
 
@@ -5912,6 +5938,52 @@ fn delete_director_preset_command(
     app: AppHandle,
     preset_id: String,
 ) -> Result<(), String> {
+    validate_director_store(&app)?;
+    let preset = find_director_preset_by_id(&app, &preset_id)
+        .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+
+    let referenced_by_routine = list_routines(&app)?.iter().any(|routine| {
+        routine.steps.iter().any(|step| match step {
+            RoutineStep::DirectorPreset { preset: reference } => {
+                reference == &preset.id
+                    || reference.eq_ignore_ascii_case(&preset.name)
+                    || preset
+                        .aliases
+                        .iter()
+                        .any(|alias| reference.eq_ignore_ascii_case(alias))
+            }
+            _ => false,
+        })
+    });
+
+    if referenced_by_routine {
+        return Err(
+            "This Director Mode preset is still referenced by a Routine. Update or delete that Routine first."
+                .to_string(),
+        );
+    }
+
+    let referenced_by_action = list_saved_actions(&app)?.iter().any(|action| {
+        match &action.step {
+            AgentStep::DirectorPreset { preset: reference } => {
+                reference == &preset.id
+                    || reference.eq_ignore_ascii_case(&preset.name)
+                    || preset
+                        .aliases
+                        .iter()
+                        .any(|alias| reference.eq_ignore_ascii_case(alias))
+            }
+            _ => false,
+        }
+    });
+
+    if referenced_by_action {
+        return Err(
+            "This Director Mode preset is still referenced by a Saved AURA Action. Update or delete that Action first."
+                .to_string(),
+        );
+    }
+
     delete_director_preset(&app, &preset_id)
 }
 
