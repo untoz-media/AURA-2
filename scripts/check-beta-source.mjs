@@ -101,6 +101,14 @@ for (const file of atomicStores) {
   if (!source.includes("write_json_atomic")) {
     failures.push(`${file}: critical local state is not using atomic JSON persistence`);
   }
+
+  const directWritePattern =
+    file.endsWith("model_manager.rs")
+      ? /std_fs::write\s*\(/
+      : /(?<!async_)fs::write\s*\(/;
+  if (directWritePattern.test(source)) {
+    failures.push(`${file}: critical local JSON store uses a direct file write instead of atomic persistence`);
+  }
 }
 
 const desktopPersistence = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
