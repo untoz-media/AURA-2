@@ -39,6 +39,7 @@ Install only the local features you want:
 - Whisper Base for Voice STT
 - Piper voices for local TTS
 - SmolVLM2 for Vision
+- AURA Create · Image for local text-to-image generation
 
 ## 7. Try deterministic controls first
 
@@ -46,6 +47,9 @@ Examples:
 
 - open Brave
 - switch to OBS
+- minimize Brave
+- maximize OBS
+- restore Brave
 - what app am I using?
 - run a saved routine
 
@@ -58,6 +62,25 @@ Examples:
 ## 9. Try Agents
 
 Open Agents, describe a bounded goal, review the proposed steps and approve only if the plan matches your intent.
+
+## 9.5 Create a local image
+
+Open **Create → Image**.
+
+If required:
+
+1. Install or repair the AURA Runtime.
+2. Download **AURA Create · Image**.
+3. Enter a prompt.
+4. Choose square, landscape or portrait.
+5. Optionally set a negative prompt, inference steps or seed.
+6. Choose **Generate image**.
+
+The first generation takes longer because the local Diffusers pipeline must load. Later generations reuse the resident worker.
+
+Generated PNGs are saved locally under **Pictures → AURA Create** when Windows exposes the Pictures directory.
+
+The model download requires network access once. Inference is configured to use the installed local files only.
 
 ## 10. Diagnostics
 
