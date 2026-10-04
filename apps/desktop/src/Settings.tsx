@@ -2531,7 +2531,7 @@ export default function Settings({
             <Surface className="settings-card">
               <SectionLabel>Available & planned</SectionLabel>
               <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
-              <SettingRow title="App Skills" description="Contextual deterministic skills. Browser Skills V1 supports Brave and Chrome with focus verification." trailing={<Badge tone="ready">Beta</Badge>} />
+              <SettingRow title="App Skills" description="Deterministic app capabilities. V1 includes focus-verified Brave/Chrome controls and safe personal-folder File Explorer skills." trailing={<Badge tone="ready">Beta</Badge>} />
             </Surface>
           </>
         )}
