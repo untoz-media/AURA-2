@@ -68,6 +68,9 @@ import type {
   AuraAutomation,
   SaveAutomationRequest,
   AutomationEvent,
+  BetaStatus,
+  SetBetaPreferencesRequest,
+  DiagnosticsSnapshot,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -657,4 +660,23 @@ export async function listenToAutomation(
     AURA_EVENTS.automation,
     ({ payload }) => handler(payload),
   );
+}
+
+
+export async function getBetaStatus(): Promise<BetaStatus> {
+  return invoke<BetaStatus>("get_beta_status");
+}
+
+export async function setBetaPreferences(
+  request: SetBetaPreferencesRequest,
+): Promise<BetaStatus> {
+  return invoke<BetaStatus>("set_beta_preferences", { request });
+}
+
+export async function getBetaDiagnostics(): Promise<DiagnosticsSnapshot> {
+  return invoke<DiagnosticsSnapshot>("get_beta_diagnostics");
+}
+
+export async function exportBetaDiagnostics(): Promise<string> {
+  return invoke<string>("export_beta_diagnostics");
 }
