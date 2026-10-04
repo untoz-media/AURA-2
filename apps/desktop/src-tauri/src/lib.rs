@@ -41,7 +41,8 @@ use computer::clipboard::{
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
 use computer::file_intelligence::{
-    reveal_personal_path, search_personal_files, summarize_file_search,
+    recent_personal_files, reveal_personal_path, search_personal_files,
+    summarize_file_search, summarize_recent_files,
 };
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
@@ -3536,6 +3537,61 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::FindRecentPersonalFiles(request) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Finding recent {} in {}…",
+                                        request.category.display_name(),
+                                        request.root.display_name()
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match recent_personal_files(&worker_app, &request) {
+                                Ok(snapshot) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_recent_files(&snapshot, &request),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not find recent files: {error}"
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.recent_file_search_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::FindPersonalFiles(query) => {
                             emit_core_event(
                                 &worker_app,
@@ -3594,6 +3650,11 @@ fn process_user_command(
                         "Showing a personal file or folder in File Explorer requires confirmation under the current Act policy."
                             .to_string()
                     }
+                    ActionIntent::FindRecentPersonalFiles(request) => format!(
+                        "Reading filesystem metadata to find recent {} in {} requires confirmation under the current Read policy.",
+                        request.category.display_name(),
+                        request.root.display_name()
+                    ),
                     ActionIntent::FindPersonalFiles(query) => format!(
                         "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
                         query
