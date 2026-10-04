@@ -570,6 +570,41 @@ mod voice_command_tests {
     }
 }
 
+#[cfg(test)]
+mod vision_route_tests {
+    use super::*;
+
+    #[test]
+    fn detects_full_screen_visual_questions() {
+        assert!(matches!(
+            vision_query_target("AURA, o que vês no meu ecrã?"),
+            Some(VisionQueryTarget::Screen)
+        ));
+        assert!(matches!(
+            vision_query_target("look at my screen"),
+            Some(VisionQueryTarget::Screen)
+        ));
+    }
+
+    #[test]
+    fn detects_active_window_visual_questions() {
+        assert!(matches!(
+            vision_query_target("what's wrong here?"),
+            Some(VisionQueryTarget::ActiveWindow)
+        ));
+        assert!(matches!(
+            vision_query_target("onde devo clicar nesta janela ativa?"),
+            Some(VisionQueryTarget::ActiveWindow)
+        ));
+    }
+
+    #[test]
+    fn ordinary_commands_do_not_trigger_screen_capture() {
+        assert!(vision_query_target("open Brave").is_none());
+        assert!(vision_query_target("what app am I using?").is_none());
+    }
+}
+
 fn next_command_id() -> String {
     let counter = COMMAND_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("cmd-{}-{}", unix_timestamp_ms(), counter)
@@ -1665,7 +1700,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M006 Complete · Voice · 0.6.0-alpha.1",
+        stage: "M007 Complete · Vision · 0.7.0-alpha.1",
         local_first: true,
     }
 }
