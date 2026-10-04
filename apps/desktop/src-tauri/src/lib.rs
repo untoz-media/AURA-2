@@ -227,6 +227,13 @@ mod beta_self_test_tests {
     use super::*;
 
     #[test]
+    fn corrupted_desktop_preferences_fail_closed_to_paused() {
+        let recovery = DesktopPreferences::fail_closed();
+        assert!(recovery.background_enabled);
+        assert!(recovery.paused);
+    }
+
+    #[test]
     fn legacy_desktop_preferences_default_pause_to_false() {
         let preferences: DesktopPreferences =
             serde_json::from_str(r#"{"backgroundEnabled":false}"#).unwrap();
@@ -354,6 +361,15 @@ impl Default for DesktopPreferences {
         Self {
             background_enabled: true,
             paused: false,
+        }
+    }
+}
+
+impl DesktopPreferences {
+    fn fail_closed() -> Self {
+        Self {
+            background_enabled: true,
+            paused: true,
         }
     }
 }
@@ -860,14 +876,18 @@ fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn load_preferences(app: &tauri::AppHandle) -> DesktopPreferences {
     let Ok(path) = preferences_path(app) else {
-        return DesktopPreferences::default();
+        return DesktopPreferences::fail_closed();
     };
 
-    let Ok(content) = fs::read_to_string(path) else {
+    if !path.exists() {
         return DesktopPreferences::default();
+    }
+
+    let Ok(content) = fs::read_to_string(&path) else {
+        return DesktopPreferences::fail_closed();
     };
 
-    serde_json::from_str(&content).unwrap_or_default()
+    serde_json::from_str(&content).unwrap_or_else(|_| DesktopPreferences::fail_closed())
 }
 
 fn save_preferences(
