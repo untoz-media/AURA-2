@@ -1707,7 +1707,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn only_idempotent_app_steps_are_retried() {
         assert!(step_is_retryable(&AgentStep::LaunchApp {
             app: "brave".to_string()
@@ -1721,6 +1720,29 @@ mod tests {
         assert!(!step_is_retryable(&AgentStep::DirectorPreset {
             preset: "Live".to_string()
         }));
+        assert!(!step_is_retryable(&AgentStep::Wait { milliseconds: 500 }));
+        assert!(!step_is_retryable(&AgentStep::SavedAction {
+            action: "Prepare".to_string()
+        }));
+    }
+
+    #[test]
+    fn interval_trigger_enforces_beta_bounds() {
+        assert!(validate_trigger(&AutomationTrigger::Interval { every_minutes: 1 }).is_ok());
+        assert!(validate_trigger(&AutomationTrigger::Interval {
+            every_minutes: 10_080
+        })
+        .is_ok());
+        assert!(validate_trigger(&AutomationTrigger::Interval { every_minutes: 0 }).is_err());
+        assert!(validate_trigger(&AutomationTrigger::Interval {
+            every_minutes: 10_081
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn planner_rejects_non_json_output() {
+        assert!(parse_planned_payload("Open OBS and then switch to Brave.").is_err());
     }
 
     #[test]
@@ -1731,6 +1753,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn action_alias_conflicts_are_case_insensitive() {
         let existing = SavedAuraAction {
             id: "action-1".to_string(),
