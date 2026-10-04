@@ -234,9 +234,13 @@ pub fn plan_goal(
     goal: &str,
 ) -> Result<AgentPlan, String> {
     let goal = validate_text(goal, "Agent goal", 1200)?;
-    let routines = list_routines(app).unwrap_or_default();
+    let routines = list_routines(app)
+        .map_err(|error| format!("Agent planner could not load Routines: {error}"))?;
+    validate_director_store(app)
+        .map_err(|error| format!("Agent planner could not load Director presets: {error}"))?;
     let presets = load_director_presets(app);
-    let actions = list_saved_actions(app).unwrap_or_default();
+    let actions = list_saved_actions(app)
+        .map_err(|error| format!("Agent planner could not load Saved Actions: {error}"))?;
 
     let routine_names = routines
         .iter()
