@@ -91,7 +91,7 @@ export default function Memory({
     <section className="memory-page">
       <div className="memory-hero">
         <div>
-          <span className="memory-kicker">M005 · LOCAL CONTEXT</span>
+          <span className="memory-kicker">LOCAL · PRIVATE · USER CONTROLLED</span>
           <h2>Memory</h2>
           <p>
             Explicit memories stored locally on this PC. AURA only saves entries
@@ -202,8 +202,8 @@ export default function Memory({
       <div className="memory-privacy-note">
         <strong>Local-first</strong>
         <span>
-          M005.1 stores explicit memory in AURA&apos;s local app configuration.
-          Automatic context capture is not enabled in this milestone.
+          Explicit memories stay in AURA&apos;s local app data. App, window and
+          recent-file context are handled separately and remain local to this PC.
         </span>
       </div>
 
