@@ -84,6 +84,8 @@ function App() {
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
+    imageRuntimeStatus,
+    lastGeneratedImage,
     chatMessages,
     pendingConfirmation,
     bridgeError,
@@ -149,6 +151,8 @@ function App() {
     refreshModels,
     refreshManagedRuntime,
     runManagedRuntimeAction,
+    refreshImageRuntime,
+    generateImageControl,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
@@ -647,7 +651,18 @@ function App() {
             />
           )}
 
-          {view === "create" && <Create />}
+          {view === "create" && (
+            <Create
+              catalog={modelCatalog}
+              managedRuntime={managedRuntimeStatus}
+              imageRuntime={imageRuntimeStatus}
+              lastImage={lastGeneratedImage}
+              onModelOperation={runModelOperation}
+              onRuntimeAction={runManagedRuntimeAction}
+              onRuntimeRefresh={refreshImageRuntime}
+              onGenerateImage={generateImageControl}
+            />
+          )}
 
           {view === "computer" && (
             <Computer
