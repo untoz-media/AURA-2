@@ -1809,7 +1809,7 @@ export default function Settings({
 
               <SettingRow
                 title="Export diagnostics"
-                description="Writes a human-readable JSON diagnostics file to Downloads (or AURA Local Data as fallback). Nothing is uploaded automatically."
+                description="Writes a size-bounded, allowlisted JSON diagnostics file to Downloads (or AURA Local Data as fallback). Unexpected fields are blocked by the privacy guard and nothing is uploaded automatically."
                 trailing={
                   <button
                     type="button"
@@ -1820,6 +1820,7 @@ export default function Settings({
                       setBetaExportPath(null);
                       void onBetaDiagnosticsExport()
                         .then((path) => setBetaExportPath(path))
+                        .catch(() => setBetaExportPath(null))
                         .finally(() => setBetaBusy(null));
                     }}
                   >
