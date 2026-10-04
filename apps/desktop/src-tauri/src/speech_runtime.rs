@@ -59,6 +59,7 @@ pub struct SpeechTranscriptionResult {
     pub source_sample_rate: u32,
     pub source_channels: u16,
     pub input_samples_16khz: usize,
+    pub input_rms: f32,
     pub completed_at_ms: u64,
 }
 
@@ -134,6 +135,7 @@ impl SpeechRuntime {
         let source_sample_rate = capture.sample_rate;
         let source_channels = capture.channels;
         let duration_ms = capture.completed_at_ms.saturating_sub(capture.started_at_ms);
+        let input_rms = capture.rms();
         let samples = capture.mono_16khz();
 
         if samples.is_empty() {
@@ -223,6 +225,7 @@ impl SpeechRuntime {
                         source_sample_rate,
                         source_channels,
                         input_samples_16khz,
+                        input_rms,
                         completed_at_ms: timestamp_ms(),
                     });
                 }
