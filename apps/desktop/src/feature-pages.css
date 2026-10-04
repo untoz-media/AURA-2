@@ -1633,3 +1633,44 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.app-skill-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 12px;
+  background: var(--aura-surface-1);
+}
+
+.app-skill-subheading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-skill-subheading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.app-skill-subheading > div > span {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.app-skill-subheading small {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+}
+
+@media (max-width: 620px) {
+  .app-skill-subheading {
+    flex-direction: column;
+  }
+}
