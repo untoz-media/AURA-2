@@ -40,7 +40,9 @@ use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
-use computer::file_intelligence::{search_personal_files, summarize_file_search};
+use computer::file_intelligence::{
+    reveal_personal_path, search_personal_files, summarize_file_search,
+};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::recent_files::{
@@ -3485,6 +3487,55 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::RevealPersonalPath(path) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Revealing the selected path in File Explorer…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match reveal_personal_path(&worker_app, &path) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not reveal that path: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.file_reveal_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::FindPersonalFiles(query) => {
                             emit_core_event(
                                 &worker_app,
@@ -3539,7 +3590,11 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::FindPersonalFiles(query) => format!(
+                        ActionIntent::RevealPersonalPath(_) => {
+                        "Showing a personal file or folder in File Explorer requires confirmation under the current Act policy."
+                            .to_string()
+                    }
+                    ActionIntent::FindPersonalFiles(query) => format!(
                         "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
                         query
                     ),
