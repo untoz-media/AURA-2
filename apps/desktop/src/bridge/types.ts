@@ -743,6 +743,7 @@ export type AgentRun = {
     | "completed"
     | "failed"
     | "cancelled"
+    | "cancelling"
     | "interrupted"
     | string;
   currentStep?: number | null;
