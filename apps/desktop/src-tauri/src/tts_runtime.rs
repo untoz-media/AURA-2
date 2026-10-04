@@ -329,18 +329,18 @@ impl TtsRuntime {
             }
         }
 
+        let previous = self
+            .status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let status = TtsRuntimeStatus {
             state: "stopped".to_string(),
-            model_id: DEFAULT_TTS_MODEL_ID.to_string(),
-            dependency_ready: true,
-            voice_installed: true,
-            sample_rate: None,
-            last_text: self
-                .status
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .last_text
-                .clone(),
+            model_id: previous.model_id,
+            dependency_ready: previous.dependency_ready,
+            voice_installed: previous.voice_installed,
+            sample_rate: previous.sample_rate,
+            last_text: previous.last_text,
             last_error: None,
             refreshed_at_ms: timestamp_ms(),
         };
