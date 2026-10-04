@@ -379,6 +379,13 @@ function App() {
                       <strong>Computer status</strong>
                       <span>Understand what you are working in</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => void runQuickCommand("Look at my screen. What do you see?")}
+                    >
+                      <strong>Look at my screen</strong>
+                      <span>Use local AURA Vision on an explicit screenshot</span>
+                    </button>
                     <button type="button" onClick={() => setView("create")}>
                       <strong>Create with AURA</strong>
                       <span>Images now, video-ready architecture</span>
