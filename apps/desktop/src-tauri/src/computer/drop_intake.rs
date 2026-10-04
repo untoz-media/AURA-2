@@ -235,7 +235,8 @@ fn snapshot_from_records(
 }
 
 fn classify(extension: Option<&str>) -> &'static str {
-    match extension.unwrap_or_default() {
+    let normalized = extension.unwrap_or_default().to_ascii_lowercase();
+    match normalized.as_str() {
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => "image",
         "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv" | "mts" | "m2ts" => "video",
         "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus" => "audio",
@@ -264,7 +265,7 @@ mod tests {
     #[test]
     fn classifies_common_drop_types() {
         assert_eq!(classify(Some("png")), "image");
-        assert_eq!(classify(Some("MP4")), "other");
+        assert_eq!(classify(Some("MP4")), "video");
         assert_eq!(classify(Some("pdf")), "document");
         assert_eq!(classify(Some("zip")), "archive");
         assert_eq!(classify(None), "other");
