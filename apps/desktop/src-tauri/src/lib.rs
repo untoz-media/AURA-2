@@ -5894,8 +5894,9 @@ fn delete_memory_command(
 }
 
 #[tauri::command]
-fn get_director_presets(app: AppHandle) -> Vec<DirectorPreset> {
-    load_director_presets(&app)
+fn get_director_presets(app: AppHandle) -> Result<Vec<DirectorPreset>, String> {
+    validate_director_store(&app)?;
+    Ok(load_director_presets(&app))
 }
 
 #[tauri::command]
