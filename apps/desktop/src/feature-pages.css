@@ -1524,3 +1524,59 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* File Intelligence */
+
+.file-intelligence-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-intelligence-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.file-intelligence-search input {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  outline: none;
+  color: var(--aura-text-1);
+  background: var(--aura-bg-2);
+  font: inherit;
+}
+
+.file-intelligence-search input:focus {
+  border-color: var(--aura-border-focus);
+}
+
+.file-intelligence-search input:disabled {
+  opacity: .55;
+}
+
+.file-intelligence-boundary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.file-intelligence-boundary span {
+  padding: 5px 7px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 999px;
+  color: var(--aura-text-4);
+  background: var(--aura-surface-2);
+  font-size: var(--text-3xs);
+}
+
+@media (max-width: 680px) {
+  .file-intelligence-search {
+    grid-template-columns: 1fr;
+  }
+}
