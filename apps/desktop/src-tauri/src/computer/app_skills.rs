@@ -1,12 +1,41 @@
-use std::{process::Command, thread, time::Duration};
+use std::{
+    process::Command,
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
+use serde::Serialize;
 use tauri::{AppHandle, Manager};
+
+use crate::permissions::PermissionClass;
 
 use super::{
     app_launcher::AppTarget,
     keyboard::{press_shortcut, KeyboardShortcut},
     window_manager::{current_app, switch_to_app},
 };
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSkillDescriptor {
+    pub id: String,
+    pub group: String,
+    pub app_name: String,
+    pub name: String,
+    pub description: String,
+    pub command: String,
+    pub permission: PermissionClass,
+    pub available: bool,
+    pub contextual: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSkillCatalog {
+    pub skills: Vec<AppSkillDescriptor>,
+    pub context_app_name: Option<String>,
+    pub refreshed_at_ms: u64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PersonalFolderSkill {
@@ -19,6 +48,21 @@ pub enum PersonalFolderSkill {
 }
 
 impl PersonalFolderSkill {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Desktop => "explorer.desktop",
+            Self::Documents => "explorer.documents",
+            Self::Downloads => "explorer.downloads",
+            Self::Pictures => "explorer.pictures",
+            Self::Videos => "explorer.videos",
+            Self::Music => "explorer.music",
+        }
+    }
+
+    pub fn command(self) -> String {
+        format!("Open {}", self.display_name())
+    }
+
     pub fn display_name(self) -> &'static str {
         match self {
             Self::Desktop => "Desktop",
@@ -42,6 +86,43 @@ pub enum BrowserSkillAction {
 }
 
 impl BrowserSkillAction {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::NewTab => "new-tab",
+            Self::NextTab => "next-tab",
+            Self::PreviousTab => "previous-tab",
+            Self::Reload => "reload",
+            Self::FocusAddressBar => "focus-address-bar",
+            Self::ReopenClosedTab => "reopen-closed-tab",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::NewTab => "Open a new browser tab.",
+            Self::NextTab => "Move to the next browser tab.",
+            Self::PreviousTab => "Move to the previous browser tab.",
+            Self::Reload => "Reload the current browser tab.",
+            Self::FocusAddressBar => "Focus the browser address bar.",
+            Self::ReopenClosedTab => "Reopen the most recently closed browser tab.",
+        }
+    }
+
+    pub fn command(self, target: AppTarget) -> String {
+        match self {
+            Self::NewTab => format!("New tab in {}", target.display_name()),
+            Self::NextTab => format!("Next tab in {}", target.display_name()),
+            Self::PreviousTab => format!("Previous tab in {}", target.display_name()),
+            Self::Reload => format!("Reload {}", target.display_name()),
+            Self::FocusAddressBar => {
+                format!("Focus address bar in {}", target.display_name())
+            }
+            Self::ReopenClosedTab => {
+                format!("Reopen closed tab in {}", target.display_name())
+            }
+        }
+    }
+
     pub fn display_name(self) -> &'static str {
         match self {
             Self::NewTab => "New tab",
@@ -90,6 +171,80 @@ impl BrowserSkill {
             self.target.display_name()
         )
     }
+}
+
+pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
+    let mut skills = Vec::new();
+
+    for folder in [
+        PersonalFolderSkill::Desktop,
+        PersonalFolderSkill::Documents,
+        PersonalFolderSkill::Downloads,
+        PersonalFolderSkill::Pictures,
+        PersonalFolderSkill::Videos,
+        PersonalFolderSkill::Music,
+    ] {
+        skills.push(AppSkillDescriptor {
+            id: folder.id().to_string(),
+            group: "File Explorer".to_string(),
+            app_name: "File Explorer".to_string(),
+            name: folder.display_name().to_string(),
+            description: format!(
+                "Open the resolved Windows {} folder in File Explorer.",
+                folder.display_name()
+            ),
+            command: folder.command(),
+            permission: PermissionClass::Act,
+            available: true,
+            contextual: false,
+        });
+    }
+
+    for target in [AppTarget::Brave, AppTarget::Chrome] {
+        let available = context == Some(target);
+
+        for action in [
+            BrowserSkillAction::NewTab,
+            BrowserSkillAction::NextTab,
+            BrowserSkillAction::PreviousTab,
+            BrowserSkillAction::Reload,
+            BrowserSkillAction::FocusAddressBar,
+            BrowserSkillAction::ReopenClosedTab,
+        ] {
+            skills.push(AppSkillDescriptor {
+                id: format!(
+                    "browser.{}.{}",
+                    match target {
+                        AppTarget::Brave => "brave",
+                        AppTarget::Chrome => "chrome",
+                        _ => unreachable!("browser registry uses browser targets only"),
+                    },
+                    action.id()
+                ),
+                group: "Browser".to_string(),
+                app_name: target.display_name().to_string(),
+                name: action.display_name().to_string(),
+                description: action.description().to_string(),
+                command: action.command(target),
+                permission: PermissionClass::Act,
+                available,
+                contextual: true,
+            });
+        }
+    }
+
+    AppSkillCatalog {
+        skills,
+        context_app_name: context.map(AppTarget::display_name).map(str::to_string),
+        refreshed_at_ms: timestamp_ms(),
+    }
+}
+
+fn timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 pub fn execute_browser_skill(skill: BrowserSkill) -> Result<String, String> {
@@ -174,6 +329,50 @@ pub fn execute_personal_folder_skill(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skill_catalog_has_stable_browser_and_explorer_entries() {
+        let catalog = app_skill_catalog(Some(AppTarget::Brave));
+        assert_eq!(catalog.skills.len(), 18);
+        assert_eq!(catalog.context_app_name.as_deref(), Some("Brave"));
+
+        let brave = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "Brave")
+            .collect::<Vec<_>>();
+        assert_eq!(brave.len(), 6);
+        assert!(brave.iter().all(|skill| skill.available));
+
+        let chrome = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "Google Chrome")
+            .collect::<Vec<_>>();
+        assert_eq!(chrome.len(), 6);
+        assert!(chrome.iter().all(|skill| !skill.available));
+
+        let explorer = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "File Explorer")
+            .collect::<Vec<_>>();
+        assert_eq!(explorer.len(), 6);
+        assert!(explorer.iter().all(|skill| skill.available && !skill.contextual));
+    }
+
+    #[test]
+    fn skill_registry_commands_match_router_language() {
+        let catalog = app_skill_catalog(Some(AppTarget::Chrome));
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.command == "New tab in Google Chrome"));
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.command == "Open Downloads"));
+    }
 
     #[test]
     fn personal_folder_skill_labels_are_stable() {
