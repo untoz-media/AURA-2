@@ -481,6 +481,41 @@ mod voice_command_tests {
     fn wake_word_alone_is_not_a_command() {
         assert_eq!(normalize_voice_command("AURA"), "");
     }
+
+    #[test]
+    fn extracts_configured_wake_phrase_and_followup() {
+        assert_eq!(
+            extract_wake_command("AURA, abre o Brave", "AURA"),
+            Some("abre o Brave".to_string())
+        );
+        assert_eq!(
+            extract_wake_command("AURA", "AURA"),
+            Some(String::new())
+        );
+        assert_eq!(
+            extract_wake_command("abre o Brave", "AURA"),
+            None
+        );
+    }
+
+    #[test]
+    fn voice_preferences_are_sanitized() {
+        let preferences = VoicePreferences {
+            auto_speak: true,
+            tts_speed: 9.0,
+            conversation_mode: true,
+            conversation_timeout_seconds: 99,
+            wake_word_enabled: true,
+            wake_phrase: "   ".to_string(),
+            tts_voice_id: "unknown".to_string(),
+        }
+        .sanitized();
+
+        assert_eq!(preferences.tts_speed, 1.5);
+        assert_eq!(preferences.conversation_timeout_seconds, 20);
+        assert_eq!(preferences.wake_phrase, "AURA");
+        assert_eq!(preferences.tts_voice_id, "voice-piper-ptpt");
+    }
 }
 
 fn next_command_id() -> String {
