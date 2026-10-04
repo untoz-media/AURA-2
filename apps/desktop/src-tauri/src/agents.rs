@@ -210,6 +210,7 @@ pub struct AutomationScheduler {
     permission_policy: Mutex<PermissionPolicy>,
     startup_fired: Mutex<HashSet<String>>,
     last_external_process: Mutex<Option<String>>,
+    last_scheduler_error: Mutex<Option<String>>,
 }
 
 impl Default for AutomationScheduler {
@@ -220,6 +221,7 @@ impl Default for AutomationScheduler {
             permission_policy: Mutex::new(PermissionPolicy::default()),
             startup_fired: Mutex::new(HashSet::new()),
             last_external_process: Mutex::new(None),
+            last_scheduler_error: Mutex::new(None),
         }
     }
 }
@@ -545,6 +547,10 @@ impl AutomationScheduler {
             .last_external_process
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        *self
+            .last_scheduler_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 
         let handle = app.clone();
         thread::spawn(move || loop {
@@ -553,17 +559,39 @@ impl AutomationScheduler {
                 return;
             }
 
-            if let Err(error) = scheduler.tick(&handle) {
-                let _ = handle.emit(
-                    AUTOMATION_EVENT,
-                    AutomationEvent {
-                        automation_id: "scheduler".to_string(),
-                        automation_name: "Automation scheduler".to_string(),
-                        status: "error".to_string(),
-                        message: error,
-                        timestamp_ms: timestamp_ms(),
-                    },
-                );
+            match scheduler.tick(&handle) {
+                Ok(()) => {
+                    *scheduler
+                        .last_scheduler_error
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+                }
+                Err(error) => {
+                    let should_emit = {
+                        let mut last_error = scheduler
+                            .last_scheduler_error
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let changed = last_error.as_deref() != Some(error.as_str());
+                        if changed {
+                            *last_error = Some(error.clone());
+                        }
+                        changed
+                    };
+
+                    if should_emit {
+                        let _ = handle.emit(
+                            AUTOMATION_EVENT,
+                            AutomationEvent {
+                                automation_id: "scheduler".to_string(),
+                                automation_name: "Automation scheduler".to_string(),
+                                status: "error".to_string(),
+                                message: error,
+                                timestamp_ms: timestamp_ms(),
+                            },
+                        );
+                    }
+                }
             }
 
             thread::sleep(Duration::from_secs(2));
