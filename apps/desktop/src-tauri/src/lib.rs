@@ -864,6 +864,25 @@ fn save_preferences(
     storage::write_json_atomic(&path, preferences)
 }
 
+fn validate_optional_json_file<T>(
+    path: Result<PathBuf, String>,
+    label: &str,
+) -> Result<(), String>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let path = path?;
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read {label}: {error}"))?;
+    serde_json::from_str::<T>(&content)
+        .map(|_| ())
+        .map_err(|error| format!("{label} is invalid: {error}"))
+}
+
 fn runtime_snapshot(state: &RuntimeState) -> RuntimeSnapshot {
     RuntimeSnapshot {
         paused: *state
@@ -1925,6 +1944,50 @@ fn run_beta_self_test(
         ),
     };
     checks.push(atomic_storage_check);
+
+    for (id, label, result) in [
+        (
+            "permissionPolicyFile",
+            "Permission policy file",
+            validate_optional_json_file::<PermissionPolicy>(
+                permission_policy_path(&app),
+                "permission policy file",
+            ),
+        ),
+        (
+            "voicePreferencesFile",
+            "Voice preferences file",
+            validate_optional_json_file::<VoicePreferences>(
+                voice_preferences_path(&app),
+                "voice preferences file",
+            ),
+        ),
+        (
+            "desktopPreferencesFile",
+            "Desktop preferences file",
+            validate_optional_json_file::<DesktopPreferences>(
+                preferences_path(&app),
+                "desktop preferences file",
+            ),
+        ),
+    ] {
+        checks.push(match result {
+            Ok(()) => beta_self_test_check(
+                id,
+                label,
+                "pass",
+                true,
+                format!("{label} is valid or has not been created yet."),
+            ),
+            Err(error) => beta_self_test_check(
+                id,
+                label,
+                "fail",
+                true,
+                error,
+            ),
+        });
+    }
 
     let policy = state
         .permission_policy
