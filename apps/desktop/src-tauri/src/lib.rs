@@ -814,6 +814,18 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     app.state::<AgentEngine>().set_global_paused(app, paused);
     app.state::<AutomationScheduler>().set_paused(paused);
 
+    if paused {
+        state.conversation_active.store(false, Ordering::Relaxed);
+
+        let audio = app.state::<AudioInputManager>();
+        if audio.capture_active() {
+            let _ = audio.stop_push_to_talk();
+            let _ = audio.take_last_capture();
+        }
+
+        let _ = app.state::<TtsRuntime>().interrupt();
+    }
+
     emit_runtime_state(app)
 }
 
@@ -1304,6 +1316,10 @@ fn process_voice_capture(
 fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     thread::spawn(move || {
         let runtime = app.state::<RuntimeState>();
+        if runtime_snapshot(&runtime).paused {
+            return;
+        }
+
         if runtime
             .conversation_active
             .swap(true, Ordering::Relaxed)
@@ -1373,6 +1389,27 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
         let timeout = Duration::from_secs(preferences.conversation_timeout_seconds);
 
         while started.elapsed() < timeout {
+            if runtime_snapshot(&runtime).paused {
+                let _ = audio.stop_push_to_talk();
+                let _ = audio.take_last_capture();
+                runtime.conversation_active.store(false, Ordering::Relaxed);
+                emit_voice_capture_event(
+                    &app,
+                    VoiceCaptureEvent {
+                        phase: "conversationPaused",
+                        shortcut: "conversation",
+                        sample_count: 0,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        sample_rate: None,
+                        channels: None,
+                        message: "Conversation Mode stopped because AURA was paused.".to_string(),
+                        text: None,
+                        timestamp_ms: unix_timestamp_ms(),
+                    },
+                );
+                return;
+            }
+
             let level = audio.current_level();
 
             if level >= 0.015 {
@@ -1451,7 +1488,10 @@ fn resume_wake_monitor_if_enabled(app: tauri::AppHandle) {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .wake_word_enabled;
 
-    if !enabled || state.conversation_active.load(Ordering::Relaxed) {
+    if !enabled
+        || state.conversation_active.load(Ordering::Relaxed)
+        || runtime_snapshot(&state).paused
+    {
         return;
     }
 
