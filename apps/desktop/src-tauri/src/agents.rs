@@ -208,7 +208,7 @@ pub fn plan_goal(
 ) -> Result<AgentPlan, String> {
     let goal = validate_text(goal, "Agent goal", 1200)?;
     let routines = list_routines(app).unwrap_or_default();
-    let presets = load_director_presets(app).unwrap_or_default();
+    let presets = load_director_presets(app);
     let actions = list_saved_actions(app).unwrap_or_default();
 
     let routine_names = routines
@@ -876,7 +876,7 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
         AgentStep::DirectorPreset { preset } => {
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
-                    load_director_presets(app).ok()?.into_iter().find(|item| {
+                    load_director_presets(app).into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(preset)
                             || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
                     })
@@ -1057,7 +1057,6 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
                         item.name.eq_ignore_ascii_case(routine)
                             || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                     })
-                });
             if exists {
                 Ok(())
             } else {
@@ -1066,8 +1065,7 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
         }
         AgentStep::DirectorPreset { preset } => {
             let exists = find_director_preset_by_id(app, preset).is_some()
-                || load_director_presets(app).ok().is_some_and(|items| {
-                    items.iter().any(|item| {
+                || load_director_presets(app).iter().any(|item| {
                         item.name.eq_ignore_ascii_case(preset)
                             || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
                     })
