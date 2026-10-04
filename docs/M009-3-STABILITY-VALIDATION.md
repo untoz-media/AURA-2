@@ -93,6 +93,13 @@ After App Skills V3 (Windows Terminal + Calculator), the hosted jobs still fail 
 
 The App Skills V3 pass therefore also has no GitHub-hosted compile/test evidence yet.
 
+After Drag & Drop Actions V1, the same pre-runner failure reproduced again:
+
+- Windows Build run `37241609285`: empty runner name, `steps: []`, failed before the NSIS installer job executed
+- Static Checks run `37241609275`: empty runner name, `steps: []`, failed before Beta source validation executed
+
+The runs briefly appeared queued, then completed as failures within about two seconds without receiving a runner. Drag & Drop V1 therefore has no hosted compile/test evidence yet.
+
 This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
 
 Before retrying, check the Untoz organization:
