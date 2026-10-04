@@ -3,6 +3,7 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
+    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -155,7 +156,53 @@ pub fn summarize_file_search(snapshot: &FileSearchSnapshot) -> String {
         );
     }
 
+    lines.push(
+        "Tip: use “Reveal file <full path>” to show a result safely in File Explorer."
+            .to_string(),
+    );
+
     lines.join("\n")
+}
+
+pub fn reveal_personal_path(app: &AppHandle, value: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err("File path cannot be empty.".to_string());
+    }
+
+    let target = PathBuf::from(value);
+    if !target.is_absolute() {
+        return Err("Reveal file requires an absolute path from a File Intelligence result.".to_string());
+    }
+
+    let canonical_target = fs::canonicalize(&target)
+        .map_err(|_| "That file or folder no longer exists.".to_string())?;
+
+    let allowed = personal_roots(app)
+        .into_iter()
+        .filter_map(|root| fs::canonicalize(root.path).ok())
+        .any(|root| canonical_target.starts_with(root));
+
+    if !allowed {
+        return Err(
+            "AURA only reveals paths inside Desktop, Documents, Downloads, Pictures, Videos or Music."
+                .to_string(),
+        );
+    }
+
+    let argument = format!("/select,{}", canonical_target.to_string_lossy());
+    Command::new("explorer.exe")
+        .arg(argument)
+        .spawn()
+        .map_err(|error| format!("Could not open File Explorer: {error}"))?;
+
+    Ok(format!(
+        "Revealed {} in File Explorer.",
+        canonical_target
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_else(|| canonical_target.to_string_lossy())
+    ))
 }
 
 fn personal_roots(app: &AppHandle) -> Vec<SearchRoot> {
@@ -352,6 +399,29 @@ mod tests {
             match_score("invoice.pdf", "world united", &["world", "united"]),
             None
         );
+    }
+
+    #[test]
+    fn search_summary_includes_safe_reveal_hint() {
+        let snapshot = FileSearchSnapshot {
+            query: "report".to_string(),
+            items: vec![FileSearchItem {
+                name: "report.pdf".to_string(),
+                path: "C:\\Users\\Test\\Documents\\report.pdf".to_string(),
+                root_label: "Documents".to_string(),
+                kind: "file".to_string(),
+                extension: Some("pdf".to_string()),
+                size_bytes: Some(10),
+                modified_at_ms: 1,
+            }],
+            roots: vec!["Documents".to_string()],
+            scanned_entries: 1,
+            scan_limit_reached: false,
+            max_depth: MAX_SEARCH_DEPTH,
+            refreshed_at_ms: 1,
+        };
+
+        assert!(summarize_file_search(&snapshot).contains("Reveal file <full path>"));
     }
 
     #[test]
