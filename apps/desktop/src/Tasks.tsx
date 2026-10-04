@@ -436,10 +436,9 @@ export default function Tasks({
       <div className="feature-note">
         <strong>Local and deterministic.</strong>
         <span>
-          The local model may later help interpret natural language, but saved
-          routine steps are explicit AURA actions executed by the permission
-          engine. Scheduling and autonomous background tasks remain scoped to
-          M008.
+          Saved routine steps are explicit AURA actions executed by the permission
+          engine. For multi-step goals, reusable Actions and scheduled background
+          work, use the Agents workspace.
         </span>
       </div>
     </section>
