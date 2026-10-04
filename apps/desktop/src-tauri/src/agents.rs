@@ -799,6 +799,22 @@ pub fn save_action(
     let aliases = sanitize_aliases(&request.aliases, &name, 12)?;
     let requested_id = request.id.as_deref();
 
+    if let Some(action_id) = requested_id {
+        let automations = read_automations(app)?;
+        if automations
+            .iter()
+            .any(|automation| automation.action_id == action_id)
+        {
+            let permission = permission_for_step(app, &normalized_step)?;
+            if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+                return Err(
+                    "This AURA Action is used by an Automation and cannot be changed to Modify, Sensitive or Destructive. Update or remove the Automation first."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
     for existing in &actions {
         if requested_id == Some(existing.id.as_str()) {
             continue;
