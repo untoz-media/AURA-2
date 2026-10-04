@@ -108,8 +108,10 @@ impl TtsRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
 
-        current.dependency_ready =
-            python_module_available(app, "piper").unwrap_or(false);
+        if !current.dependency_ready {
+            current.dependency_ready =
+                python_module_available(app, "piper").unwrap_or(false);
+        }
         current.voice_installed =
             manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
         current.refreshed_at_ms = timestamp_ms();
