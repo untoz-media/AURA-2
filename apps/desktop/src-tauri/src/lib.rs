@@ -1,5 +1,6 @@
 mod agents;
 mod audio_input;
+mod beta;
 mod computer;
 mod core;
 mod integrations;
@@ -24,6 +25,12 @@ use agents::{
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
+use beta::{
+    begin_session as begin_beta_session, export_diagnostics as export_beta_diagnostics_file,
+    mark_session_clean as mark_beta_session_clean, save_preferences as save_beta_preferences,
+    status as beta_status, BetaSessionRuntime, BetaStatus, DiagnosticsSnapshot,
+    SetBetaPreferencesRequest,
+};
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
 use computer::audio::{execute_media_action, MediaAction};
@@ -1704,6 +1711,91 @@ fn aura_tray_icon() -> Image<'static> {
     }
 
     Image::new_owned(rgba, SIZE, SIZE)
+}
+
+fn build_beta_diagnostics(
+    app: &AppHandle,
+    state: &RuntimeState,
+    manager: &ModelManager,
+    setup: &ManagedRuntimeSetup,
+    engine: &AgentEngine,
+) -> Result<DiagnosticsSnapshot, String> {
+    let runtime = runtime_snapshot(state);
+    let catalog = manager.catalog(app)?;
+    let agent_snapshot = engine.snapshot(app)?;
+    let actions = list_saved_actions(app)?;
+    let automations = list_automations(app)?;
+
+    Ok(DiagnosticsSnapshot {
+        schema_version: 1,
+        app_name: "AURA-2".to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        channel: "beta".to_string(),
+        platform: std::env::consts::OS.to_string(),
+        architecture: std::env::consts::ARCH.to_string(),
+        paused: runtime.paused,
+        background_enabled: runtime.background_enabled,
+        autostart_enabled: runtime.autostart_enabled,
+        active_model_id: catalog.active_model_id,
+        installed_model_ids: catalog
+            .models
+            .into_iter()
+            .filter(|model| model.installed)
+            .map(|model| model.id)
+            .collect(),
+        managed_runtime_state: setup.status(app).state,
+        agent_runs_total: agent_snapshot.runs.len(),
+        active_agent_runs: agent_snapshot
+            .runs
+            .iter()
+            .filter(|run| matches!(run.state.as_str(), "queued" | "running" | "paused" | "cancelling"))
+            .count(),
+        saved_actions: actions.len(),
+        automations: automations.len(),
+        enabled_automations: automations.iter().filter(|automation| automation.enabled).count(),
+        telemetry_enabled: false,
+        generated_at_ms: unix_timestamp_ms(),
+    })
+}
+
+#[tauri::command]
+fn get_beta_status(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+) -> Result<BetaStatus, String> {
+    beta_status(&app, &beta)
+}
+
+#[tauri::command]
+fn set_beta_preferences(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+    request: SetBetaPreferencesRequest,
+) -> Result<BetaStatus, String> {
+    save_beta_preferences(&app, &beta, request)
+}
+
+#[tauri::command]
+fn get_beta_diagnostics(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+) -> Result<DiagnosticsSnapshot, String> {
+    build_beta_diagnostics(&app, &state, &manager, &setup, &engine)
+}
+
+#[tauri::command]
+fn export_beta_diagnostics(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+) -> Result<String, String> {
+    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine)?;
+    export_beta_diagnostics_file(&app, &snapshot)
 }
 
 #[tauri::command]
@@ -5292,6 +5384,7 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(BetaSessionRuntime::default())
         .manage(AgentEngine::default())
         .manage(AutomationScheduler::default())
         .manage(VisionSession::default())
@@ -5588,6 +5681,9 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let beta_runtime = app.state::<BetaSessionRuntime>();
+            let _ = begin_beta_session(app.handle(), &beta_runtime);
+
             let preferences = load_preferences(app.handle());
             let voice_preferences = load_voice_preferences(app.handle());
             let permission_policy = load_permission_policy(app.handle());
@@ -5688,6 +5784,7 @@ pub fn run() {
                         let _ = app.emit("aura:open-settings", ());
                     }
                     "quit" => {
+                        let _ = mark_beta_session_clean(app);
                         app.state::<ModelRuntime>().stop();
                         app.state::<SpeechRuntime>().stop();
                         app.state::<TtsRuntime>().stop();
@@ -5726,6 +5823,7 @@ pub fn run() {
                                 "AURA is running in the background. Use the tray or shortcut to return.",
                             );
                         } else {
+                            let _ = mark_beta_session_clean(&app_for_close);
                             app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.state::<TtsRuntime>().stop();
@@ -5760,6 +5858,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
+            get_beta_status,
+            set_beta_preferences,
+            get_beta_diagnostics,
+            export_beta_diagnostics,
             get_runtime_state,
             get_voice_preferences,
             set_voice_preferences,
