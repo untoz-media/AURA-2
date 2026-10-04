@@ -26,7 +26,25 @@ export default function Computer({
   onRecentFilesRefresh,
   onCommand,
 }: Props) {
+  const contextualWindowActions = currentApp?.knownApp
+    ? [
+        {
+          label: `Minimize ${currentApp.appName}`,
+          command: `Minimize ${currentApp.appName}`,
+        },
+        {
+          label: `Maximize ${currentApp.appName}`,
+          command: `Maximize ${currentApp.appName}`,
+        },
+        {
+          label: `Restore ${currentApp.appName}`,
+          command: `Restore ${currentApp.appName}`,
+        },
+      ]
+    : [];
+
   const actions = [
+    ...contextualWindowActions,
     { label: "Show windows", command: "Show windows" },
     { label: "Current app", command: "What app am I using?" },
     { label: "Recent files", command: "Recent files" },
@@ -132,6 +150,14 @@ export default function Computer({
           <div>
             <span className="feature-kicker">QUICK ACTIONS</span>
             <strong>Ask the computer layer directly.</strong>
+            {currentApp?.knownApp && (
+              <small>
+                Window controls target {currentApp.appName}
+                {currentApp.contextSource === "lastExternal"
+                  ? " from your last external context."
+                  : "."}
+              </small>
+            )}
           </div>
         </div>
         <div className="quick-action-grid">
