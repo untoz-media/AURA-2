@@ -286,7 +286,7 @@ export default function Vision({
             <button
               className="feature-primary-button"
               type="button"
-              disabled={visionBusy || visionBlocked}
+              disabled={visionBusy}
               onClick={() => void runModel("download")}
             >
               Install Vision model
@@ -323,7 +323,7 @@ export default function Vision({
             <button
               className="feature-secondary-button"
               type="button"
-              disabled={visionBusy || visionBlocked}
+              disabled={visionBusy}
               onClick={() => void runModel("remove")}
             >
               Remove model
@@ -332,7 +332,7 @@ export default function Vision({
           <button
             className="feature-secondary-button"
             type="button"
-            disabled={visionBusy || visionBlocked}
+            disabled={visionBusy}
             onClick={() => void onRuntimeRefresh()}
           >
             Refresh
