@@ -33,9 +33,11 @@ use beta::{
     status as beta_status, BetaSessionRuntime, BetaStatus, DiagnosticCheck, DiagnosticsSnapshot,
     SetBetaPreferencesRequest,
 };
-use computer::app_launcher::launch_app;
+use computer::app_launcher::{launch_app, AppTarget};
 use computer::app_lifecycle::close_app;
-use computer::app_skills::{execute_browser_skill, execute_personal_folder_skill};
+use computer::app_skills::{
+    app_skill_catalog, execute_browser_skill, execute_personal_folder_skill, AppSkillCatalog,
+};
 use computer::audio::{execute_media_action, MediaAction};
 use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
@@ -5945,6 +5947,18 @@ fn get_current_app_context(
 }
 
 #[tauri::command]
+fn get_app_skill_catalog(
+    awareness: State<'_, CurrentAppAwareness>,
+) -> AppSkillCatalog {
+    let context = awareness
+        .snapshot()
+        .ok()
+        .and_then(|current| AppTarget::from_process_image(&current.process_name));
+
+    app_skill_catalog(context)
+}
+
+#[tauri::command]
 fn get_recent_files_context() -> Result<RecentFilesSnapshot, String> {
     default_recent_files_snapshot().map_err(|error| error.to_string())
 }
@@ -6777,6 +6791,7 @@ pub fn run() {
             start_audio_input_test,
             stop_audio_input_test,
             get_current_app_context,
+            get_app_skill_catalog,
             get_recent_files_context,
             get_project_memory,
             save_project_memory,
