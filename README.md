@@ -250,7 +250,7 @@ The desktop now includes a Managed Runtime installer that can prepare a private 
 
 AURA now has a real deterministic App Skills layer.
 
-Browser Skills V1 supports **Brave** and **Google Chrome** with:
+V1 includes Browser Skills for **Brave** and **Google Chrome** with:
 
 - New tab
 - Next tab
@@ -269,7 +269,9 @@ Every Browser Skill:
 
 If foreground verification fails, no shortcut is injected.
 
-Browser Skills V1 use the reversible `Act` permission class and do not require an LLM.
+File Explorer Skills V1 can also open the known personal folders Desktop, Documents, Downloads, Pictures, Videos and Music using paths resolved by Windows/Tauri. They do not accept arbitrary paths or use a shell.
+
+All App Skills V1 use the reversible `Act` permission class and do not require an LLM.
 
 ### File Intelligence
 
