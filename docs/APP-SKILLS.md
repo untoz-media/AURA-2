@@ -4,6 +4,13 @@ App Skills are deterministic application-specific capabilities built on top of A
 
 They are not generic macros and do not require an LLM for execution.
 
+## Implemented V1 skills
+
+App Skills V1 currently contains:
+
+- Browser Skills for Brave and Google Chrome
+- File Explorer Skills for known personal folders
+
 ## Browser Skills V1
 
 Initial supported targets:
@@ -72,9 +79,40 @@ Portuguese examples:
 - `Foca a barra de endereços no Brave`
 - `Reabre o separador fechado no Chrome`
 
+
+
+## File Explorer Skills V1
+
+AURA can open only the Windows personal folders resolved through the platform path API:
+
+- Desktop
+- Documents
+- Downloads
+- Pictures
+- Videos
+- Music
+
+Examples:
+
+- `Open Downloads`
+- `Open Documents`
+- `Abre os Downloads`
+- `Abre a pasta vídeos`
+
+Execution uses `explorer.exe` with the resolved path as a direct argument.
+
+AURA does not:
+
+- interpolate a shell command;
+- accept an arbitrary folder path through this skill;
+- use PowerShell or cmd.exe;
+- create, rename, move or delete anything.
+
+These skills use `PermissionClass::Act`.
+
 ## Permission boundary
 
-Browser Skills V1 are classified as `PermissionClass::Act`.
+Browser Skills V1 and File Explorer Skills V1 are classified as `PermissionClass::Act`.
 
 They are reversible navigation/state actions and do not:
 
