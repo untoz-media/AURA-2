@@ -4573,6 +4573,7 @@ fn run_aura_action(
     app: AppHandle,
     state: State<'_, RuntimeState>,
     action_id: String,
+    approved: bool,
 ) -> Result<String, String> {
     if runtime_snapshot(&state).paused {
         return Err("AURA is paused. Resume it before running a saved Action.".to_string());
@@ -4584,7 +4585,7 @@ fn run_aura_action(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
-    run_saved_action(&app, &action_id, &policy)
+    run_saved_action(&app, &action_id, &policy, approved)
 }
 
 #[tauri::command]
