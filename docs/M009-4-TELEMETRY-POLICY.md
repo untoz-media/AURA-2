@@ -44,3 +44,13 @@ The diagnostics snapshot intentionally excludes:
 - arbitrary file paths/content
 
 The JSON file is written locally only after an explicit Export action.
+
+Before writing, AURA applies a fail-closed privacy guard:
+
+- diagnostics schema fields are allowlisted;
+- health-check fields are allowlisted;
+- unexpected fields block export instead of being written;
+- the exported payload is capped at 64 KiB;
+- export failures are surfaced locally through the AURA bridge/activity state.
+
+This means future code cannot silently expand the diagnostics export schema without also updating and reviewing the privacy boundary.
