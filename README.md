@@ -281,6 +281,27 @@ Notepad Skills V1 are also available contextually:
 - Undo → Modify
 - Redo → Modify
 
+Windows Terminal Skills V1:
+
+- New tab
+- Next tab
+- Previous tab
+- Command palette
+- Find
+- Tab/profile dropdown
+
+Terminal Skills never accept arbitrary shell command text. They use the documented default Windows Terminal key bindings and therefore respect the product boundary that AURA is navigating the Terminal UI, not executing a shell.
+
+Calculator Skills V1:
+
+- Standard mode
+- Scientific mode
+- Programmer mode
+- Date Calculation
+- Graphing mode
+
+Calculator Skills use the keyboard accelerators exercised by the official Microsoft Calculator repository's manual test plan.
+
 Notepad shortcuts use the same foreground-process verification as Browser Skills. Save/Close are intentionally not exposed in this pass because they can write files or risk unsaved work.
 
 App Skills remain deterministic and do not require an LLM.
