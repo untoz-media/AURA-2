@@ -252,7 +252,7 @@ The desktop now includes a Managed Runtime installer that can prepare a private 
 
 AURA now accepts local files dropped onto the main desktop window through Tauri's native drag/drop events.
 
-Drag & Drop V1 is intentionally an **intake layer**, not automatic execution.
+Drag & Drop V2 is an **explicit intake + bounded inspection layer**, not automatic execution.
 
 Current behavior:
 
@@ -265,12 +265,17 @@ Current behavior:
 - nothing is opened, executed, uploaded, remembered or analyzed automatically
 - the temporary drop session can be dismissed without modifying the original files
 - any accepted file can be revealed explicitly in File Explorer
+- any accepted file can be inspected explicitly without exposing its real path to React
+- allowlisted text/code formats can expose a temporary preview bounded to 64 KiB / 12,000 characters
+- image inspection can expose local dimensions without creating a Vision capture
+- **Inspect all** applies the same bounded rules across the temporary batch
+- PDFs, Office files, video, audio and archives remain metadata-only in this Beta step
 - PNG/JPEG/WebP/GIF/BMP images can be staged explicitly for AURA Vision
 - Vision works from a normalized PNG copy in AURA's cache, never from the original image
 - Vision image import is bounded to 40 MB and the existing 24-million-pixel capture limit
 - dropped-file paths/content are not added to Beta diagnostics
 
-The drop tray classifies metadata as image, video, audio, document, archive or other, but V1 does not inspect file contents for non-image files.
+The drop tray classifies metadata as image, video, audio, document, archive or other. V2 adds explicit bounded inspection for allowlisted UTF-8 text/code files while keeping complex binary formats metadata-only.
 
 ### App Skills
 
