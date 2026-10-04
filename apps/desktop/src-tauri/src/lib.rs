@@ -6334,7 +6334,15 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
-            let _ = recover_interrupted_runs(app.handle());
+            if let Err(error) = recover_interrupted_runs(app.handle()) {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "agents.recovery_failed",
+                    &format!(
+                        "AURA could not recover interrupted Agent runs. Agent history needs attention: {error}"
+                    ),
+                );
+            }
             app.state::<AgentEngine>()
                 .set_global_paused(app.handle(), preferences.paused);
             app.state::<AutomationScheduler>()
