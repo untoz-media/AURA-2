@@ -50,6 +50,9 @@ jobs:
       - name: Validate release metadata
         run: npm run release:check
 
+      - name: Validate Beta source guardrails
+        run: npm run beta:source-check
+
       - name: Test Rust Core
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
