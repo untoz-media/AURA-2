@@ -1,0 +1,61 @@
+# AURA-2 Beta — Known Issues & Limitations
+
+## Release blockers
+
+### GitHub Actions jobs currently fail before step 1
+
+Recent Windows Build runs and the independent Beta Quality run have failed with zero recorded steps. Checkout and project commands never started.
+
+This means CI has not yet provided a valid compile/test result for the current Beta stack. The Public Beta must wait for a successful quality run and a successful Windows installer build.
+
+## Product limitations
+
+### Dedicated AURA-2 model checkpoint is not defined yet
+
+The Model Manager contains an AURA-2 slot, but no source repository/checkpoint has been assigned to it.
+
+The current usable local assistant profile is **AURA-1**, backed by `Qwen/Qwen3-4B-Instruct-2507`. The surrounding AURA-2 desktop/Core/Agent architecture is already the new generation.
+
+### Pre-release installer may be unsigned
+
+Until Untoz configures a real protected Windows code-signing identity, internal/Beta installers may trigger Microsoft Defender SmartScreen reputation warnings.
+
+Do not bypass warnings for an installer unless it came from the expected Untoz release/build and its SHA-256 checksum matches.
+
+### First-time AI setup is large
+
+The assistant model and optional Voice/Vision models are downloaded separately from the core application. AURA-1 alone is approximately 8 GB, and the managed runtime also requires significant free disk space.
+
+### CPU fallback is slower
+
+AURA can use CPU inference when a compatible NVIDIA CUDA path is unavailable, but local model generation, Voice and Vision may be noticeably slower.
+
+### OBS requires local configuration
+
+OBS integration requires the OBS WebSocket server to be reachable with the configured host/port/password. AURA does not bypass OBS authentication.
+
+### Cloud assistance is intentionally unavailable
+
+The Beta does not require or silently route prompts to a cloud LLM. Optional cloud assistance remains unconfigured.
+
+## Not bugs
+
+- Sensitive and Destructive permissions cannot be permanently Allow.
+- Background Automations cannot execute Modify/Sensitive/Destructive Actions.
+- A scheduled Automation stops running silently if its permission changes away from Allow.
+- Agents cannot invent shell commands, arbitrary mouse coordinates, file deletion, purchases, uploads or unsupported actions.
+- Global Pause intentionally suspends Agents and Automations.
+
+## Reporting
+
+If a new issue is found, record:
+
+- build/version
+- Windows version
+- hardware relevant to the issue
+- exact reproduction steps
+- expected behaviour
+- actual behaviour/error
+- whether the issue survives restart
+
+Avoid including credentials, private files, prompts or personal data unless they are strictly necessary and you intentionally choose to share them.
