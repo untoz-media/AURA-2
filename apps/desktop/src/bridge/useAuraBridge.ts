@@ -55,6 +55,9 @@ import {
   setActiveProjectMemory,
   getAudioInputState,
   getSpeechRuntimeStatus,
+  getTtsRuntimeStatus,
+  prepareTtsRuntime,
+  testTtsVoice,
   selectAudioInputDevice,
   startAudioInputTest,
   stopAudioInputTest,
@@ -114,6 +117,7 @@ import type {
   AudioInputSnapshot,
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
+  TtsRuntimeStatus,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -174,6 +178,14 @@ const DEFAULT_AUDIO_INPUT: AudioInputSnapshot = {
 const DEFAULT_SPEECH_RUNTIME: SpeechRuntimeStatus = {
   state: "stopped",
   modelId: "voice-whisper-base",
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_TTS_RUNTIME: TtsRuntimeStatus = {
+  state: "stopped",
+  modelId: "voice-piper-ptpt",
+  dependencyReady: false,
+  voiceInstalled: false,
   refreshedAtMs: 0,
 };
 
@@ -239,6 +251,8 @@ export function useAuraBridge() {
     useState<VoiceCaptureEvent | null>(null);
   const [speechRuntime, setSpeechRuntime] =
     useState<SpeechRuntimeStatus>(DEFAULT_SPEECH_RUNTIME);
+  const [ttsRuntime, setTtsRuntime] =
+    useState<TtsRuntimeStatus>(DEFAULT_TTS_RUNTIME);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -320,6 +334,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Speech runtime remains stopped until Voice STT is used.
+      });
+
+    getTtsRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setTtsRuntime(runtime);
+      })
+      .catch(() => {
+        // TTS remains unavailable until explicitly prepared.
       });
 
     getAudioInputState()
@@ -916,6 +938,24 @@ export function useAuraBridge() {
     const snapshot = await getProjectMemory();
     setProjectMemory(snapshot);
     return snapshot;
+  }, []);
+
+  const refreshTtsRuntime = useCallback(async () => {
+    const runtime = await getTtsRuntimeStatus();
+    setTtsRuntime(runtime);
+    return runtime;
+  }, []);
+
+  const prepareTtsRuntimeControl = useCallback(async () => {
+    const runtime = await prepareTtsRuntime();
+    setTtsRuntime(runtime);
+    return runtime;
+  }, []);
+
+  const testTtsVoiceControl = useCallback(async (text?: string) => {
+    const runtime = await testTtsVoice(text);
+    setTtsRuntime(runtime);
+    return runtime;
   }, []);
 
   const refreshAudioInput = useCallback(async () => {
@@ -1782,6 +1822,7 @@ export function useAuraBridge() {
     audioInput,
     voiceCapture,
     speechRuntime,
+    ttsRuntime,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1813,6 +1854,9 @@ export function useAuraBridge() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    refreshTtsRuntime,
+    prepareTtsRuntimeControl,
+    testTtsVoiceControl,
     refreshAudioInput,
     selectAudioInput,
     startAudioTest,

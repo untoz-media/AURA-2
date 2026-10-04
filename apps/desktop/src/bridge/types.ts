@@ -382,7 +382,7 @@ export type ModelStatus = {
   subtitle: string;
   description: string;
   generation: string;
-  role: "assistant" | "speechToText" | string;
+  role: "assistant" | "speechToText" | "textToSpeech" | string;
   state: ModelInstallState;
   downloadAvailable: boolean;
   installed: boolean;
@@ -583,6 +583,25 @@ export type SpeechRuntimeStatus = {
   modelId: string;
   device?: string | null;
   cuda?: boolean | null;
+  lastText?: string | null;
+  lastError?: string | null;
+  refreshedAtMs: number;
+};
+
+
+export type TtsRuntimeStatus = {
+  state:
+    | "stopped"
+    | "installingDependency"
+    | "loading"
+    | "ready"
+    | "speaking"
+    | "error"
+    | string;
+  modelId: string;
+  dependencyReady: boolean;
+  voiceInstalled: boolean;
+  sampleRate?: number | null;
   lastText?: string | null;
   lastError?: string | null;
   refreshedAtMs: number;

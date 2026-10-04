@@ -71,7 +71,7 @@ export default function Models({
   onRuntimeAction,
 }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
-  const assistantModels = catalog.models.filter((model) => model.role !== "speechToText");
+  const assistantModels = catalog.models.filter((model) => model.role === "assistant");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const runtimeBusy = [

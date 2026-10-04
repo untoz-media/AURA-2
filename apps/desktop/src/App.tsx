@@ -62,6 +62,7 @@ function App() {
     audioInput,
     voiceCapture,
     speechRuntime,
+    ttsRuntime,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -92,6 +93,9 @@ function App() {
     saveProjectMemoryControl,
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
+    refreshTtsRuntime,
+    prepareTtsRuntimeControl,
+    testTtsVoiceControl,
     refreshAudioInput,
     selectAudioInput,
     startAudioTest,
@@ -594,6 +598,10 @@ function App() {
               audioInput={audioInput}
               voiceCapture={voiceCapture}
               speechRuntime={speechRuntime}
+              ttsRuntime={ttsRuntime}
+              onTtsRuntimeRefresh={refreshTtsRuntime}
+              onTtsRuntimePrepare={prepareTtsRuntimeControl}
+              onTtsVoiceTest={testTtsVoiceControl}
               onVoiceModelOperation={runModelOperation}
               onAudioRefresh={refreshAudioInput}
               onAudioSelect={selectAudioInput}

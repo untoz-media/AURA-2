@@ -78,7 +78,7 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 - [x] **M006.2** — Push-to-talk
 - [x] **M006.3** — Local speech-to-text
 - [x] **M006.4** — Voice → AURA Core
-- [ ] **M006.5** — Local text-to-speech
+- [x] **M006.5** — Local text-to-speech
 - [ ] **M006.6** — Voice selection & settings
 - [ ] **M006.7** — Conversation mode
 - [ ] **M006.8** — Voice interruption / stop speaking

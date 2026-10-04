@@ -26,6 +26,7 @@ import type {
   AudioInputSnapshot,
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
+  TtsRuntimeStatus,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -108,6 +109,10 @@ type Props = {
   audioInput: AudioInputSnapshot;
   voiceCapture: VoiceCaptureEvent | null;
   speechRuntime: SpeechRuntimeStatus;
+  ttsRuntime: TtsRuntimeStatus;
+  onTtsRuntimeRefresh: () => Promise<TtsRuntimeStatus>;
+  onTtsRuntimePrepare: () => Promise<TtsRuntimeStatus>;
+  onTtsVoiceTest: (text?: string) => Promise<TtsRuntimeStatus>;
   onVoiceModelOperation: (
     operation: "download" | "pause" | "resume" | "cancel" | "remove",
     modelId: string,
@@ -272,6 +277,10 @@ export default function Settings({
   audioInput,
   voiceCapture,
   speechRuntime,
+  ttsRuntime,
+  onTtsRuntimeRefresh,
+  onTtsRuntimePrepare,
+  onTtsVoiceTest,
   onVoiceModelOperation,
   onAudioRefresh,
   onAudioSelect,
@@ -293,8 +302,12 @@ export default function Settings({
   const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
   const [obsStreamClockMs, setObsStreamClockMs] = useState(0);
   const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
+  const [ttsBusy, setTtsBusy] = useState<string | null>(null);
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
+  );
+  const ttsModel = modelCatalog.models.find(
+    (model) => model.id === "voice-piper-ptpt",
   );
 
   async function runVoiceModel(
@@ -313,6 +326,44 @@ export default function Settings({
       await onVoiceModelOperation(operation, voiceModel.id);
     } finally {
       setVoiceModelBusy(null);
+    }
+  }
+
+  async function runTtsModel(
+    operation: "download" | "pause" | "resume" | "cancel" | "remove",
+  ) {
+    if (!ttsModel) return;
+    if (
+      operation === "remove" &&
+      !window.confirm("Remove the Portuguese AURA Voice TTS model?")
+    ) {
+      return;
+    }
+
+    setTtsBusy(operation);
+    try {
+      await onVoiceModelOperation(operation, ttsModel.id);
+      await onTtsRuntimeRefresh();
+    } finally {
+      setTtsBusy(null);
+    }
+  }
+
+  async function prepareLocalTts() {
+    setTtsBusy("runtime");
+    try {
+      await onTtsRuntimePrepare();
+    } finally {
+      setTtsBusy(null);
+    }
+  }
+
+  async function testLocalTts() {
+    setTtsBusy("test");
+    try {
+      await onTtsVoiceTest();
+    } finally {
+      setTtsBusy(null);
     }
   }
 
@@ -1077,7 +1128,172 @@ export default function Settings({
                   </p>
                 )}
               </div>
-              <SettingRow title="Voice output" description="Natural local spoken responses for actions and status." trailing={<Badge tone="planned">M006.5</Badge>} />
+              <div className="voice-stt-panel">
+                <div className="voice-stt-heading">
+                  <div>
+                    <strong>AURA Voice TTS</strong>
+                    <span>Piper · Tugão Medium · Português (Portugal) · local</span>
+                  </div>
+                  <Badge
+                    tone={
+                      ttsModel?.state === "installed" && ttsRuntime.dependencyReady
+                        ? "ready"
+                        : ttsModel?.state === "failed" || ttsRuntime.state === "error"
+                          ? "critical"
+                          : "neutral"
+                    }
+                  >
+                    {ttsRuntime.state === "speaking"
+                      ? "Speaking"
+                      : ttsModel?.state === "downloading"
+                        ? "Downloading"
+                        : ttsModel?.state === "paused"
+                          ? "Paused"
+                          : ttsModel?.state === "installed" && ttsRuntime.dependencyReady
+                            ? "Ready"
+                            : "Setup required"}
+                  </Badge>
+                </div>
+
+                <p className="voice-tts-copy">
+                  Spoken replies are generated on-device. Automatic speech is used
+                  only for commands that originated from Voice.
+                </p>
+
+                {ttsModel &&
+                  (ttsModel.state === "downloading" ||
+                    ttsModel.state === "paused") && (
+                    <div className="voice-stt-progress">
+                      <div className="voice-meter-track">
+                        <span
+                          style={{
+                            width: `${Math.max(
+                              0,
+                              Math.min(100, ttsModel.progressPercent),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <span>{ttsModel.progressPercent.toFixed(1)}%</span>
+                    </div>
+                  )}
+
+                <div className="voice-stream-meta">
+                  <span>
+                    {ttsRuntime.dependencyReady
+                      ? "Piper runtime ready"
+                      : "Piper runtime not installed"}
+                  </span>
+                  <span>
+                    {ttsModel?.state === "installed"
+                      ? "PT-PT voice installed"
+                      : "~63 MB voice"}
+                  </span>
+                  <span>{ttsRuntime.sampleRate ? `${ttsRuntime.sampleRate} Hz` : "Sample rate —"}</span>
+                </div>
+
+                <div className="voice-stt-actions">
+                  {!ttsRuntime.dependencyReady && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      disabled={ttsBusy !== null || managedRuntimeStatus.state !== "ready"}
+                      onClick={() => void prepareLocalTts()}
+                    >
+                      {managedRuntimeStatus.state === "ready"
+                        ? "Install Piper runtime"
+                        : "Managed runtime required"}
+                    </button>
+                  )}
+
+                  {ttsModel?.state === "notInstalled" && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      disabled={ttsBusy !== null}
+                      onClick={() => void runTtsModel("download")}
+                    >
+                      Install PT-PT voice
+                    </button>
+                  )}
+
+                  {ttsModel?.state === "downloading" && (
+                    <>
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        onClick={() => void runTtsModel("pause")}
+                      >
+                        Pause
+                      </button>
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        onClick={() => void runTtsModel("cancel")}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+
+                  {ttsModel?.state === "paused" && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      onClick={() => void runTtsModel("resume")}
+                    >
+                      Resume
+                    </button>
+                  )}
+
+                  {ttsModel?.state === "installed" && ttsRuntime.dependencyReady && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      disabled={ttsBusy !== null}
+                      onClick={() => void testLocalTts()}
+                    >
+                      {ttsBusy === "test" ? "Speaking…" : "Test voice"}
+                    </button>
+                  )}
+
+                  {ttsModel?.state === "installed" && (
+                    <button
+                      type="button"
+                      className="feature-secondary-button"
+                      disabled={ttsBusy !== null}
+                      onClick={() => void runTtsModel("remove")}
+                    >
+                      Remove voice
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="feature-secondary-button"
+                    disabled={ttsBusy !== null}
+                    onClick={() => void onTtsRuntimeRefresh()}
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {ttsRuntime.lastText && (
+                  <div className="voice-transcript-card">
+                    <span>LAST SPOKEN RESPONSE</span>
+                    <strong>{ttsRuntime.lastText}</strong>
+                  </div>
+                )}
+
+                {ttsRuntime.lastError && (
+                  <p className="voice-input-error">{ttsRuntime.lastError}</p>
+                )}
+
+                <p className="voice-license-note">
+                  Voice model: MIT. Piper runtime: GPL-3.0, installed explicitly
+                  inside AURA's private managed environment.
+                </p>
+              </div>
               <SettingRow title="Wake word" description="Optional hands-free activation after the core voice path is stable." trailing={<Badge tone="planned">M006.9</Badge>} />
             </Surface>
           </>

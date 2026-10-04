@@ -755,6 +755,75 @@ pub(crate) fn managed_python_path(app: &AppHandle) -> Result<PathBuf, String> {
     runtime_python_path(app)
 }
 
+pub(crate) fn python_module_available(
+    app: &AppHandle,
+    module: &str,
+) -> Result<bool, String> {
+    let python = runtime_python_path(app)?;
+    if !python.exists() {
+        return Ok(false);
+    }
+
+    #[cfg(windows)]
+    {
+        let script = format!(
+            "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec({:?}) else 1)",
+            module
+        );
+        let mut command = Command::new(&python);
+        command
+            .args(["-c", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW);
+
+        return command
+            .status()
+            .map(|status| status.success())
+            .map_err(|error| format!("Could not inspect managed Python module {module}: {error}"));
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = module;
+        Ok(false)
+    }
+}
+
+pub(crate) fn install_managed_python_package(
+    app: &AppHandle,
+    package: &str,
+) -> Result<(), String> {
+    let python = runtime_python_path(app)?;
+    if !python.exists() {
+        return Err("AURA Managed Runtime is not installed. Install it from Models first.".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        run_python(
+            &python,
+            &[
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "--no-input",
+                "--upgrade",
+                package,
+            ],
+        )?;
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = package;
+        Err("Managed package installation currently supports Windows only.".to_string())
+    }
+}
+
 fn runtime_python_path(app: &AppHandle) -> Result<PathBuf, String> {
     #[cfg(windows)]
     {
