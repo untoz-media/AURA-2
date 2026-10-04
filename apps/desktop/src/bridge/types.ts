@@ -618,4 +618,5 @@ export type VoicePreferences = {
   conversationTimeoutSeconds: number;
   wakeWordEnabled: boolean;
   wakePhrase: string;
+  ttsVoiceId: "voice-piper-ptpt" | "voice-piper-engb-alan" | string;
 };
