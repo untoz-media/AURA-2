@@ -49,11 +49,34 @@ $checksumPath = Join-Path $artifactDir "AURA-2-Windows-x64.sha256"
 "$hash  $($installer.Name)" | Set-Content $checksumPath -Encoding ascii
 
 $signature = Get-AuthenticodeSignature $copiedInstaller
+$gitSha = $null
+try {
+  $gitSha = (git rev-parse HEAD 2>$null).Trim()
+} catch {
+  $gitSha = $null
+}
+
+$manifest = [ordered]@{
+  schemaVersion = 1
+  product = "AURA-2"
+  version = $version
+  channel = "beta"
+  installer = $installer.Name
+  installerSizeBytes = (Get-Item $copiedInstaller).Length
+  sha256 = $hash
+  signatureStatus = [string]$signature.Status
+  sourceCommit = $gitSha
+  builtAtUtc = [DateTime]::UtcNow.ToString("o")
+}
+
+$manifestPath = Join-Path $artifactDir "AURA-2-Beta-Build.json"
+$manifest | ConvertTo-Json -Depth 4 | Set-Content $manifestPath -Encoding utf8
 
 Write-Host ""
 Write-Host "AURA-2 $version Windows Beta candidate built successfully."
 Write-Host "Installer: $copiedInstaller"
 Write-Host "SHA-256:   $hash"
 Write-Host "Signature: $($signature.Status)"
+Write-Host "Manifest:  $manifestPath"
 Write-Host ""
 Write-Host "Next gate: install this artifact on a clean/current-user Windows profile and complete the M009.3 smoke checklist."
