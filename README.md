@@ -154,6 +154,7 @@ Stable next-generation release.
 - [Beta test checklist](docs/BETA-TEST-CHECKLIST.md)
 - [Known issues](docs/BETA-KNOWN-ISSUES.md)
 - [Telemetry policy](docs/TELEMETRY-POLICY.md)
+- [Beta feedback](docs/BETA-FEEDBACK.md)
 
 The Public Beta remains gated on a successful Beta Quality run and Windows installer build.
 
