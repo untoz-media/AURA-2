@@ -618,8 +618,15 @@ export function useAuraBridge() {
       setVisionEvent(event);
       setActivity(event.message);
 
-      if (event.capture) {
+      if (
+        event.capture &&
+        !["completed", "historyError", "error"].includes(event.phase)
+      ) {
         setVisionCapture(event.capture);
+      }
+
+      if (event.phase === "completed") {
+        setVisionCapture(null);
       }
 
       if (event.phase === "capturing" || event.phase === "analyzing") {
@@ -1178,7 +1185,7 @@ export function useAuraBridge() {
 
   const analyzeVisionControl = useCallback(async (prompt: string) => {
     const result = await analyzeLastVisionCapture(prompt);
-    setVisionCapture(result.capture);
+    setVisionCapture(null);
     setVisionHistory(result.history);
     setVisionRuntime((current) => ({
       ...current,
