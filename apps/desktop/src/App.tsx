@@ -848,6 +848,14 @@ function App() {
         onClear={clearDropIntakeControl}
         onReveal={revealDroppedFileControl}
         onInspect={inspectDroppedFileControl}
+        onAnalyze={async (dropIds) => {
+          setView("chat");
+          return submitCommand(
+            "Analyze the attached local files. Summarize the available content, compare the files when useful, and clearly state when a file is metadata-only.",
+            "desktop",
+            dropIds,
+          );
+        }}
         onUseVision={async (dropId) => {
           await stageDroppedImageForVisionControl(dropId);
           setView("vision");
