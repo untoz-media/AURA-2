@@ -523,6 +523,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   timestampMs: number;
+  attachmentNames?: string[];
 };
 
 
