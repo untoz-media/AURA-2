@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   CurrentAppInfo,
   ObsConnectionState,
@@ -26,6 +27,8 @@ export default function Computer({
   onRecentFilesRefresh,
   onCommand,
 }: Props) {
+  const [clipboardDraft, setClipboardDraft] = useState("");
+
   const contextualWindowActions = currentApp?.knownApp
     ? [
         {
@@ -48,6 +51,7 @@ export default function Computer({
     { label: "Show windows", command: "Show windows" },
     { label: "Current app", command: "What app am I using?" },
     { label: "Recent files", command: "Recent files" },
+    { label: "Read clipboard", command: "Read clipboard" },
     { label: "Production health", command: "Check production health" },
     { label: "List OBS scenes", command: "List OBS scenes" },
   ];
@@ -143,6 +147,71 @@ export default function Computer({
         ) : (
           <div className="feature-empty">No recent Windows items are available.</div>
         )}
+      </div>
+
+      <div className="feature-section clipboard-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">CLIPBOARD INTELLIGENCE</span>
+            <strong>On-demand only. No clipboard monitoring.</strong>
+          </div>
+          <span className="feature-badge">Private by default</span>
+        </div>
+
+        <div className="clipboard-grid">
+          <label className="clipboard-compose">
+            <span>Copy text to Windows clipboard</span>
+            <textarea
+              rows={4}
+              maxLength={3000}
+              value={clipboardDraft}
+              disabled={runtimeState.paused}
+              placeholder="Text to place on the clipboard…"
+              onChange={(event) => setClipboardDraft(event.target.value)}
+            />
+            <small>{clipboardDraft.length}/3000 · confirmation required</small>
+          </label>
+
+          <div className="clipboard-actions">
+            <button
+              type="button"
+              className="feature-primary-button"
+              disabled={runtimeState.paused || !clipboardDraft.trim()}
+              onClick={() => {
+                const value = clipboardDraft.trim();
+                if (!value) return;
+                void onCommand(`Copy to clipboard ${value}`);
+              }}
+            >
+              Copy text
+            </button>
+            <button
+              type="button"
+              className="feature-secondary-button"
+              disabled={runtimeState.paused}
+              onClick={() => void onCommand("Read clipboard")}
+            >
+              Read clipboard
+            </button>
+            <button
+              type="button"
+              className="feature-secondary-button danger"
+              disabled={runtimeState.paused}
+              onClick={() => void onCommand("Clear clipboard")}
+            >
+              Clear clipboard
+            </button>
+          </div>
+        </div>
+
+        <div className="feature-note clipboard-privacy-note">
+          <strong>Privacy boundary</strong>
+          <span>
+            Reading is Sensitive, writing is Modify and clearing is Destructive.
+            AURA never polls the clipboard, never adds clipboard contents to Beta
+            diagnostics and does not speak clipboard text aloud for voice commands.
+          </span>
+        </div>
       </div>
 
       <div className="feature-section">
