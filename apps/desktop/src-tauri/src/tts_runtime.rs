@@ -11,7 +11,7 @@ use std::{
     path::Path,
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU32, AtomicU64, Ordering},
         Mutex,
     },
     time::{SystemTime, UNIX_EPOCH},
@@ -80,6 +80,7 @@ pub struct TtsRuntime {
     process: Mutex<Option<TtsProcess>>,
     status: Mutex<TtsRuntimeStatus>,
     request_counter: AtomicU64,
+    process_id: AtomicU32,
 }
 
 impl Default for TtsRuntime {
@@ -88,6 +89,7 @@ impl Default for TtsRuntime {
             process: Mutex::new(None),
             status: Mutex::new(TtsRuntimeStatus::default()),
             request_counter: AtomicU64::new(1),
+            process_id: AtomicU32::new(0),
         }
     }
 }
@@ -154,6 +156,7 @@ impl TtsRuntime {
         app: &AppHandle,
         manager: &ModelManager,
         text: &str,
+        speed: f32,
     ) -> Result<TtsRuntimeStatus, String> {
         let text = text.trim();
         if text.is_empty() {
@@ -207,7 +210,7 @@ impl TtsRuntime {
             "type": "speak",
             "id": request_id.clone(),
             "text": text,
-            "speed": 1.0,
+            "speed": speed.clamp(0.6, 1.5),
         });
 
         {
@@ -280,7 +283,46 @@ impl TtsRuntime {
             let _ = running.child.wait();
         }
 
+        self.process_id.store(0, Ordering::Relaxed);
         self.set_status(TtsRuntimeStatus::default());
+    }
+
+    pub fn interrupt(&self) -> Result<TtsRuntimeStatus, String> {
+        let pid = self.process_id.swap(0, Ordering::Relaxed);
+        if pid != 0 {
+            #[cfg(windows)]
+            {
+                let status = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .status()
+                    .map_err(|error| format!("Could not stop local TTS playback: {error}"))?;
+                if !status.success() {
+                    return Err("Windows could not stop the TTS worker.".to_string());
+                }
+            }
+        }
+
+        let status = TtsRuntimeStatus {
+            state: "stopped".to_string(),
+            model_id: TTS_MODEL_ID.to_string(),
+            dependency_ready: true,
+            voice_installed: true,
+            sample_rate: None,
+            last_text: self
+                .status
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .last_text
+                .clone(),
+            last_error: None,
+            refreshed_at_ms: timestamp_ms(),
+        };
+        self.set_status(status.clone());
+        Ok(status)
     }
 
     fn start_process(
@@ -332,6 +374,7 @@ impl TtsRuntime {
         let mut child = command
             .spawn()
             .map_err(|error| format!("Could not start local TTS runtime: {error}"))?;
+        self.process_id.store(child.id(), Ordering::Relaxed);
         let stdin = child
             .stdin
             .take()
