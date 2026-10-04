@@ -52,6 +52,13 @@ import type {
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
   VoicePreferences,
+  VisionCapture,
+  VisionEvent,
+  VisionRuntimeStatus,
+  VisionPreferences,
+  VisionHistorySnapshot,
+  VisionAnalysisPayload,
+  VisionRegionRequest,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -62,6 +69,7 @@ export const AURA_EVENTS = {
   modelDownload: "aura:model-download",
   managedRuntime: "aura:managed-runtime",
   voiceCapture: "aura:voice-capture",
+  vision: "aura:vision-event",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -495,4 +503,60 @@ export async function setVoicePreferences(
 
 export async function stopTtsSpeaking(): Promise<TtsRuntimeStatus> {
   return invoke<TtsRuntimeStatus>("stop_tts_speaking");
+}
+
+
+export async function getVisionRuntimeStatus(): Promise<VisionRuntimeStatus> {
+  return invoke<VisionRuntimeStatus>("get_vision_runtime_status");
+}
+
+export async function getVisionHistory(): Promise<VisionHistorySnapshot> {
+  return invoke<VisionHistorySnapshot>("get_vision_history");
+}
+
+export async function setVisionPreferences(
+  preferences: VisionPreferences,
+): Promise<VisionHistorySnapshot> {
+  return invoke<VisionHistorySnapshot>("set_vision_preferences", { preferences });
+}
+
+export async function clearVisionHistory(): Promise<VisionHistorySnapshot> {
+  return invoke<VisionHistorySnapshot>("clear_vision_history");
+}
+
+export async function getLastVisionCapture(): Promise<VisionCapture | null> {
+  return invoke<VisionCapture | null>("get_last_vision_capture");
+}
+
+export async function clearLastVisionCapture(): Promise<void> {
+  return invoke<void>("clear_last_vision_capture");
+}
+
+export async function captureVisionScreen(): Promise<VisionCapture> {
+  return invoke<VisionCapture>("capture_vision_screen");
+}
+
+export async function captureVisionActiveWindow(): Promise<VisionCapture> {
+  return invoke<VisionCapture>("capture_vision_active_window");
+}
+
+export async function captureVisionRegion(
+  request: VisionRegionRequest,
+): Promise<VisionCapture> {
+  return invoke<VisionCapture>("capture_vision_region", { request });
+}
+
+export async function analyzeLastVisionCapture(
+  prompt: string,
+): Promise<VisionAnalysisPayload> {
+  return invoke<VisionAnalysisPayload>("analyze_last_vision_capture", { prompt });
+}
+
+export async function listenToVision(
+  handler: (event: VisionEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<VisionEvent>(
+    AURA_EVENTS.vision,
+    ({ payload }) => handler(payload),
+  );
 }
