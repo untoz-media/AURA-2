@@ -682,7 +682,13 @@ function App() {
                   normalized.startsWith("último ") ||
                   normalized.startsWith("ultimo ") ||
                   normalized.startsWith("última ") ||
-                  normalized.startsWith("ultima ")
+                  normalized.startsWith("ultima ") ||
+                  normalized.startsWith("new tab in ") ||
+                  normalized.startsWith("next tab in ") ||
+                  normalized.startsWith("previous tab in ") ||
+                  normalized.startsWith("reload ") ||
+                  normalized.startsWith("focus address bar in ") ||
+                  normalized.startsWith("reopen closed tab in ")
                 ) {
                   setView("chat");
                 }
