@@ -161,7 +161,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local diagnostics and an explicit zero-telemetry policy.
+AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, named window state control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, local image generation through AURA Create, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local health diagnostics and an explicit zero-telemetry policy.
 
 The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. APIs, architecture and product behaviour may still change during the Beta cycle.
 
@@ -204,7 +204,7 @@ The desktop also supports persistent visual themes:
 - Aurora
 - Light
 
-Model downloads and media-generation engines are intentionally not simulated by the UI foundation. Their buttons remain disabled until the real backend engines are implemented.
+AURA Create now has a real local image-generation backend. Video remains deliberately unavailable until a real hardware-aware video engine is connected; AURA does not simulate unavailable generation features.
 
 
 ### Model Manager
@@ -244,6 +244,27 @@ Current runtime behavior:
 The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
 
 
+### AURA Create
+
+The Create workspace now includes real local text-to-image generation.
+
+Current behavior:
+
+- dedicated `AURA Create · Image` model managed separately from the assistant model
+- pinned model revision and SafeTensors-only weight manifest
+- one-time model download with pause/resume/cancel support
+- persistent local Diffusers worker using only installed files during inference
+- square, landscape and portrait presets
+- configurable inference steps, optional negative prompt and reproducible seed
+- CUDA-aware execution with CPU offload when CUDA is available
+- CPU fallback
+- generated PNG files saved under `Pictures/AURA Create` when the Pictures directory is available
+- preview remains in the current desktop session
+- removing or repairing the managed runtime stops all local AI workers first
+
+Video generation remains planned and is not simulated by the interface.
+
+
 ### Managed Runtime
 
 Local model users no longer need to configure Python manually.
@@ -257,7 +278,7 @@ From **Models**, AURA can install its own private Windows AI environment:
 - GPU-aware PyTorch installation
 - CUDA 12.8 wheels when NVIDIA is detected
 - CPU wheels otherwise
-- Transformers / Accelerate / BitsAndBytes / Safetensors
+- Transformers / Diffusers / Accelerate / BitsAndBytes / Safetensors
 - final import/version/CUDA verification
 - repair and removal controls
 
@@ -279,7 +300,7 @@ The managed setup:
 - verifies the official Python installer with Windows Authenticode
 - checks for at least 10 GB of free runtime space
 - selects CUDA or CPU PyTorch based on NVIDIA detection
-- installs Transformers, Accelerate, BitsAndBytes and Safetensors
+- installs Transformers, Diffusers, Accelerate, BitsAndBytes and Safetensors
 - verifies the final Python/AI stack before marking it Ready
 - exposes install, repair, reinstall and removal controls in the desktop UI
 
