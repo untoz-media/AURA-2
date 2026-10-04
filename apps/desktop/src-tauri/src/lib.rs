@@ -46,6 +46,7 @@ use core::{
 use integrations::director::{
     delete_director_preset, find_director_preset_by_id, load_director_presets,
     preset_requires_sensitive_permission, resolve_director_preset_command, run_director_preset,
+    validate_director_store,
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
@@ -75,6 +76,7 @@ use vision_capture::{
 use vision_history::{
     clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
     save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
+    validate_preferences_store as validate_vision_preferences_store,
     VisionHistorySnapshot, VisionPreferences,
 };
 use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
@@ -2013,6 +2015,40 @@ fn run_beta_self_test(
             "fail",
             true,
             format!("Vision history failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match validate_vision_preferences_store(&app) {
+        Ok(()) => beta_self_test_check(
+            "visionPreferencesStore",
+            "Vision preferences store",
+            "pass",
+            true,
+            "Vision preferences are valid.",
+        ),
+        Err(error) => beta_self_test_check(
+            "visionPreferencesStore",
+            "Vision preferences store",
+            "fail",
+            true,
+            error,
+        ),
+    });
+
+    checks.push(match validate_director_store(&app) {
+        Ok(count) => beta_self_test_check(
+            "directorPresetsStore",
+            "Director presets store",
+            "pass",
+            true,
+            format!("Director presets store loaded successfully ({count} presets)."),
+        ),
+        Err(error) => beta_self_test_check(
+            "directorPresetsStore",
+            "Director presets store",
+            "fail",
+            true,
+            error,
         ),
     });
 
