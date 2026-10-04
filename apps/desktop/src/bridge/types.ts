@@ -701,3 +701,108 @@ export type VisionRegionRequest = {
   width: number;
   height: number;
 };
+
+
+export type AgentStep =
+  | { type: "launchApp"; app: string }
+  | { type: "switchToApp"; app: string }
+  | { type: "runRoutine"; routine: string }
+  | { type: "directorPreset"; preset: string }
+  | { type: "wait"; milliseconds: number }
+  | { type: "savedAction"; action: string };
+
+export type AgentPlan = {
+  id: string;
+  goal: string;
+  summary: string;
+  steps: AgentStep[];
+  requiresConfirmation: boolean;
+  highestPermission: PermissionClass;
+  createdAtMs: number;
+};
+
+export type AgentStepResult = {
+  index: number;
+  label: string;
+  status: "completed" | "failed" | string;
+  attempts: number;
+  message: string;
+  startedAtMs: number;
+  completedAtMs: number;
+};
+
+export type AgentRun = {
+  id: string;
+  planId: string;
+  goal: string;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled" | string;
+  currentStep?: number | null;
+  completedSteps: number;
+  totalSteps: number;
+  steps: AgentStepResult[];
+  startedAtMs: number;
+  completedAtMs?: number | null;
+  error?: string | null;
+};
+
+export type AgentSnapshot = {
+  runs: AgentRun[];
+  refreshedAtMs: number;
+};
+
+export type AgentEvent = {
+  run: AgentRun;
+  message: string;
+  timestampMs: number;
+};
+
+export type SavedAuraAction = {
+  id: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  step: AgentStep;
+  updatedAtMs: number;
+};
+
+export type SaveAuraActionRequest = {
+  id?: string;
+  name: string;
+  description?: string;
+  aliases?: string[];
+  step: AgentStep;
+};
+
+export type AutomationTrigger =
+  | { type: "startup" }
+  | { type: "interval"; everyMinutes: number }
+  | { type: "atTime"; runAtMs: number; repeatDaily: boolean }
+  | { type: "appFocused"; app: string };
+
+export type AuraAutomation = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  actionId: string;
+  trigger: AutomationTrigger;
+  lastRunAtMs?: number | null;
+  nextRunAtMs?: number | null;
+  lastResult?: string | null;
+  updatedAtMs: number;
+};
+
+export type SaveAutomationRequest = {
+  id?: string;
+  name: string;
+  enabled: boolean;
+  actionId: string;
+  trigger: AutomationTrigger;
+};
+
+export type AutomationEvent = {
+  automationId: string;
+  automationName: string;
+  status: "completed" | "failed" | "error" | string;
+  message: string;
+  timestampMs: number;
+};
