@@ -1,6 +1,6 @@
 use crate::computer::{
     app_launcher::AppTarget,
-    app_skills::{BrowserSkill, BrowserSkillAction},
+    app_skills::{BrowserSkill, BrowserSkillAction, PersonalFolderSkill},
     audio::MediaAction,
     file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
     keyboard::KeyboardShortcut,
@@ -62,6 +62,7 @@ pub enum ActionIntent {
     FindRecentPersonalFiles(RecentFileQuery),
     RevealPersonalPath(String),
     BrowserSkill(BrowserSkill),
+    OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
 }
 
@@ -373,6 +374,36 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn personal_folder_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let skill = match normalized.as_str() {
+        "open desktop" | "open desktop folder" | "abre o ambiente de trabalho"
+        | "abre a área de trabalho" | "abre a area de trabalho" => {
+            Some(PersonalFolderSkill::Desktop)
+        }
+        "open documents" | "open documents folder" | "abre os documentos"
+        | "abre a pasta documentos" => Some(PersonalFolderSkill::Documents),
+        "open downloads" | "open downloads folder" | "abre os downloads"
+        | "abre a pasta downloads" => Some(PersonalFolderSkill::Downloads),
+        "open pictures" | "open pictures folder" | "open photos"
+        | "abre as imagens" | "abre as fotografias" | "abre a pasta imagens" => {
+            Some(PersonalFolderSkill::Pictures)
+        }
+        "open videos" | "open videos folder" | "abre os vídeos" | "abre os videos"
+        | "abre a pasta vídeos" | "abre a pasta videos" => {
+            Some(PersonalFolderSkill::Videos)
+        }
+        "open music" | "open music folder" | "abre a música" | "abre a musica"
+        | "abre a pasta música" | "abre a pasta musica" => {
+            Some(PersonalFolderSkill::Music)
+        }
+        _ => None,
+    };
+
+    skill.map(ActionIntent::OpenPersonalFolder)
 }
 
 fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
@@ -1461,6 +1492,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = personal_folder_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(skill) = browser_skill_request(input) {
         return match skill {
             Ok(intent) => {
@@ -1765,6 +1805,29 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_personal_folder_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Open Downloads", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::OpenPersonalFolder(PersonalFolderSkill::Downloads),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Abre a pasta vídeos", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::OpenPersonalFolder(PersonalFolderSkill::Videos),
+                permission: PermissionClass::Act,
+                ..
+            })
         ));
     }
 
