@@ -37,6 +37,119 @@ pub struct FileSearchSnapshot {
     pub refreshed_at_ms: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileCategory {
+    Any,
+    Video,
+    Image,
+    Audio,
+    Document,
+    Archive,
+}
+
+impl FileCategory {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Any => "file",
+            Self::Video => "video",
+            Self::Image => "image",
+            Self::Audio => "audio file",
+            Self::Document => "document",
+            Self::Archive => "archive",
+        }
+    }
+
+    fn matches_extension(self, extension: Option<&str>) -> bool {
+        if self == Self::Any {
+            return true;
+        }
+
+        let Some(extension) = extension else {
+            return false;
+        };
+        let extension = extension.to_ascii_lowercase();
+
+        match self {
+            Self::Any => true,
+            Self::Video => matches!(
+                extension.as_str(),
+                "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv" | "mts" | "m2ts"
+            ),
+            Self::Image => matches!(
+                extension.as_str(),
+                "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "heic"
+            ),
+            Self::Audio => matches!(
+                extension.as_str(),
+                "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus"
+            ),
+            Self::Document => matches!(
+                extension.as_str(),
+                "pdf" | "txt" | "md" | "rtf" | "doc" | "docx" | "ppt" | "pptx" | "xls"
+                    | "xlsx" | "csv"
+            ),
+            Self::Archive => matches!(
+                extension.as_str(),
+                "zip" | "7z" | "rar" | "tar" | "gz"
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PersonalRootFilter {
+    All,
+    Desktop,
+    Documents,
+    Downloads,
+    Pictures,
+    Videos,
+    Music,
+}
+
+impl PersonalRootFilter {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::All => "personal folders",
+            Self::Desktop => "Desktop",
+            Self::Documents => "Documents",
+            Self::Downloads => "Downloads",
+            Self::Pictures => "Pictures",
+            Self::Videos => "Videos",
+            Self::Music => "Music",
+        }
+    }
+
+    fn includes(self, label: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::Desktop => label == "Desktop",
+            Self::Documents => label == "Documents",
+            Self::Downloads => label == "Downloads",
+            Self::Pictures => label == "Pictures",
+            Self::Videos => label == "Videos",
+            Self::Music => label == "Music",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecentFileQuery {
+    pub category: FileCategory,
+    pub root: PersonalRootFilter,
+    pub limit: usize,
+}
+
+impl RecentFileQuery {
+    pub fn bounded(category: FileCategory, root: PersonalRootFilter, limit: usize) -> Self {
+        Self {
+            category,
+            root,
+            limit: limit.clamp(1, 10),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct SearchRoot {
     label: &'static str,
@@ -107,6 +220,117 @@ pub fn search_personal_files(
         max_depth: MAX_SEARCH_DEPTH,
         refreshed_at_ms: timestamp_ms(),
     })
+}
+
+pub fn recent_personal_files(
+    app: &AppHandle,
+    request: &RecentFileQuery,
+) -> Result<FileSearchSnapshot, String> {
+    let roots = personal_roots(app)
+        .into_iter()
+        .filter(|root| request.root.includes(root.label))
+        .collect::<Vec<_>>();
+
+    if roots.is_empty() {
+        return Err(format!(
+            "AURA could not resolve the {} folder scope.",
+            request.root.display_name()
+        ));
+    }
+
+    let mut state = SearchState {
+        scanned_entries: 0,
+        scan_limit_reached: false,
+        matches: Vec::new(),
+    };
+
+    for root in &roots {
+        scan_recent_directory(&root.path, root, 0, request.category, &mut state);
+        if state.scan_limit_reached {
+            break;
+        }
+    }
+
+    state.matches.sort_by(|left, right| {
+        right
+            .1
+            .modified_at_ms
+            .cmp(&left.1.modified_at_ms)
+            .then_with(|| left.1.name.to_lowercase().cmp(&right.1.name.to_lowercase()))
+    });
+    state.matches.truncate(request.limit);
+
+    Ok(FileSearchSnapshot {
+        query: format!(
+            "recent {} in {}",
+            request.category.display_name(),
+            request.root.display_name()
+        ),
+        items: state.matches.into_iter().map(|(_, item)| item).collect(),
+        roots: roots.iter().map(|root| root.label.to_string()).collect(),
+        scanned_entries: state.scanned_entries,
+        scan_limit_reached: state.scan_limit_reached,
+        max_depth: MAX_SEARCH_DEPTH,
+        refreshed_at_ms: timestamp_ms(),
+    })
+}
+
+pub fn summarize_recent_files(
+    snapshot: &FileSearchSnapshot,
+    request: &RecentFileQuery,
+) -> String {
+    if snapshot.items.is_empty() {
+        let suffix = if snapshot.scan_limit_reached {
+            " The bounded scan hit its entry limit, so the result may be incomplete."
+        } else {
+            ""
+        };
+        return format!(
+            "I did not find a recent {} in {}.{}",
+            request.category.display_name(),
+            request.root.display_name(),
+            suffix
+        );
+    }
+
+    let singular = request.limit == 1 || snapshot.items.len() == 1;
+    let mut lines = vec![if singular {
+        format!(
+            "Most recently modified {} in {}:",
+            request.category.display_name(),
+            request.root.display_name()
+        )
+    } else {
+        format!(
+            "Most recently modified {}s in {}:",
+            request.category.display_name(),
+            request.root.display_name()
+        )
+    }];
+
+    for (index, item) in snapshot.items.iter().enumerate() {
+        lines.push(format!(
+            "{}. {} · {} · {}",
+            index + 1,
+            item.name,
+            item.root_label,
+            item.path
+        ));
+    }
+
+    if snapshot.scan_limit_reached {
+        lines.push(
+            "The search reached AURA's 8,000-entry safety limit, so a newer item could exist outside the bounded scan."
+                .to_string(),
+        );
+    }
+
+    lines.push(
+        "These are ranked by filesystem modified time; AURA is not claiming which application created/exported them."
+            .to_string(),
+    );
+
+    lines.join("\n")
 }
 
 pub fn summarize_file_search(snapshot: &FileSearchSnapshot) -> String {
@@ -326,6 +550,71 @@ fn scan_directory(
     }
 }
 
+fn scan_recent_directory(
+    directory: &Path,
+    root: &SearchRoot,
+    depth: usize,
+    category: FileCategory,
+    state: &mut SearchState,
+) {
+    if depth > MAX_SEARCH_DEPTH || state.scan_limit_reached {
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        if state.scanned_entries >= MAX_SCANNED_ENTRIES {
+            state.scan_limit_reached = true;
+            return;
+        }
+        state.scanned_entries += 1;
+
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.is_empty() || name.starts_with('.') {
+            continue;
+        }
+
+        let path = entry.path();
+        if file_type.is_file() {
+            let extension = path.extension().and_then(|value| value.to_str());
+            if category.matches_extension(extension) {
+                let metadata = entry.metadata().ok();
+                state.matches.push((
+                    0,
+                    FileSearchItem {
+                        name,
+                        path: path.to_string_lossy().to_string(),
+                        root_label: root.label.to_string(),
+                        kind: "file".to_string(),
+                        extension: extension.map(str::to_string),
+                        size_bytes: metadata.as_ref().map(|metadata| metadata.len()),
+                        modified_at_ms: metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.modified().ok())
+                            .map(system_time_ms)
+                            .unwrap_or(0),
+                    },
+                ));
+            }
+        } else if file_type.is_dir() && depth < MAX_SEARCH_DEPTH {
+            scan_recent_directory(&path, root, depth + 1, category, state);
+            if state.scan_limit_reached {
+                return;
+            }
+        }
+    }
+}
+
 fn match_score(name: &str, query: &str, tokens: &[&str]) -> Option<u16> {
     if name == query {
         return Some(100);
@@ -374,6 +663,44 @@ fn timestamp_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_categories_match_expected_extensions() {
+        assert!(FileCategory::Video.matches_extension(Some("MP4")));
+        assert!(FileCategory::Image.matches_extension(Some("png")));
+        assert!(FileCategory::Document.matches_extension(Some("pdf")));
+        assert!(!FileCategory::Video.matches_extension(Some("png")));
+        assert!(!FileCategory::Image.matches_extension(None));
+    }
+
+    #[test]
+    fn recent_query_limit_is_bounded() {
+        assert_eq!(
+            RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                100,
+            )
+            .limit,
+            10
+        );
+        assert_eq!(
+            RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                0,
+            )
+            .limit,
+            1
+        );
+    }
+
+    #[test]
+    fn root_filters_are_explicit() {
+        assert!(PersonalRootFilter::Downloads.includes("Downloads"));
+        assert!(!PersonalRootFilter::Downloads.includes("Documents"));
+        assert!(PersonalRootFilter::All.includes("Documents"));
+    }
 
     #[test]
     fn exact_name_scores_above_partial_match() {
