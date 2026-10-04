@@ -102,6 +102,28 @@ requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "AgentStep::LaunchApp { .. } | AgentStep::SwitchToApp { .. }",
   "Background automations cannot run sensitive routines.",
   "Background automations cannot run a sensitive Director preset.",
+  "Agent planner could not load Routines",
+  "Agent planner could not load Director presets",
+  "Agent planner could not load Saved Actions",
+  "validate_director_store(app)",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/integrations/director.rs", [
+  "Director presets file is invalid and was left unchanged",
+  "let mut presets = read_director_presets(app)?;",
+  "resolve_director_preset_command_checked",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/routines.rs", [
+  "resolve_routine_command_checked",
+  "resolve_director_preset_command_checked",
+  "does not exist. Fix the Routine before saving it.",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  '"routine.store_invalid"',
+  '"director.store_invalid"',
+  'validate_director_store(&app)?;',
 ]);
 
 const actionRouter = fs.readFileSync("apps/desktop/src-tauri/src/core/action_router.rs", "utf8");
