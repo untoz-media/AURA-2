@@ -1,15 +1,47 @@
-# App Skills V1
+# App Skills V2
 
 App Skills are deterministic application-specific capabilities built on top of AURA Computer Control.
 
 They are not generic macros and do not require an LLM for execution.
 
+V2 introduces a **Core-owned Skill Registry**. The backend publishes each skill's stable id, app/group, display name, description, command, permission class and current contextual availability. The React Computer workspace renders that registry rather than maintaining a second hard-coded skill list.
+
 ## Implemented V1 skills
 
-App Skills V1 currently contains:
+App Skills V2 currently contains:
 
 - Browser Skills for Brave and Google Chrome
 - File Explorer Skills for known personal folders
+- Notepad Skills for safe document/navigation actions
+
+
+
+## Skill Registry
+
+The registry is the single source of truth for the Computer workspace.
+
+Each published skill contains:
+
+- stable `id`
+- `group`
+- `appName`
+- display `name`
+- human-readable `description`
+- deterministic `command`
+- `permission` class
+- `available` state
+- whether it is `contextual`
+
+Current catalog size:
+
+- 6 File Explorer skills
+- 6 Brave skills
+- 6 Google Chrome skills
+- 5 Notepad skills
+
+Total: **23 registered skills**.
+
+File Explorer skills are always available. Browser and Notepad skills become available only when their application is current/last-external context.
 
 ## Browser Skills V1
 
@@ -80,6 +112,41 @@ Portuguese examples:
 - `Reabre o separador fechado no Chrome`
 
 
+
+
+
+## Notepad Skills V1
+
+Notepad skills appear only when Notepad is the current or last external known app.
+
+Supported actions:
+
+| Skill | Shortcut | Permission |
+| --- | --- | --- |
+| New note | Ctrl+N | Act |
+| Find | Ctrl+F | Act |
+| Select all | Ctrl+A | Act |
+| Undo | Ctrl+Z | Modify |
+| Redo | Ctrl+Y | Modify |
+
+Undo and Redo are classified as **Modify** because they change document state, even though they are reversible.
+
+Execution uses the same focus-verification path as Browser Skills:
+
+1. switch to the known Notepad target;
+2. wait for Windows focus transition;
+3. re-read the foreground process;
+4. abort if Notepad is not actually foreground;
+5. only then send the fixed shortcut.
+
+V1 deliberately does not expose:
+
+- Save
+- Save As
+- Close
+- arbitrary text insertion
+
+Those actions can write files, overwrite data or affect unsaved work and need their own permission/product design.
 
 ## File Explorer Skills V1
 
