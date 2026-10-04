@@ -53,6 +53,9 @@ pub enum ActionIntent {
     CurrentApp,
     ActiveWindow,
     RecentFiles,
+    ClipboardRead,
+    ClipboardWrite(String),
+    ClipboardClear,
     UserRoutine(String),
 }
 
@@ -363,6 +366,81 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn clipboard_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    if matches!(
+        normalized.as_str(),
+        "read clipboard"
+            | "show clipboard"
+            | "show my clipboard"
+            | "what is in my clipboard"
+            | "what's in my clipboard"
+            | "what is on my clipboard"
+            | "clipboard contents"
+            | "lê o clipboard"
+            | "le o clipboard"
+            | "mostra o clipboard"
+            | "o que está no clipboard"
+            | "o que esta no clipboard"
+            | "lê a área de transferência"
+            | "le a area de transferencia"
+            | "mostra a área de transferência"
+            | "mostra a area de transferencia"
+            | "o que está na área de transferência"
+            | "o que esta na area de transferencia"
+    ) {
+        return Some(ActionIntent::ClipboardRead);
+    }
+
+    if matches!(
+        normalized.as_str(),
+        "clear clipboard"
+            | "empty clipboard"
+            | "clear my clipboard"
+            | "limpa o clipboard"
+            | "limpar o clipboard"
+            | "esvazia o clipboard"
+            | "limpa a área de transferência"
+            | "limpa a area de transferencia"
+            | "esvazia a área de transferência"
+            | "esvazia a area de transferencia"
+    ) {
+        return Some(ActionIntent::ClipboardClear);
+    }
+
+    const WRITE_PREFIXES: &[&str] = &[
+        "copy to clipboard ",
+        "set clipboard to ",
+        "put on clipboard ",
+        "put in clipboard ",
+        "copia para o clipboard ",
+        "copiar para o clipboard ",
+        "coloca no clipboard ",
+        "colocar no clipboard ",
+        "guarda no clipboard ",
+        "guardar no clipboard ",
+        "copia para a área de transferência ",
+        "copia para a area de transferencia ",
+        "coloca na área de transferência ",
+        "coloca na area de transferencia ",
+    ];
+
+    value_after_prefix(input, WRITE_PREFIXES).and_then(|value| {
+        let text = unwrap_text_quotes(value).trim();
+        (!text.is_empty()).then(|| ActionIntent::ClipboardWrite(text.to_string()))
+    })
+}
+
+fn permission_for_clipboard(intent: &ActionIntent) -> Option<PermissionClass> {
+    match intent {
+        ActionIntent::ClipboardRead => Some(PermissionClass::Sensitive),
+        ActionIntent::ClipboardWrite(_) => Some(PermissionClass::Modify),
+        ActionIntent::ClipboardClear => Some(PermissionClass::Destructive),
+        _ => None,
+    }
 }
 
 fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
@@ -1109,6 +1187,16 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = clipboard_request(input) {
+        let permission = permission_for_clipboard(&intent)
+            .expect("clipboard intent should have a permission class");
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(action) = system_request(input) {
         let permission = permission_for_system(action);
         return RouteResult::Action(RoutedAction {
@@ -1362,6 +1450,45 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn clipboard_read_is_sensitive_and_requires_confirmation() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("What's in my clipboard?", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardRead,
+                permission: PermissionClass::Sensitive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+    }
+
+    #[test]
+    fn clipboard_write_preserves_case_and_is_modify() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Copy to clipboard \"Hello AURA 2\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardWrite(text),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            }) if text == "Hello AURA 2"
+        ));
+    }
+
+    #[test]
+    fn clipboard_clear_is_destructive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Limpa o clipboard", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardClear,
+                permission: PermissionClass::Destructive,
+                decision: PermissionDecision::Ask,
+            })
         ));
     }
 
