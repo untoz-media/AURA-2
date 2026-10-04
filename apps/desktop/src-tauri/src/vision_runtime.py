@@ -23,7 +23,7 @@ def main() -> int:
 
     try:
         import torch
-        from PIL import Image
+        import PIL
         from transformers import AutoModelForMultimodalLM, AutoProcessor
     except Exception as error:
         emit({
@@ -114,12 +114,11 @@ def main() -> int:
             if not os.path.isfile(image_path):
                 raise ValueError("Vision capture file does not exist")
 
-            image = Image.open(image_path).convert("RGB")
             messages = [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image", "image": image},
+                        {"type": "image", "path": image_path},
                         {"type": "text", "text": prompt.strip()},
                     ],
                 }
