@@ -8,6 +8,10 @@ if (!/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) {
   failures.push(`Root version is not a Beta semver: ${version}`);
 }
 
+if (!fs.existsSync("package-lock.json")) {
+  failures.push("package-lock.json is required for a reproducible Public Beta build.");
+}
+
 const requiredDocs = [
   "docs/BETA.md",
   "docs/BETA-GUIDE.md",
