@@ -1580,3 +1580,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.file-intelligence-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.file-intelligence-recent > span {
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.file-intelligence-recent > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.file-intelligence-recent small {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+  line-height: 1.45;
+}
