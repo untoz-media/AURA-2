@@ -1,0 +1,438 @@
+.agents-page {
+  padding-bottom: 30px;
+}
+
+.agents-hero {
+  align-items: center;
+}
+
+.agents-status-card {
+  min-width: 160px;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 18px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 16px;
+  background: var(--aura-surface-2);
+}
+
+.agents-status-card span,
+.agent-plan-summary span,
+.agent-run-top span,
+.automation-last-event span {
+  color: var(--aura-accent);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: .1em;
+}
+
+.agents-status-card strong {
+  color: var(--aura-text-1);
+  font-size: 2rem;
+}
+
+.agents-status-card small {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.agents-error,
+.agents-warning,
+.agents-safety-note {
+  padding: 12px 14px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  color: var(--aura-text-3);
+  background: var(--aura-surface-2);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 12px;
+}
+
+.agents-grid.lower {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agents-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 15px;
+  background: var(--aura-surface-1);
+}
+
+.agents-panel-heading,
+.agent-plan-summary,
+.agent-run-top,
+.saved-action-list article,
+.automation-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.agents-panel-heading {
+  align-items: flex-start;
+}
+
+.agents-panel-heading h3 {
+  margin: 5px 0 0;
+  color: var(--aura-text-1);
+  font-size: var(--text-lg);
+}
+
+.agent-goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.agent-goal-form textarea {
+  min-height: 122px;
+  padding: 12px;
+  resize: vertical;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  outline: 0;
+  color: var(--aura-text-1);
+  background: var(--aura-bg-2);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.agent-plan-card,
+.agents-empty,
+.agent-run-card,
+.automation-last-event,
+.agents-safety-note {
+  margin-top: 14px;
+}
+
+.agent-plan-card {
+  padding: 14px;
+  border: 1px solid var(--aura-border-focus);
+  border-radius: 13px;
+  background: var(--aura-surface-2);
+}
+
+.agent-plan-summary {
+  align-items: flex-start;
+}
+
+.agent-plan-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-plan-summary strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.permission-pill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 999px;
+  color: var(--aura-text-3);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+}
+
+.permission-pill.sensitive,
+.permission-pill.destructive {
+  border-color: var(--aura-border-focus);
+}
+
+.agent-plan-steps {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-plan-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-bg-2);
+}
+
+.agent-plan-steps li > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: var(--aura-text-2);
+  background: var(--aura-surface-3);
+  font-size: var(--text-2xs);
+}
+
+.agent-plan-steps li div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-plan-steps strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.agent-plan-steps small,
+.agents-empty span,
+.agent-run-card small,
+.agent-history small,
+.saved-action-list span,
+.automation-list span,
+.automation-list small,
+.automation-last-event small {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.agents-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.agent-plan-card .agents-actions-row {
+  margin-top: 11px;
+}
+
+.agents-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-2);
+}
+
+.agents-empty strong {
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+}
+
+.agent-run-list,
+.agent-history,
+.saved-action-list,
+.automation-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.agent-run-card {
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-2);
+}
+
+.agent-run-card.active {
+  border-color: var(--aura-border-focus);
+}
+
+.agent-run-top strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.agent-run-top em {
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+  font-style: normal;
+}
+
+.agent-progress-track {
+  height: 5px;
+  overflow: hidden;
+  margin: 10px 0 7px;
+  border-radius: 999px;
+  background: var(--aura-surface-3);
+}
+
+.agent-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--aura-accent);
+}
+
+.agent-run-card .agents-actions-row {
+  margin-top: 9px;
+}
+
+.agent-history {
+  margin-top: 18px;
+}
+
+.agent-history > article {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--aura-border-1);
+}
+
+.agent-history > article > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-history strong {
+  color: var(--aura-text-3);
+  font-size: var(--text-xs);
+}
+
+.agent-history span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+}
+
+.agent-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 14px 0 11px;
+}
+
+.agent-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agent-form-grid label > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  font-weight: 650;
+}
+
+.agent-form-grid input,
+.agent-form-grid select {
+  min-height: 37px;
+  padding: 0 9px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  color: var(--aura-text-2);
+  background: var(--aura-bg-2);
+  font: inherit;
+}
+
+.agent-form-wide {
+  grid-column: 1 / -1;
+}
+
+.agent-checkbox {
+  justify-content: center;
+}
+
+.agent-checkbox input {
+  min-height: auto;
+}
+
+.saved-action-list article,
+.automation-list article {
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-2);
+}
+
+.saved-action-list article > div:first-child,
+.automation-main > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.saved-action-list strong,
+.automation-list strong,
+.automation-last-event strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.automation-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.automation-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--aura-text-4);
+}
+
+.automation-dot.enabled {
+  background: var(--aura-accent);
+}
+
+.automation-last-event {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-2);
+}
+
+@media (max-width: 960px) {
+  .agents-grid,
+  .agents-grid.lower {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .agents-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agents-status-card {
+    min-width: 0;
+  }
+
+  .agent-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-form-wide {
+    grid-column: auto;
+  }
+
+  .saved-action-list article,
+  .automation-list article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

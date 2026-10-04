@@ -16,6 +16,7 @@ import Computer from "./Computer";
 import Tasks from "./Tasks";
 import DirectorMode from "./DirectorMode";
 import Vision from "./Vision";
+import Agents from "./Agents";
 import {
   applyAuraTheme,
   readAuraTheme,
@@ -29,6 +30,7 @@ type AppView =
   | "create"
   | "computer"
   | "vision"
+  | "agents"
   | "tasks"
   | "director"
   | "settings";
@@ -70,6 +72,11 @@ function App() {
     visionHistory,
     visionCapture,
     visionEvent,
+    agentPlan,
+    agentRuns,
+    savedActions,
+    automations,
+    automationEvent,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -101,6 +108,20 @@ function App() {
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
     updateVoicePreferences,
+    planAgentGoal,
+    clearAgentPlan,
+    refreshAgentRuns,
+    startAgentPlanControl,
+    pauseAgentRunControl,
+    cancelAgentRunControl,
+    refreshSavedActions,
+    saveAuraActionControl,
+    deleteAuraActionControl,
+    runAuraActionControl,
+    refreshAutomations,
+    saveAutomationControl,
+    deleteAutomationControl,
+    setAutomationEnabledControl,
     refreshVisionRuntime,
     updateVisionPreferences,
     clearVisionHistoryControl,
@@ -267,6 +288,13 @@ function App() {
             Vision
           </NavItem>
           <NavItem
+            active={view === "agents"}
+            icon="✧"
+            onClick={() => setView("agents")}
+          >
+            Agents
+          </NavItem>
+          <NavItem
             active={view === "tasks"}
             icon="↻"
             onClick={() => setView("tasks")}
@@ -323,6 +351,9 @@ function App() {
             </button>
             <button type="button" onClick={() => setView("vision")}>
               Vision
+            </button>
+            <button type="button" onClick={() => setView("agents")}>
+              Agents
             </button>
             <button type="button" onClick={() => setView("director")}>
               OBS
@@ -385,6 +416,10 @@ function App() {
                     >
                       <strong>Look at my screen</strong>
                       <span>Use local AURA Vision on an explicit screenshot</span>
+                    </button>
+                    <button type="button" onClick={() => setView("agents")}>
+                      <strong>Plan a task</strong>
+                      <span>Build and review a local multi-step Agent plan</span>
                     </button>
                     <button type="button" onClick={() => setView("create")}>
                       <strong>Create with AURA</strong>
@@ -581,6 +616,29 @@ function App() {
               onHistoryClear={clearVisionHistoryControl}
               onCaptureClear={clearVisionCaptureControl}
               onRuntimeRefresh={refreshVisionRuntime}
+            />
+          )}
+
+          {view === "agents" && (
+            <Agents
+              plan={agentPlan}
+              runs={agentRuns}
+              actions={savedActions}
+              automations={automations}
+              automationEvent={automationEvent}
+              routines={routines}
+              directorPresets={directorPresets}
+              onPlan={planAgentGoal}
+              onPlanClear={clearAgentPlan}
+              onRunPlan={startAgentPlanControl}
+              onPauseRun={pauseAgentRunControl}
+              onCancelRun={cancelAgentRunControl}
+              onActionSave={saveAuraActionControl}
+              onActionDelete={deleteAuraActionControl}
+              onActionRun={runAuraActionControl}
+              onAutomationSave={saveAutomationControl}
+              onAutomationDelete={deleteAutomationControl}
+              onAutomationEnabled={setAutomationEnabledControl}
             />
           )}
 

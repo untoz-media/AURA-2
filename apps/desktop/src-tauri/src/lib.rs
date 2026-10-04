@@ -1,3 +1,4 @@
+mod agents;
 mod audio_input;
 mod computer;
 mod core;
@@ -15,6 +16,13 @@ mod vision_capture;
 mod vision_history;
 mod vision_runtime;
 
+use agents::{
+    delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
+    recover_interrupted_runs,
+    run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
+    AgentPlan, AgentRun, AgentSnapshot, AuraAutomation, AutomationScheduler,
+    SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
+};
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
@@ -794,6 +802,9 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *current = paused;
     }
+
+    app.state::<AgentEngine>().set_global_paused(app, paused);
+    app.state::<AutomationScheduler>().set_paused(paused);
 
     emit_runtime_state(app)
 }
@@ -1700,7 +1711,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M007 Complete · Vision · 0.7.0-alpha.1",
+        stage: "M008 Complete · Agents & Automations · 0.8.0-alpha.1",
         local_first: true,
     }
 }
@@ -1777,6 +1788,9 @@ fn set_permission_decision(
         *current = next.clone();
     }
 
+    app.state::<AutomationScheduler>()
+        .set_permission_policy(next.clone());
+
     emit_lifecycle_event(
         &app,
         "permissions.updated",
@@ -1801,6 +1815,9 @@ fn reset_permission_policy(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *current = next.clone();
     }
+
+    app.state::<AutomationScheduler>()
+        .set_permission_policy(next.clone());
 
     emit_lifecycle_event(
         &app,
@@ -4460,6 +4477,150 @@ fn process_user_command(
 }
 
 #[tauri::command]
+fn create_agent_plan(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    runtime: State<'_, ModelRuntime>,
+    goal: String,
+) -> Result<AgentPlan, String> {
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before asking an Agent to plan.".to_string());
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    plan_goal(&app, &manager, &runtime, &policy, &goal)
+}
+
+#[tauri::command]
+fn get_agent_runs(
+    app: AppHandle,
+    engine: State<'_, AgentEngine>,
+) -> Result<AgentSnapshot, String> {
+    engine.snapshot(&app)
+}
+
+#[tauri::command]
+fn start_agent_plan(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    engine: State<'_, AgentEngine>,
+    plan: AgentPlan,
+    approved: bool,
+) -> Result<AgentRun, String> {
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before starting an Agent.".to_string());
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    engine.start(app, plan, policy, approved)
+}
+
+#[tauri::command]
+fn pause_agent_run(
+    app: AppHandle,
+    engine: State<'_, AgentEngine>,
+    run_id: String,
+    paused: bool,
+) -> Result<AgentRun, String> {
+    engine.pause(&app, &run_id, paused)
+}
+
+#[tauri::command]
+fn cancel_agent_run(
+    app: AppHandle,
+    engine: State<'_, AgentEngine>,
+    run_id: String,
+) -> Result<AgentRun, String> {
+    engine.cancel(&app, &run_id)
+}
+
+#[tauri::command]
+fn get_saved_aura_actions(
+    app: AppHandle,
+) -> Result<Vec<SavedAuraAction>, String> {
+    list_saved_actions(&app)
+}
+
+#[tauri::command]
+fn save_aura_action(
+    app: AppHandle,
+    request: SaveAuraActionRequest,
+) -> Result<SavedAuraAction, String> {
+    save_action(&app, request)
+}
+
+#[tauri::command]
+fn delete_aura_action(
+    app: AppHandle,
+    action_id: String,
+) -> Result<(), String> {
+    delete_action(&app, &action_id)
+}
+
+#[tauri::command]
+fn run_aura_action(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    action_id: String,
+    approved: bool,
+) -> Result<String, String> {
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before running a saved Action.".to_string());
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    run_saved_action(&app, &action_id, &policy, approved)
+}
+
+#[tauri::command]
+fn get_aura_automations(
+    app: AppHandle,
+) -> Result<Vec<AuraAutomation>, String> {
+    list_automations(&app)
+}
+
+#[tauri::command]
+fn save_aura_automation(
+    app: AppHandle,
+    request: SaveAutomationRequest,
+) -> Result<AuraAutomation, String> {
+    save_automation(&app, request)
+}
+
+#[tauri::command]
+fn delete_aura_automation(
+    app: AppHandle,
+    automation_id: String,
+) -> Result<(), String> {
+    delete_automation(&app, &automation_id)
+}
+
+#[tauri::command]
+fn set_aura_automation_enabled(
+    app: AppHandle,
+    automation_id: String,
+    enabled: bool,
+) -> Result<AuraAutomation, String> {
+    set_automation_enabled(&app, &automation_id, enabled)
+}
+
+#[tauri::command]
 fn get_managed_runtime_status(
     app: AppHandle,
     setup: State<'_, ManagedRuntimeSetup>,
@@ -5131,6 +5292,8 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(AgentEngine::default())
+        .manage(AutomationScheduler::default())
         .manage(VisionSession::default())
         .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
@@ -5447,7 +5610,7 @@ pub fn run() {
                     .permission_policy
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                *current_policy = permission_policy;
+                *current_policy = permission_policy.clone();
 
                 *runtime
                     .voice_preferences
@@ -5455,6 +5618,13 @@ pub fn run() {
                     .unwrap_or_else(|poisoned| poisoned.into_inner()) =
                     voice_preferences.clone();
             }
+
+            let _ = recover_interrupted_runs(app.handle());
+            app.state::<AutomationScheduler>()
+                .set_permission_policy(permission_policy);
+            app.state::<AutomationScheduler>().set_paused(false);
+            app.state::<AutomationScheduler>()
+                .start(app.handle().clone());
 
             if voice_preferences.wake_word_enabled {
                 let generation = app
@@ -5601,6 +5771,19 @@ pub fn run() {
             reset_permission_policy,
             resolve_confirmation,
             process_user_command,
+            create_agent_plan,
+            get_agent_runs,
+            start_agent_plan,
+            pause_agent_run,
+            cancel_agent_run,
+            get_saved_aura_actions,
+            save_aura_action,
+            delete_aura_action,
+            run_aura_action,
+            get_aura_automations,
+            save_aura_automation,
+            delete_aura_automation,
+            set_aura_automation_enabled,
             get_managed_runtime_status,
             install_managed_runtime,
             repair_managed_runtime,

@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M005 Memory & Context in progress · AURA-2 0.4.0-alpha.1 · pre-Beta
+> **Current stage:** M008 Agents & Automations complete · AURA-2 0.8.0-alpha.1 · pre-Beta
 
 ---
 
@@ -127,17 +127,17 @@ Deterministic Windows control for applications, windows, keyboard, mouse, audio/
 ### M004 — OBS Integration ✅
 OBS WebSocket v5 connection, live state detection, scene/source/audio control, recording/streaming control, live duration, production health monitoring and persistent Director Mode presets are implemented.
 
-### M005 — Memory & Context
-Persistent local memory, app context and system awareness.
+### M005 — Memory & Context ✅
+Persistent local memory, app/window/recent-file context, user routines and project-scoped memory.
 
-### M006 — Voice
-Speech input, speech output and low-latency interaction.
+### M006 — Voice ✅
+Local microphone capture, Push-to-Talk, Whisper STT, Piper TTS, Conversation Mode, interruption and wake phrase support.
 
-### M007 — Vision
-Screen understanding and permission-based visual context.
+### M007 — Vision ✅
+Explicit Windows screenshot/region capture, active-window understanding, local multimodal UI analysis and privacy-first history.
 
-### M008 — Agents & Automations
-Multi-step tasks, reusable actions and event-based workflows.
+### M008 — Agents & Automations ✅
+Local multi-step planning, deterministic Agent execution, reusable AURA Actions, event triggers, schedules, background status and failure recovery.
 
 ### M009 — AURA-2 Beta
 Public testing release.
@@ -159,7 +159,7 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M004 — OBS Control / Director Mode** as **0.4.0-alpha.1** and is progressing through **M005 — Memory & Context** with explicit local persistent memory, current-app awareness, active-window context, Windows Recent Items context and persistent user-defined routines, project-scoped memory with an explicit active project, and a complete local Voice stack plus local Vision: explicit Windows screenshot/region capture, active-window understanding, local SmolVLM2 UI analysis, visible screen-access indicators and opt-in local Vision history.
+AURA-2 has completed **M008 — Agents & Automations** as **0.8.0-alpha.1**. The current Alpha combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, live task status and permission-aware background execution.
 
 APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
 

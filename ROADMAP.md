@@ -98,13 +98,15 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M008 — Agents & Automations
 
-- [ ] Multi-step task planning
-- [ ] Action execution engine
-- [ ] Reusable AURA Actions
-- [ ] Event triggers
-- [ ] Scheduled automations
-- [ ] Background task status
-- [ ] Failure recovery
+**Status: Complete — AURA-2 0.8.0-alpha.1**
+
+- [x] **M008.1** — Multi-step task planning
+- [x] **M008.2** — Action execution engine
+- [x] **M008.3** — Reusable AURA Actions
+- [x] **M008.4** — Event triggers
+- [x] **M008.5** — Scheduled automations
+- [x] **M008.6** — Background task status
+- [x] **M008.7** — Failure recovery
 
 ## M009 — AURA-2 Beta
 

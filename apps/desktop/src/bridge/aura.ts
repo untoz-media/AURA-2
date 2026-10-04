@@ -59,6 +59,15 @@ import type {
   VisionHistorySnapshot,
   VisionAnalysisPayload,
   VisionRegionRequest,
+  AgentPlan,
+  AgentRun,
+  AgentSnapshot,
+  AgentEvent,
+  SavedAuraAction,
+  SaveAuraActionRequest,
+  AuraAutomation,
+  SaveAutomationRequest,
+  AutomationEvent,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -70,6 +79,8 @@ export const AURA_EVENTS = {
   managedRuntime: "aura:managed-runtime",
   voiceCapture: "aura:voice-capture",
   vision: "aura:vision-event",
+  agent: "aura:agent-event",
+  automation: "aura:automation-event",
 } as const;
 
 export async function getAppStatus(): Promise<AppStatus> {
@@ -557,6 +568,93 @@ export async function listenToVision(
 ): Promise<UnlistenFn> {
   return listen<VisionEvent>(
     AURA_EVENTS.vision,
+    ({ payload }) => handler(payload),
+  );
+}
+
+
+export async function createAgentPlan(goal: string): Promise<AgentPlan> {
+  return invoke<AgentPlan>("create_agent_plan", { goal });
+}
+
+export async function getAgentRuns(): Promise<AgentSnapshot> {
+  return invoke<AgentSnapshot>("get_agent_runs");
+}
+
+export async function startAgentPlan(
+  plan: AgentPlan,
+  approved: boolean,
+): Promise<AgentRun> {
+  return invoke<AgentRun>("start_agent_plan", { plan, approved });
+}
+
+export async function pauseAgentRun(
+  runId: string,
+  paused: boolean,
+): Promise<AgentRun> {
+  return invoke<AgentRun>("pause_agent_run", { runId, paused });
+}
+
+export async function cancelAgentRun(runId: string): Promise<AgentRun> {
+  return invoke<AgentRun>("cancel_agent_run", { runId });
+}
+
+export async function getSavedAuraActions(): Promise<SavedAuraAction[]> {
+  return invoke<SavedAuraAction[]>("get_saved_aura_actions");
+}
+
+export async function saveAuraAction(
+  request: SaveAuraActionRequest,
+): Promise<SavedAuraAction> {
+  return invoke<SavedAuraAction>("save_aura_action", { request });
+}
+
+export async function deleteAuraAction(actionId: string): Promise<void> {
+  return invoke<void>("delete_aura_action", { actionId });
+}
+
+export async function runAuraAction(
+  actionId: string,
+  approved: boolean,
+): Promise<string> {
+  return invoke<string>("run_aura_action", { actionId, approved });
+}
+
+export async function getAuraAutomations(): Promise<AuraAutomation[]> {
+  return invoke<AuraAutomation[]>("get_aura_automations");
+}
+
+export async function saveAuraAutomation(
+  request: SaveAutomationRequest,
+): Promise<AuraAutomation> {
+  return invoke<AuraAutomation>("save_aura_automation", { request });
+}
+
+export async function deleteAuraAutomation(automationId: string): Promise<void> {
+  return invoke<void>("delete_aura_automation", { automationId });
+}
+
+export async function setAuraAutomationEnabled(
+  automationId: string,
+  enabled: boolean,
+): Promise<AuraAutomation> {
+  return invoke<AuraAutomation>("set_aura_automation_enabled", {
+    automationId,
+    enabled,
+  });
+}
+
+export async function listenToAgent(
+  handler: (event: AgentEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<AgentEvent>(AURA_EVENTS.agent, ({ payload }) => handler(payload));
+}
+
+export async function listenToAutomation(
+  handler: (event: AutomationEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<AutomationEvent>(
+    AURA_EVENTS.automation,
     ({ payload }) => handler(payload),
   );
 }

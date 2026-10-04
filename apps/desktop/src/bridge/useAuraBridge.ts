@@ -24,6 +24,21 @@ import {
   listenToManagedRuntime,
   listenToVoiceCapture,
   listenToVision,
+  listenToAgent,
+  listenToAutomation,
+  createAgentPlan,
+  getAgentRuns,
+  startAgentPlan,
+  pauseAgentRun,
+  cancelAgentRun,
+  getSavedAuraActions,
+  saveAuraAction,
+  deleteAuraAction,
+  runAuraAction,
+  getAuraAutomations,
+  saveAuraAutomation,
+  deleteAuraAutomation,
+  setAuraAutomationEnabled,
   getVisionRuntimeStatus,
   getVisionHistory,
   setVisionPreferences,
@@ -140,6 +155,15 @@ import type {
   VisionHistorySnapshot,
   VisionAnalysisPayload,
   VisionRegionRequest,
+  AgentPlan,
+  AgentRun,
+  AgentSnapshot,
+  AgentEvent,
+  SavedAuraAction,
+  SaveAuraActionRequest,
+  AuraAutomation,
+  SaveAutomationRequest,
+  AutomationEvent,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -237,6 +261,11 @@ const DEFAULT_VISION_HISTORY: VisionHistorySnapshot = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_AGENT_SNAPSHOT: AgentSnapshot = {
+  runs: [],
+  refreshedAtMs: 0,
+};
+
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
   models: [],
   modelsRoot: "",
@@ -311,6 +340,13 @@ export function useAuraBridge() {
     useState<VisionCapture | null>(null);
   const [visionEvent, setVisionEvent] =
     useState<VisionEvent | null>(null);
+  const [agentPlan, setAgentPlan] = useState<AgentPlan | null>(null);
+  const [agentRuns, setAgentRuns] =
+    useState<AgentSnapshot>(DEFAULT_AGENT_SNAPSHOT);
+  const [savedActions, setSavedActions] = useState<SavedAuraAction[]>([]);
+  const [automations, setAutomations] = useState<AuraAutomation[]>([]);
+  const [automationEvent, setAutomationEvent] =
+    useState<AutomationEvent | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -330,6 +366,8 @@ export function useAuraBridge() {
     let cleanupManagedRuntime: (() => void) | undefined;
     let cleanupVoiceCapture: (() => void) | undefined;
     let cleanupVision: (() => void) | undefined;
+    let cleanupAgent: (() => void) | undefined;
+    let cleanupAutomation: (() => void) | undefined;
 
     Promise.all([
       getAppStatus(),
@@ -433,6 +471,30 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // No current screenshot is a supported state.
+      });
+
+    getAgentRuns()
+      .then((snapshot) => {
+        if (!cancelled) setAgentRuns(snapshot);
+      })
+      .catch(() => {
+        // Agent history starts empty.
+      });
+
+    getSavedAuraActions()
+      .then((items) => {
+        if (!cancelled) setSavedActions(items);
+      })
+      .catch(() => {
+        // Saved Actions are optional.
+      });
+
+    getAuraAutomations()
+      .then((items) => {
+        if (!cancelled) setAutomations(items);
+      })
+      .catch(() => {
+        // Automations are optional.
       });
 
     getAudioInputState()
@@ -665,6 +727,54 @@ export function useAuraBridge() {
         // Vision events supplement explicit capture/analysis results.
       });
 
+    listenToAgent((event: AgentEvent) => {
+      if (cancelled) return;
+      setActivity(event.message);
+      setAgentRuns((current) => {
+        const runs = [
+          event.run,
+          ...current.runs.filter((run) => run.id !== event.run.id),
+        ].sort((left, right) => right.startedAtMs - left.startedAtMs);
+        return {
+          runs: runs.slice(0, 50),
+          refreshedAtMs: event.timestampMs,
+        };
+      });
+
+      if (["queued", "running"].includes(event.run.state)) {
+        setStatus("Working");
+      } else if (event.run.state === "paused") {
+        setStatus("Waiting");
+      } else {
+        setStatus("Idle");
+      }
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else cleanupAgent = unlisten;
+      })
+      .catch(() => {
+        // Agent events supplement explicit snapshots.
+      });
+
+    listenToAutomation((event: AutomationEvent) => {
+      if (cancelled) return;
+      setAutomationEvent(event);
+      setActivity(`${event.automationName}: ${event.message}`);
+      void getAuraAutomations()
+        .then((items) => {
+          if (!cancelled) setAutomations(items);
+        })
+        .catch(() => undefined);
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else cleanupAutomation = unlisten;
+      })
+      .catch(() => {
+        // Automation events supplement explicit snapshots.
+      });
+
     listenToManagedRuntime((runtime: ManagedRuntimeStatus) => {
       if (cancelled) return;
       setManagedRuntimeStatus(runtime);
@@ -826,6 +936,8 @@ export function useAuraBridge() {
       cleanupManagedRuntime?.();
       cleanupVoiceCapture?.();
       cleanupVision?.();
+      cleanupAgent?.();
+      cleanupAutomation?.();
     };
   }, []);
 
@@ -1135,6 +1247,111 @@ export function useAuraBridge() {
     const runtime = await stopTtsSpeaking();
     setTtsRuntime(runtime);
     return runtime;
+  }, []);
+
+  const planAgentGoal = useCallback(async (goal: string) => {
+    const plan = await createAgentPlan(goal);
+    setAgentPlan(plan);
+    return plan;
+  }, []);
+
+  const clearAgentPlan = useCallback(() => {
+    setAgentPlan(null);
+  }, []);
+
+  const refreshAgentRuns = useCallback(async () => {
+    const snapshot = await getAgentRuns();
+    setAgentRuns(snapshot);
+    return snapshot;
+  }, []);
+
+  const startAgentPlanControl = useCallback(async (
+    plan: AgentPlan,
+    approved: boolean,
+  ) => {
+    const run = await startAgentPlan(plan, approved);
+    setAgentRuns((current) => ({
+      runs: [run, ...current.runs.filter((item) => item.id !== run.id)],
+      refreshedAtMs: Date.now(),
+    }));
+    return run;
+  }, []);
+
+  const pauseAgentRunControl = useCallback(async (
+    runId: string,
+    paused: boolean,
+  ) => {
+    const run = await pauseAgentRun(runId, paused);
+    setAgentRuns((current) => ({
+      ...current,
+      runs: current.runs.map((item) => (item.id === run.id ? run : item)),
+      refreshedAtMs: Date.now(),
+    }));
+    return run;
+  }, []);
+
+  const cancelAgentRunControl = useCallback(async (runId: string) => {
+    const run = await cancelAgentRun(runId);
+    return run;
+  }, []);
+
+  const refreshSavedActions = useCallback(async () => {
+    const items = await getSavedAuraActions();
+    setSavedActions(items);
+    return items;
+  }, []);
+
+  const saveAuraActionControl = useCallback(async (
+    request: SaveAuraActionRequest,
+  ) => {
+    const saved = await saveAuraAction(request);
+    const items = await getSavedAuraActions();
+    setSavedActions(items);
+    return saved;
+  }, []);
+
+  const deleteAuraActionControl = useCallback(async (actionId: string) => {
+    await deleteAuraAction(actionId);
+    const items = await getSavedAuraActions();
+    setSavedActions(items);
+  }, []);
+
+  const runAuraActionControl = useCallback(async (actionId: string) => {
+    const result = await runAuraAction(actionId, true);
+    setActivity(result);
+    return result;
+  }, []);
+
+  const refreshAutomations = useCallback(async () => {
+    const items = await getAuraAutomations();
+    setAutomations(items);
+    return items;
+  }, []);
+
+  const saveAutomationControl = useCallback(async (
+    request: SaveAutomationRequest,
+  ) => {
+    const saved = await saveAuraAutomation(request);
+    const items = await getAuraAutomations();
+    setAutomations(items);
+    return saved;
+  }, []);
+
+  const deleteAutomationControl = useCallback(async (automationId: string) => {
+    await deleteAuraAutomation(automationId);
+    const items = await getAuraAutomations();
+    setAutomations(items);
+  }, []);
+
+  const setAutomationEnabledControl = useCallback(async (
+    automationId: string,
+    enabled: boolean,
+  ) => {
+    const saved = await setAuraAutomationEnabled(automationId, enabled);
+    setAutomations((current) =>
+      current.map((item) => (item.id === saved.id ? saved : item)),
+    );
+    return saved;
   }, []);
 
   const refreshVisionRuntime = useCallback(async () => {
@@ -2092,6 +2309,11 @@ export function useAuraBridge() {
     visionHistory,
     visionCapture,
     visionEvent,
+    agentPlan,
+    agentRuns,
+    savedActions,
+    automations,
+    automationEvent,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -2124,6 +2346,20 @@ export function useAuraBridge() {
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
     updateVoicePreferences,
+    planAgentGoal,
+    clearAgentPlan,
+    refreshAgentRuns,
+    startAgentPlanControl,
+    pauseAgentRunControl,
+    cancelAgentRunControl,
+    refreshSavedActions,
+    saveAuraActionControl,
+    deleteAuraActionControl,
+    runAuraActionControl,
+    refreshAutomations,
+    saveAutomationControl,
+    deleteAutomationControl,
+    setAutomationEnabledControl,
     refreshVisionRuntime,
     refreshVisionHistory,
     updateVisionPreferences,

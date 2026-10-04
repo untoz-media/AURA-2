@@ -147,6 +147,27 @@ impl ModelRuntime {
         user_text: &str,
         desktop_context: Option<&str>,
     ) -> Result<String, String> {
+        self.generate_internal(app, manager, user_text, desktop_context, true)
+    }
+
+    pub fn generate_isolated(
+        &self,
+        app: &AppHandle,
+        manager: &ModelManager,
+        user_text: &str,
+        desktop_context: Option<&str>,
+    ) -> Result<String, String> {
+        self.generate_internal(app, manager, user_text, desktop_context, false)
+    }
+
+    fn generate_internal(
+        &self,
+        app: &AppHandle,
+        manager: &ModelManager,
+        user_text: &str,
+        desktop_context: Option<&str>,
+        persist_conversation: bool,
+    ) -> Result<String, String> {
         let user_text = user_text.trim();
         if user_text.is_empty() {
             return Err("The model runtime received an empty message.".to_string());
@@ -182,7 +203,7 @@ impl ModelRuntime {
             self.request_counter.fetch_add(1, Ordering::Relaxed)
         );
 
-        let messages = {
+        let messages = if persist_conversation {
             let conversation = self
                 .conversation
                 .lock()
@@ -193,6 +214,11 @@ impl ModelRuntime {
                 content: user_text.to_string(),
             });
             messages
+        } else {
+            vec![RuntimeMessage {
+                role: "user".to_string(),
+                content: user_text.to_string(),
+            }]
         };
 
         let request = json!({
@@ -235,7 +261,7 @@ impl ModelRuntime {
             let envelope_result = {
                 let running = process_guard
                     .as_mut()
-                    .ok_or_else(|| "The model runtime is no longer available.".to_string())?;
+                    .ok_or_else(|| "The local model runtime is no longer available.".to_string())?;
                 read_envelope(&mut running.stdout)
             };
 
@@ -270,7 +296,7 @@ impl ModelRuntime {
                         return Err(message);
                     }
 
-                    {
+                    if persist_conversation {
                         let mut conversation = self
                             .conversation
                             .lock()
