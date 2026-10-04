@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   AppStatus,
   CommandAck,
@@ -37,6 +38,7 @@ import type {
   MemoryRecord,
   CurrentAppInfo,
   AppSkillCatalog,
+  DropIntakeSnapshot,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
@@ -340,6 +342,50 @@ export async function getCurrentAppContext(): Promise<CurrentAppInfo> {
 
 export async function getAppSkillCatalog(): Promise<AppSkillCatalog> {
   return invoke<AppSkillCatalog>("get_app_skill_catalog");
+}
+
+export async function getDropIntake(): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("get_drop_intake");
+}
+
+export async function ingestDroppedFiles(
+  paths: string[],
+): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("ingest_dropped_files", { paths });
+}
+
+export async function clearDropIntake(): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("clear_drop_intake");
+}
+
+export async function revealDroppedFile(dropId: string): Promise<string> {
+  return invoke<string>("reveal_dropped_file", { dropId });
+}
+
+export async function stageDroppedImageForVision(
+  dropId: string,
+): Promise<VisionCapture> {
+  return invoke<VisionCapture>("stage_dropped_image_for_vision", { dropId });
+}
+
+export async function listenToFileDrop(
+  handler: (paths: string[]) => void,
+  hover?: (active: boolean) => void,
+): Promise<UnlistenFn> {
+  return getCurrentWindow().onDragDropEvent((event) => {
+    if (event.payload.type === "over") {
+      hover?.(true);
+      return;
+    }
+
+    if (event.payload.type === "drop") {
+      hover?.(false);
+      handler(event.payload.paths);
+      return;
+    }
+
+    hover?.(false);
+  });
 }
 
 export async function getRecentFilesContext(): Promise<RecentFilesSnapshot> {
