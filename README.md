@@ -248,7 +248,9 @@ The desktop now includes a Managed Runtime installer that can prepare a private 
 
 ### App Skills
 
-AURA now has a real deterministic App Skills layer.
+AURA now has a real deterministic **App Skills V2** layer backed by a Core-owned Skill Registry.
+
+The desktop UI no longer hard-codes which app capabilities exist. AURA Core publishes skill metadata, permission class and contextual availability, and the Computer workspace renders that catalog dynamically.
 
 V1 includes Browser Skills for **Brave** and **Google Chrome** with:
 
@@ -271,7 +273,17 @@ If foreground verification fails, no shortcut is injected.
 
 File Explorer Skills V1 can also open the known personal folders Desktop, Documents, Downloads, Pictures, Videos and Music using paths resolved by Windows/Tauri. They do not accept arbitrary paths or use a shell.
 
-All App Skills V1 use the reversible `Act` permission class and do not require an LLM.
+Notepad Skills V1 are also available contextually:
+
+- New note → Act
+- Find → Act
+- Select all → Act
+- Undo → Modify
+- Redo → Modify
+
+Notepad shortcuts use the same foreground-process verification as Browser Skills. Save/Close are intentionally not exposed in this pass because they can write files or risk unsaved work.
+
+App Skills remain deterministic and do not require an LLM.
 
 ### File Intelligence
 
