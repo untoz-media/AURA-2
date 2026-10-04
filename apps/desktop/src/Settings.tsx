@@ -1783,6 +1783,7 @@ export default function Settings({
                 <div className="beta-diagnostics-grid">
                   <div><span>Platform</span><strong>{betaDiagnostics.platform} · {betaDiagnostics.architecture}</strong></div>
                   <div><span>Managed runtime</span><strong>{betaDiagnostics.managedRuntimeState}</strong></div>
+                  <div><span>Create runtime</span><strong>{betaDiagnostics.createImageRuntimeState}</strong></div>
                   <div><span>Installed models</span><strong>{betaDiagnostics.installedModelIds.length}</strong></div>
                   <div><span>Agent runs</span><strong>{betaDiagnostics.activeAgentRuns} active · {betaDiagnostics.agentRunsTotal} recorded</strong></div>
                   <div><span>Saved Actions</span><strong>{betaDiagnostics.savedActions}</strong></div>
