@@ -75,6 +75,20 @@ requireFragments("apps/desktop/src-tauri/src/lib.rs", [
   "DesktopPreferences::fail_closed()",
 ]);
 
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  'ensure_runtime_active(&state, "capturing the screen")',
+  'ensure_runtime_active(&state, "capturing the active window")',
+  'ensure_runtime_active(&state, "capturing a Vision region")',
+  'ensure_runtime_active(&state, "running Vision analysis")',
+  'ensure_runtime_active(&state, "running a Routine")',
+  'ensure_runtime_active(&state, "running a Director Mode preset")',
+  'ensure_runtime_active(&state, "changing the OBS Program scene")',
+  'ensure_runtime_active(&state, "changing OBS source visibility")',
+  'ensure_runtime_active(&state, "starting OBS recording")',
+  'ensure_runtime_active(&state, "resuming OBS recording")',
+  'ensure_runtime_active(&state, "starting OBS streaming")',
+]);
+
 requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "const MAX_PLAN_STEPS: usize = 12;",
   "const MAX_WAIT_MS: u64 = 30_000;",
