@@ -51,7 +51,7 @@ Examples:
 - "Open OBS" → app launcher
 - "Switch to Match scene" → OBS skill
 - "Find the image I used yesterday" → file intelligence + context
-- drag a local image → bounded Drop Intake → explicit Vision handoff
+- drag local files → bounded Drop Intake → explicit Inspect / Reveal / Vision handoff
 - "Prepare my stream" → agent / action workflow
 - "What is wrong with this window?" → vision + reasoning
 
@@ -89,5 +89,7 @@ Native drag/drop is treated as temporary local context, not as implicit permissi
 The frontend forwards native dropped paths to a Core intake command once. Core canonicalizes accepted files and stores their real paths only in an in-memory registry keyed by opaque drop IDs. React receives only safe metadata and capability flags.
 
 Actions on dropped files resolve the opaque ID back inside Core.
+
+Inspect is a Read-class action. Only allowlisted UTF-8 text/code formats may return a bounded preview (64 KiB / 12,000 characters), while image inspection may return dimensions. Complex binary formats remain metadata-only. Inspect never returns the canonical path.
 
 Image handoff to Vision always creates a cache copy first so Vision cleanup cannot delete the user's original file.
