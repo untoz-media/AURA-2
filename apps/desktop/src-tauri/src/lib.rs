@@ -4293,9 +4293,11 @@ fn get_managed_runtime_status(
 fn install_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.start_install(app, false)
 }
 
@@ -4303,9 +4305,11 @@ fn install_managed_runtime(
 fn repair_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.start_install(app, true)
 }
 
@@ -4313,9 +4317,11 @@ fn repair_managed_runtime(
 fn remove_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.remove(&app)
 }
 
@@ -4398,6 +4404,7 @@ fn remove_model(
     runtime: State<'_, ModelRuntime>,
     speech: State<'_, SpeechRuntime>,
     tts: State<'_, TtsRuntime>,
+    vision: State<'_, VisionRuntime>,
 ) -> Result<ModelCatalog, String> {
     if model_id == "voice-whisper-base" {
         speech.stop();
@@ -4407,6 +4414,9 @@ fn remove_model(
         "voice-piper-ptpt" | "voice-piper-engb-alan"
     ) {
         tts.stop();
+    }
+    if model_id == "vision-smolvlm2-500m" {
+        vision.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
@@ -4470,6 +4480,129 @@ fn test_tts_voice(
         .tts_voice_id
         .clone();
     runtime.speak(&app, &manager, phrase, speed, &voice_id)
+}
+
+#[tauri::command]
+fn get_vision_runtime_status(
+    runtime: State<'_, VisionRuntime>,
+) -> VisionRuntimeStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+fn get_vision_history(
+    app: AppHandle,
+) -> Result<VisionHistorySnapshot, String> {
+    vision_history_snapshot(&app)
+}
+
+#[tauri::command]
+fn set_vision_preferences(
+    app: AppHandle,
+    preferences: VisionPreferences,
+) -> Result<VisionHistorySnapshot, String> {
+    save_vision_preferences(&app, preferences)
+}
+
+#[tauri::command]
+fn clear_vision_history(
+    app: AppHandle,
+) -> Result<VisionHistorySnapshot, String> {
+    clear_vision_history_store(&app)
+}
+
+#[tauri::command]
+fn get_last_vision_capture(
+    session: State<'_, VisionSession>,
+) -> Option<VisionCapture> {
+    session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+#[tauri::command]
+fn clear_last_vision_capture(
+    session: State<'_, VisionSession>,
+) {
+    if let Some(capture) = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+    {
+        remove_capture(&capture.path);
+    }
+}
+
+#[tauri::command]
+fn capture_vision_screen(
+    app: AppHandle,
+) -> Result<VisionCapture, String> {
+    capture_for_vision_query(&app, VisionQueryTarget::Screen)
+}
+
+#[tauri::command]
+fn capture_vision_active_window(
+    app: AppHandle,
+) -> Result<VisionCapture, String> {
+    capture_for_vision_query(&app, VisionQueryTarget::ActiveWindow)
+}
+
+#[tauri::command]
+fn capture_vision_region(
+    app: AppHandle,
+    request: VisionRegionRequest,
+) -> Result<VisionCapture, String> {
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "capturing",
+            message: "Capturing the selected screen region…".to_string(),
+            capture: None,
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let capture = capture_region(
+        &app,
+        request.x,
+        request.y,
+        request.width,
+        request.height,
+    )?;
+    let capture = store_last_vision_capture(&app, capture);
+
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "captured",
+            message: "Screen region captured locally.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    Ok(capture)
+}
+
+#[tauri::command]
+fn analyze_last_vision_capture(
+    app: AppHandle,
+    prompt: String,
+    session: State<'_, VisionSession>,
+) -> Result<VisionAnalysisPayload, String> {
+    let capture = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+        .ok_or_else(|| "Capture the screen, a window or a region before asking Vision to analyze it.".to_string())?;
+
+    analyze_capture_internal(&app, &capture, &prompt)
 }
 
 #[tauri::command]
