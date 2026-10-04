@@ -764,12 +764,7 @@ fn save_permission_policy(
 ) -> Result<(), String> {
     let path = permission_policy_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content = serde_json::to_string_pretty(policy).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    storage::write_json_atomic(&path, policy)
 }
 
 fn voice_preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -794,12 +789,7 @@ fn save_voice_preferences(
     preferences: &VoicePreferences,
 ) -> Result<(), String> {
     let path = voice_preferences_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    storage::write_json_atomic(&path, preferences)
 }
 
 #[tauri::command]
@@ -869,14 +859,7 @@ fn save_preferences(
 ) -> Result<(), String> {
     let path = preferences_path(app)?;
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
-
-    fs::write(path, content).map_err(|error| error.to_string())
+    storage::write_json_atomic(&path, preferences)
 }
 
 fn runtime_snapshot(state: &RuntimeState) -> RuntimeSnapshot {
