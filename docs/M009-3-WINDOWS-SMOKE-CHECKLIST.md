@@ -68,6 +68,11 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Run Undo/Redo in a disposable Notepad document and confirm Modify requests confirmation.
 - [ ] Force a Notepad foreground mismatch and confirm no shortcut is injected.
 - [ ] Confirm Save/Close are not published by the Skill Registry.
+- [ ] Bring Windows Terminal into context and validate New tab / Next / Previous / Command palette / Find / Tab dropdown with default bindings.
+- [ ] Confirm an arbitrary request such as “Run echo hello in Windows Terminal” is not exposed as a Terminal Skill.
+- [ ] If Terminal key bindings are customized, confirm the limitation is visible during testing rather than treated as shell/API execution.
+- [ ] Bring Calculator into context and validate Standard / Scientific / Programmer / Date Calculation / Graphing mode switching.
+- [ ] Confirm Terminal and Calculator shortcuts are aborted if foreground-process verification fails.
 - [ ] Confirm the Computer UI is driven by the backend App Skill catalog rather than hard-coded browser/folder arrays.
 - [ ] Search for a known file by exact name in a personal folder.
 - [ ] Search with a partial/multi-word filename and confirm ranking is sensible.
