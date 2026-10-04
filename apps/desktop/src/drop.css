@@ -202,3 +202,109 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+.drop-tray-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.drop-tray-heading-actions .feature-secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.drop-file-inspection,
+.drop-file-inspection-error {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding: 10px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  background: var(--aura-surface-2);
+}
+
+.drop-file-inspection {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.drop-file-inspection-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.drop-file-inspection-heading strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-2xs);
+}
+
+.drop-file-inspection-heading span,
+.drop-file-inspection-meta,
+.drop-file-inspection-note {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+}
+
+.drop-file-inspection p {
+  margin: 0;
+  color: var(--aura-text-3);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+}
+
+.drop-file-inspection-note {
+  line-height: 1.45;
+}
+
+.drop-file-preview {
+  min-width: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--aura-border-1);
+}
+
+.drop-file-preview > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.drop-file-preview strong,
+.drop-file-preview span {
+  color: var(--aura-text-4);
+  font-size: var(--text-3xs);
+}
+
+.drop-file-preview pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border-radius: 7px;
+  color: var(--aura-text-3);
+  background: var(--aura-bg-2);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.drop-file-inspection-error {
+  color: var(--aura-text-3);
+  font-size: var(--text-3xs);
+  line-height: 1.45;
+}
+
+@media (max-width: 620px) {
+  .drop-tray-heading-actions {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+  }
+}
