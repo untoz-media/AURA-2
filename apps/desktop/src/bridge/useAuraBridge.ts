@@ -3,6 +3,10 @@ import {
   connectObs,
   disconnectObs,
   getAppStatus,
+  getBetaStatus,
+  setBetaPreferences,
+  getBetaDiagnostics,
+  exportBetaDiagnostics,
   getObsConnectionState,
   getObsRuntimeState,
   getObsScenes,
@@ -164,7 +168,20 @@ import type {
   AuraAutomation,
   SaveAutomationRequest,
   AutomationEvent,
+  BetaStatus,
+  SetBetaPreferencesRequest,
+  DiagnosticsSnapshot,
 } from "./types";
+
+const DEFAULT_BETA_STATUS: BetaStatus = {
+  channel: "beta",
+  onboardingComplete: false,
+  previousSessionUnclean: false,
+  telemetryEnabled: false,
+  automaticCrashUploads: false,
+  localDiagnosticsOnly: true,
+  refreshedAtMs: 0,
+};
 
 const DEFAULT_ACTIVITY =
   "Desktop foundation online. AURA Core and background runtime are ready.";
@@ -288,6 +305,10 @@ export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
+  const [betaStatus, setBetaStatusState] =
+    useState<BetaStatus>(DEFAULT_BETA_STATUS);
+  const [betaDiagnostics, setBetaDiagnostics] =
+    useState<DiagnosticsSnapshot | null>(null);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>({
     paused: false,
     backgroundEnabled: true,
@@ -375,14 +396,16 @@ export function useAuraBridge() {
       getPermissionPolicy(),
       getObsConnectionState(),
       getDirectorPresets(),
+      getBetaStatus(),
     ])
-      .then(([app, runtime, permissions, obs, presets]) => {
+      .then(([app, runtime, permissions, obs, presets, beta]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
         setObsConnection(obs);
         setDirectorPresets(presets);
+        setBetaStatusState(beta);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -1006,6 +1029,32 @@ export function useAuraBridge() {
       window.clearInterval(interval);
     };
   }, [runtimeState.paused]);
+
+  const refreshBetaStatus = useCallback(async () => {
+    const snapshot = await getBetaStatus();
+    setBetaStatusState(snapshot);
+    return snapshot;
+  }, []);
+
+  const updateBetaPreferences = useCallback(async (
+    request: SetBetaPreferencesRequest,
+  ) => {
+    const snapshot = await setBetaPreferences(request);
+    setBetaStatusState(snapshot);
+    return snapshot;
+  }, []);
+
+  const refreshBetaDiagnostics = useCallback(async () => {
+    const snapshot = await getBetaDiagnostics();
+    setBetaDiagnostics(snapshot);
+    return snapshot;
+  }, []);
+
+  const exportBetaDiagnosticsControl = useCallback(async () => {
+    const path = await exportBetaDiagnostics();
+    setActivity(`Diagnostics exported locally: ${path}`);
+    return path;
+  }, []);
 
   const refreshObsRuntime = useCallback(async () => {
     if (!obsConnection.connected) {
@@ -2284,6 +2333,8 @@ export function useAuraBridge() {
     status,
     activity,
     appStatus,
+    betaStatus,
+    betaDiagnostics,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -2321,6 +2372,10 @@ export function useAuraBridge() {
     pendingConfirmation,
     bridgeError,
     submitCommand,
+    refreshBetaStatus,
+    updateBetaPreferences,
+    refreshBetaDiagnostics,
+    exportBetaDiagnosticsControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
