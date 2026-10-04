@@ -17,6 +17,8 @@ import Tasks from "./Tasks";
 import DirectorMode from "./DirectorMode";
 import Vision from "./Vision";
 import Agents from "./Agents";
+import BetaWelcome from "./BetaWelcome";
+import "./beta.css";
 import {
   applyAuraTheme,
   readAuraTheme,
@@ -47,6 +49,8 @@ function App() {
     status,
     activity,
     appStatus,
+    betaStatus,
+    betaDiagnostics,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -84,6 +88,10 @@ function App() {
     pendingConfirmation,
     bridgeError,
     submitCommand,
+    refreshBetaStatus,
+    updateBetaPreferences,
+    refreshBetaDiagnostics,
+    exportBetaDiagnosticsControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
@@ -388,6 +396,27 @@ function App() {
           </div>
           <StatusPill status={status} />
         </header>
+
+        {betaStatus.onboardingComplete &&
+          betaStatus.previousSessionUnclean &&
+          view === "chat" && (
+            <div className="beta-recovery-banner">
+              <div>
+                <strong>Recovered after an unclean previous session</strong>
+                <span>
+                  Nothing was uploaded. Local diagnostics are available if you
+                  want to inspect the runtime state.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="feature-secondary-button"
+                onClick={() => openSettings("beta")}
+              >
+                Open diagnostics
+              </button>
+            </div>
+          )}
 
         <div className={`workspace-content ${view === "chat" ? "chat-workspace" : ""}`}>
           {view === "chat" && (
@@ -723,10 +752,31 @@ function App() {
               onAudioSelect={selectAudioInput}
               onAudioTestStart={startAudioTest}
               onAudioTestStop={stopAudioTest}
+              betaStatus={betaStatus}
+              betaDiagnostics={betaDiagnostics}
+              onBetaRefresh={refreshBetaStatus}
+              onBetaPreferencesChange={updateBetaPreferences}
+              onBetaDiagnosticsRefresh={refreshBetaDiagnostics}
+              onBetaDiagnosticsExport={exportBetaDiagnosticsControl}
             />
           )}
         </div>
       </section>
+
+      {betaStatus.refreshedAtMs > 0 && !betaStatus.onboardingComplete && (
+        <BetaWelcome
+          status={betaStatus}
+          appStatus={appStatus}
+          onComplete={async () => {
+            await updateBetaPreferences({ onboardingComplete: true });
+          }}
+          onReviewPermissions={() => {
+            void updateBetaPreferences({ onboardingComplete: true }).then(() =>
+              openSettings("permissions"),
+            );
+          }}
+        />
+      )}
     </main>
   );
 }
