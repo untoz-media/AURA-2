@@ -1948,6 +1948,74 @@ fn run_beta_self_test(
         )
     });
 
+    checks.push(match memory_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "memoryStore",
+            "Memory store",
+            "pass",
+            true,
+            format!("Memory store loaded successfully ({} records).", snapshot.records.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "memoryStore",
+            "Memory store",
+            "fail",
+            true,
+            format!("Memory store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match project_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "projectMemoryStore",
+            "Project Memory store",
+            "pass",
+            true,
+            format!("Project Memory loaded successfully ({} projects).", snapshot.projects.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "projectMemoryStore",
+            "Project Memory store",
+            "fail",
+            true,
+            format!("Project Memory failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match list_routines(&app) {
+        Ok(routines) => beta_self_test_check(
+            "routinesStore",
+            "Routines store",
+            "pass",
+            true,
+            format!("Routines store loaded successfully ({} routines).", routines.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "routinesStore",
+            "Routines store",
+            "fail",
+            true,
+            format!("Routines store failed to load: {error}"),
+        ),
+    });
+
+    checks.push(match vision_history_snapshot(&app) {
+        Ok(snapshot) => beta_self_test_check(
+            "visionHistoryStore",
+            "Vision history store",
+            "pass",
+            true,
+            format!("Vision history loaded successfully ({} items).", snapshot.items.len()),
+        ),
+        Err(error) => beta_self_test_check(
+            "visionHistoryStore",
+            "Vision history store",
+            "fail",
+            true,
+            format!("Vision history failed to load: {error}"),
+        ),
+    });
+
     checks.push(match list_saved_actions(&app) {
         Ok(actions) => beta_self_test_check(
             "savedActions",
