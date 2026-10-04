@@ -1245,7 +1245,7 @@ export default function Settings({
                 title="Push to talk"
                 description={
                   voiceCapture?.phase === "captured"
-                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for M006.3 STT.`
+                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for local speech recognition.`
                     : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released."
                 }
                 trailing={
@@ -1637,7 +1637,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Custom shortcuts"
-                description="Shortcut editing and conflict detection arrive later in M002."
+                description="Shortcut editing and conflict detection are not configurable yet."
                 trailing={<Badge tone="planned">Planned</Badge>}
               />
             </Surface>
