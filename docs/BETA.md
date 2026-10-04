@@ -10,6 +10,7 @@ AURA-2 is a Windows-first, local-first personal computer assistant. The Beta com
 - [Beta Test Checklist](./BETA-TEST-CHECKLIST.md) — structured validation before release
 - [Known Issues](./BETA-KNOWN-ISSUES.md) — current limitations and release blockers
 - [Telemetry Policy](./TELEMETRY-POLICY.md) — what AURA does and does not send
+- [Beta Feedback](./BETA-FEEDBACK.md) — how to report bugs, request features and share diagnostics safely
 - [M009.3 Stability Testing](./M009-3-STABILITY-TESTING.md) — quality gates and CI status
 
 ## Beta principles
