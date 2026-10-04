@@ -57,6 +57,7 @@ pub enum ActionIntent {
     ClipboardWrite(String),
     ClipboardClear,
     FindPersonalFiles(String),
+    RevealPersonalPath(String),
     UserRoutine(String),
 }
 
@@ -367,6 +368,27 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn file_reveal_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "reveal file ",
+        "reveal folder ",
+        "show file in explorer ",
+        "show folder in explorer ",
+        "show in explorer ",
+        "mostrar ficheiro no explorador ",
+        "mostrar pasta no explorador ",
+        "mostra ficheiro no explorador ",
+        "mostra pasta no explorador ",
+        "revela ficheiro ",
+        "revela pasta ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let path = unwrap_text_quotes(value).trim();
+        (!path.is_empty()).then(|| ActionIntent::RevealPersonalPath(path.to_string()))
+    })
 }
 
 fn file_search_request(input: &str) -> Option<ActionIntent> {
@@ -1212,6 +1234,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = file_reveal_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = file_search_request(input) {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
@@ -1484,6 +1515,22 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn reveal_file_is_reversible_act_action() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command(
+                "Reveal file \"C:\\Users\\Test\\Documents\\report.pdf\"",
+                &policy
+            ),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::RevealPersonalPath(path),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if path.ends_with("Documents\\report.pdf")
         ));
     }
 
