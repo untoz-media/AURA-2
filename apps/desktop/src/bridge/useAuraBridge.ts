@@ -483,9 +483,16 @@ export function useAuraBridge() {
       if (cancelled) return;
       setVoiceCapture(event);
 
-      if (event.phase === "listening") {
+      if (
+        event.phase === "listening" ||
+        event.phase === "conversationListening"
+      ) {
         setStatus("Listening");
-      } else if (event.phase === "transcribing" || event.phase === "transcribed") {
+      } else if (
+        event.phase === "transcribing" ||
+        event.phase === "transcribed" ||
+        event.phase === "wakeDetected"
+      ) {
         setStatus("Thinking");
       } else if (event.phase === "submitted") {
         // AURA Core owns status from this point onward.
