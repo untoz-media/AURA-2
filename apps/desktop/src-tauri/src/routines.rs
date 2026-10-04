@@ -198,18 +198,25 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         return Err(format!("A routine can contain at most {MAX_STEPS} steps."));
     }
 
+    let mut normalized_steps = Vec::with_capacity(request.steps.len());
     for step in &request.steps {
         validate_step(step)?;
-        if let RoutineStep::DirectorPreset { preset } = step {
-            let resolved = resolve_director_preset_command_checked(app, preset)?
-                .ok_or_else(|| {
-                    format!(
-                        "Director preset “{preset}” does not exist. Fix the Routine before saving it."
-                    )
-                })?;
-            if resolved.id.trim().is_empty() {
-                return Err("Resolved Director preset has an invalid empty id.".to_string());
+        match step {
+            RoutineStep::DirectorPreset { preset } => {
+                let resolved = resolve_director_preset_command_checked(app, preset)?
+                    .ok_or_else(|| {
+                        format!(
+                            "Director preset “{preset}” does not exist. Fix the Routine before saving it."
+                        )
+                    })?;
+                if resolved.id.trim().is_empty() {
+                    return Err("Resolved Director preset has an invalid empty id.".to_string());
+                }
+                normalized_steps.push(RoutineStep::DirectorPreset {
+                    preset: resolved.id,
+                });
             }
+            other => normalized_steps.push(other.clone()),
         }
     }
 
@@ -277,7 +284,7 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         name,
         description,
         aliases,
-        steps: request.steps,
+        steps: normalized_steps,
         updated_at_ms: now,
     };
 
