@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type {
   CurrentAppInfo,
+  AppSkillCatalog,
   ObsConnectionState,
   ObsRuntimeState,
   RecentFilesSnapshot,
@@ -10,6 +11,7 @@ import "./feature-pages.css";
 
 type Props = {
   currentApp: CurrentAppInfo | null;
+  appSkillCatalog: AppSkillCatalog;
   runtimeState: RuntimeState;
   obsConnection: ObsConnectionState;
   obsRuntime: ObsRuntimeState;
@@ -20,6 +22,7 @@ type Props = {
 
 export default function Computer({
   currentApp,
+  appSkillCatalog,
   runtimeState,
   obsConnection,
   obsRuntime,
@@ -30,39 +33,15 @@ export default function Computer({
   const [clipboardDraft, setClipboardDraft] = useState("");
   const [fileSearchDraft, setFileSearchDraft] = useState("");
 
-  const browserSkillTarget =
-    currentApp?.appName === "Brave" || currentApp?.appName === "Google Chrome"
-      ? currentApp.appName
-      : null;
-
-  const browserSkills = browserSkillTarget
-    ? [
-        {
-          label: "New tab",
-          command: `New tab in ${browserSkillTarget}`,
-        },
-        {
-          label: "Next tab",
-          command: `Next tab in ${browserSkillTarget}`,
-        },
-        {
-          label: "Previous tab",
-          command: `Previous tab in ${browserSkillTarget}`,
-        },
-        {
-          label: "Reload",
-          command: `Reload ${browserSkillTarget}`,
-        },
-        {
-          label: "Address bar",
-          command: `Focus address bar in ${browserSkillTarget}`,
-        },
-        {
-          label: "Reopen tab",
-          command: `Reopen closed tab in ${browserSkillTarget}`,
-        },
-      ]
-    : [];
+  const availableSkills = appSkillCatalog.skills.filter((skill) => skill.available);
+  const skillGroups = availableSkills.reduce<Record<string, typeof availableSkills>>(
+    (groups, skill) => {
+      const key = skill.appName;
+      (groups[key] ??= []).push(skill);
+      return groups;
+    },
+    {},
+  );
 
   const contextualWindowActions = currentApp?.knownApp
     ? [
@@ -151,88 +130,64 @@ export default function Computer({
         <div className="feature-section-heading">
           <div>
             <span className="feature-kicker">APP SKILLS</span>
-            <strong>Deterministic capabilities for supported Windows apps.</strong>
+            <strong>Capabilities published dynamically by AURA Core.</strong>
           </div>
-          <span className="feature-badge">V1</span>
+          <span className="feature-badge">
+            {availableSkills.length} available
+          </span>
         </div>
 
-        <div className="app-skill-subsection">
-          <div className="app-skill-subheading">
-            <div>
-              <span>File Explorer Skills</span>
-              <small>Known personal folders only</small>
-            </div>
-            <span className="feature-badge">Always available</span>
-          </div>
-          <div className="app-skill-grid">
-            {[
-              ["Desktop", "Open Desktop"],
-              ["Documents", "Open Documents"],
-              ["Downloads", "Open Downloads"],
-              ["Pictures", "Open Pictures"],
-              ["Videos", "Open Videos"],
-              ["Music", "Open Music"],
-            ].map(([label, command]) => (
-              <button
-                key={command}
-                type="button"
-                className="quick-action-card"
-                disabled={runtimeState.paused}
-                onClick={() => void onCommand(command)}
-              >
-                <strong>{label}</strong>
-                <span>{command}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {Object.entries(skillGroups).length > 0 ? (
+          Object.entries(skillGroups).map(([appName, skills]) => (
+            <div className="app-skill-subsection" key={appName}>
+              <div className="app-skill-subheading">
+                <div>
+                  <span>{appName}</span>
+                  <small>
+                    {skills.some((skill) => skill.contextual)
+                      ? `Contextual · ${appSkillCatalog.contextAppName ?? "no active context"}`
+                      : "Always available"}
+                  </small>
+                </div>
+                <span className="feature-badge">
+                  {skills[0]?.permission ?? "act"}
+                </span>
+              </div>
 
-        <div className="app-skill-subsection">
-          <div className="app-skill-subheading">
-            <div>
-              <span>
-                {browserSkillTarget
-                  ? `Browser Skills · ${browserSkillTarget}`
-                  : "Browser Skills"}
-              </span>
-              <small>Brave + Google Chrome</small>
-            </div>
-            <span className="feature-badge">
-              {browserSkillTarget ? "Context ready" : "Needs browser context"}
-            </span>
-          </div>
-
-          {browserSkillTarget ? (
-            <>
               <div className="app-skill-grid">
-                {browserSkills.map((skill) => (
+                {skills.map((skill) => (
                   <button
-                    key={skill.command}
+                    key={skill.id}
                     type="button"
                     className="quick-action-card"
+                    title={skill.description}
                     disabled={runtimeState.paused}
                     onClick={() => void onCommand(skill.command)}
                   >
-                    <strong>{skill.label}</strong>
+                    <strong>{skill.name}</strong>
                     <span>{skill.command}</span>
                   </button>
                 ))}
               </div>
-              <div className="feature-note">
-                <strong>Focus-safe shortcuts</strong>
-                <span>
-                  AURA brings {browserSkillTarget} to the foreground, verifies the
-                  foreground process and only then sends the bounded browser shortcut.
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="feature-empty">
-              Bring Brave or Google Chrome into context to expose Browser Skills.
-              OBS continues to use its deeper Director Mode integration.
+
+              {skills.some((skill) => skill.contextual) && (
+                <div className="feature-note">
+                  <strong>Context verified by Core</strong>
+                  <span>
+                    These skills are exposed only when their target application is
+                    the current or last external known app. Browser shortcuts still
+                    verify foreground process before injection.
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          ))
+        ) : (
+          <div className="feature-empty">
+            No App Skills are currently available. The registry will update as
+            supported application context changes.
+          </div>
+        )}
       </div>
 
       <div className="feature-section file-intelligence-section">
