@@ -28,6 +28,7 @@ export default function Computer({
   onCommand,
 }: Props) {
   const [clipboardDraft, setClipboardDraft] = useState("");
+  const [fileSearchDraft, setFileSearchDraft] = useState("");
 
   const contextualWindowActions = currentApp?.knownApp
     ? [
@@ -110,6 +111,55 @@ export default function Computer({
                 : "Idle"}
           </em>
         </article>
+      </div>
+
+      <div className="feature-section file-intelligence-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">FILE INTELLIGENCE</span>
+            <strong>Find files by name without scanning your whole PC.</strong>
+          </div>
+          <span className="feature-badge">Read only</span>
+        </div>
+
+        <div className="file-intelligence-search">
+          <input
+            type="text"
+            maxLength={120}
+            value={fileSearchDraft}
+            disabled={runtimeState.paused}
+            placeholder="Search Desktop, Documents, Downloads, Pictures, Videos and Music…"
+            onChange={(event) => setFileSearchDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                const value = fileSearchDraft.trim();
+                if (value.length >= 2) {
+                  void onCommand(`Find file ${value}`);
+                }
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="feature-primary-button"
+            disabled={runtimeState.paused || fileSearchDraft.trim().length < 2}
+            onClick={() => {
+              const value = fileSearchDraft.trim();
+              if (value.length < 2) return;
+              void onCommand(`Find file ${value}`);
+            }}
+          >
+            Search files
+          </button>
+        </div>
+
+        <div className="file-intelligence-boundary">
+          <span>6 personal folders</span>
+          <span>Depth ≤ 4</span>
+          <span>≤ 8,000 entries</span>
+          <span>No file contents</span>
+          <span>No symlink traversal</span>
+        </div>
       </div>
 
       <div className="feature-section">
