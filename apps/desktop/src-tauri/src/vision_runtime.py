@@ -134,7 +134,11 @@ def main() -> int:
             )
 
             inputs = {
-                key: value.to(device)
+                key: (
+                    value.to(device=device, dtype=dtype)
+                    if hasattr(value, "dtype") and torch.is_floating_point(value)
+                    else value.to(device)
+                )
                 if hasattr(value, "to")
                 else value
                 for key, value in inputs.items()
