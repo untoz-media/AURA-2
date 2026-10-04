@@ -18,6 +18,7 @@ mod vision_runtime;
 
 use agents::{
     delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
+    recover_interrupted_runs,
     run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
     AgentPlan, AgentRun, AgentSnapshot, AuraAutomation, AutomationScheduler,
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
@@ -4527,11 +4528,12 @@ fn start_agent_plan(
 
 #[tauri::command]
 fn pause_agent_run(
+    app: AppHandle,
     engine: State<'_, AgentEngine>,
     run_id: String,
     paused: bool,
 ) -> Result<AgentRun, String> {
-    engine.pause(&run_id, paused)
+    engine.pause(&app, &run_id, paused)
 }
 
 #[tauri::command]
@@ -5616,6 +5618,7 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
+            let _ = recover_interrupted_runs(app.handle());
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
             app.state::<AutomationScheduler>().set_paused(false);
