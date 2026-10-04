@@ -86,12 +86,7 @@ pub fn save_preferences(
 ) -> Result<VisionHistorySnapshot, String> {
     let preferences = preferences.sanitized();
     let path = preferences_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content =
-        serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())?;
+    crate::storage::write_json_atomic(&path, &preferences)?;
 
     if !preferences.retain_images {
         remove_retained_images(app)?;
@@ -196,11 +191,7 @@ fn load_history(app: &AppHandle) -> Result<Vec<VisionHistoryItem>, String> {
 
 fn write_history(app: &AppHandle, items: &[VisionHistoryItem]) -> Result<(), String> {
     let path = history_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(items).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    crate::storage::write_json_atomic(&path, items)
 }
 
 fn preferences_path(app: &AppHandle) -> Result<PathBuf, String> {
