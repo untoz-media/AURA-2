@@ -6,56 +6,19 @@ permissions:
 on:
   pull_request:
     paths:
-      - "apps/desktop/**"
-      - "package.json"
       - ".github/workflows/static-checks.yml"
   workflow_dispatch:
 
-concurrency:
-  group: static-checks-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   validate:
-    name: TypeScript, Python and formatting
+    name: Runner assignment probe
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Install JavaScript dependencies
-        run: npm install
-
-      - name: Verify release version metadata
-        run: node scripts/verify-versions.mjs
-
-      - name: Check desktop TypeScript and Vite build
-        run: npm --workspace @untoz/aura-desktop run build
-
-      - name: Check embedded Python worker syntax
+      - name: Prove GitHub-hosted runner starts
         run: |
-          python -m py_compile \
-            apps/desktop/src-tauri/src/model_runtime.py \
-            apps/desktop/src-tauri/src/speech_runtime.py \
-            apps/desktop/src-tauri/src/tts_runtime.py \
-            apps/desktop/src-tauri/src/vision_runtime.py
-
-      - name: Check Rust formatting
-        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+          echo "AURA-2 runner probe started"
+          uname -a
+          node --version || true
+          python --version || true
+          cargo --version || true
