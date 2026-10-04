@@ -2531,7 +2531,7 @@ export default function Settings({
             <Surface className="settings-card">
               <SectionLabel>Available & planned</SectionLabel>
               <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
-              <SettingRow title="App Skills" description="Core-owned dynamic Skill Registry. Includes focus-verified Brave/Chrome + Notepad skills and safe personal-folder File Explorer actions." trailing={<Badge tone="ready">V2 Beta</Badge>} />
+              <SettingRow title="App Skills" description="Core-owned dynamic Skill Registry. Includes Browser, Notepad, Windows Terminal, Calculator and safe File Explorer skills." trailing={<Badge tone="ready">V3 Beta</Badge>} />
             </Surface>
           </>
         )}
