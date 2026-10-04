@@ -23,7 +23,7 @@ use windows_sys::Win32::{
 
 const MAX_CAPTURE_PIXELS: i64 = 24_000_000;
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureRect {
     pub x: i32,
