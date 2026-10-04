@@ -83,7 +83,8 @@ Session recovery is conservative:
 - a missing session marker means no prior recovery condition;
 - a valid marker with `cleanExit: false` means recovered;
 - a corrupt/unreadable existing session marker is treated as an unclean prior exit rather than silently reported as clean;
-- marking a session clean now fails explicitly if the current marker is corrupt instead of masking the problem.
+- marking a session clean now fails explicitly if the current marker is corrupt instead of masking the problem;
+- after an unclean/recovered session, AURA starts paused and keeps Agents/Automations paused until the user explicitly resumes it.
 
 Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary. Settings → Beta & Diagnostics also computes an in-app integrity self-check covering the privacy invariants, diagnostics identity/schema and internal Agent/Automation counter consistency.
 
