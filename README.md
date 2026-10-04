@@ -161,9 +161,9 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M008 — Agents & Automations** as **0.8.0-alpha.1**. The current Alpha combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, live task status and permission-aware background execution.
+AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local diagnostics and an explicit zero-telemetry policy.
 
-APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
+The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. APIs, architecture and product behaviour may still change during the Beta cycle.
 
 ---
 
