@@ -93,6 +93,9 @@ requireFragments("apps/desktop/src/App.tsx", [
   "visionRuntime={visionRuntime}",
   "agentRuns={agentRuns}",
   "automations={automations}",
+  "FIRST LOCAL SETUP",
+  "const localSetupReady = managedRuntimeReady && localAssistantReady;",
+  'openSettings("diagnostics")',
 ]);
 
 const agents = fs.readFileSync("apps/desktop/src-tauri/src/agents.rs", "utf8");
