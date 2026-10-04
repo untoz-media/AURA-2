@@ -417,7 +417,8 @@ fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
     ];
 
     fn build(target_text: &str, action: BrowserSkillAction) -> Result<ActionIntent, String> {
-        let target_text = strip_article(target_text);
+        let normalized_target = target_text.trim().to_lowercase();
+        let target_text = strip_article(&normalized_target);
         let Some(target) = AppTarget::from_alias(target_text) else {
             return Err(format!(
                 "Unknown browser target “{}”. Browser Skills V1 supports Brave and Chrome.",
@@ -1764,6 +1765,21 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn browser_skill_targets_are_case_insensitive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in GOOGLE CHROME", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Chrome,
+                    action: BrowserSkillAction::NewTab,
+                }),
+                ..
+            })
         ));
     }
 
