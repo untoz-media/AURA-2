@@ -1,4 +1,4 @@
-# App Skills V2
+# App Skills V3
 
 App Skills are deterministic application-specific capabilities built on top of AURA Computer Control.
 
@@ -8,11 +8,13 @@ V2 introduces a **Core-owned Skill Registry**. The backend publishes each skill'
 
 ## Implemented V1 skills
 
-App Skills V2 currently contains:
+App Skills V3 currently contains:
 
 - Browser Skills for Brave and Google Chrome
 - File Explorer Skills for known personal folders
 - Notepad Skills for safe document/navigation actions
+- Windows Terminal navigation/UI skills
+- Windows Calculator mode-selection skills
 
 
 
@@ -38,8 +40,10 @@ Current catalog size:
 - 6 Brave skills
 - 6 Google Chrome skills
 - 5 Notepad skills
+- 6 Windows Terminal skills
+- 5 Calculator skills
 
-Total: **23 registered skills**.
+Total: **34 registered skills**.
 
 File Explorer skills are always available. Browser and Notepad skills become available only when their application is current/last-external context.
 
@@ -147,6 +151,52 @@ V1 deliberately does not expose:
 - arbitrary text insertion
 
 Those actions can write files, overwrite data or affect unsaved work and need their own permission/product design.
+
+
+
+## Windows Terminal Skills V1
+
+Supported deterministic actions:
+
+| Skill | Default shortcut | Permission |
+| --- | --- | --- |
+| New tab | Ctrl+Shift+T | Act |
+| Next tab | Ctrl+Tab | Act |
+| Previous tab | Ctrl+Shift+Tab | Act |
+| Command palette | Ctrl+Shift+P | Act |
+| Find | Ctrl+Shift+F | Act |
+| Tab/profile dropdown | Ctrl+Shift+Space | Act |
+
+The actions above correspond to documented **default** Windows Terminal key bindings.
+
+Windows Terminal allows users to customize bindings. AURA does not edit or inspect Terminal settings in V1, so a user-remapped shortcut can make a V1 skill unavailable or behave differently. This must be validated during Beta smoke testing.
+
+Security boundary:
+
+- no arbitrary command string is accepted;
+- no PowerShell/cmd/WSL command is constructed;
+- no `wt` command line is synthesized from user text;
+- no shell process is spawned by the skill executor;
+- only the fixed registry shortcuts above are injected;
+- foreground process is verified before every shortcut.
+
+A request such as `Run <command> in Windows Terminal` is not a Terminal Skill.
+
+## Calculator Skills V1
+
+Supported mode-selection actions:
+
+| Skill | Shortcut | Permission |
+| --- | --- | --- |
+| Standard mode | Alt+1 | Act |
+| Scientific mode | Alt+2 | Act |
+| Programmer mode | Alt+3 | Act |
+| Date Calculation | Alt+4 | Act |
+| Graphing mode | Alt+5 | Act |
+
+These accelerators are covered by the manual hotkey tests in Microsoft's open-source Windows Calculator repository.
+
+Calculator V1 does not type arbitrary expressions, interact with memory, clear history or copy/paste values. Those capabilities need separate permission and clipboard design.
 
 ## File Explorer Skills V1
 
