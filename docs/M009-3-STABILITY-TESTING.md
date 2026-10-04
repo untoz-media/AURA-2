@@ -49,6 +49,17 @@ It fails on:
 
 These checks do not replace Rust tests or a security review. They are a cheap additional tripwire for Beta-critical invariants.
 
+## Global Pause survives restart
+
+Global Pause is a safety control for Agents and Automations, so Beta now persists it in desktop preferences.
+
+Startup order is:
+
+`load preferences → restore runtime paused state → recover interrupted Agent runs → pause Agent Engine → apply Automation permission policy → restore scheduler paused state → start scheduler`
+
+This prevents Startup Automations from firing during launch when the user had explicitly paused AURA before the previous shutdown/restart.
+
+Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
 ## Permission corruption fails closed
 
 The persisted permission policy previously fell back to normal defaults when its JSON could not be read or parsed. Because normal defaults allow Read and Act, a corrupted file could unintentionally become less restrictive than the user's previous policy.
