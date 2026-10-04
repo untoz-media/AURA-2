@@ -1,5 +1,6 @@
 use crate::computer::{
     app_launcher::AppTarget,
+    app_skills::{BrowserSkill, BrowserSkillAction},
     audio::MediaAction,
     file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
     keyboard::KeyboardShortcut,
@@ -60,6 +61,7 @@ pub enum ActionIntent {
     FindPersonalFiles(String),
     FindRecentPersonalFiles(RecentFileQuery),
     RevealPersonalPath(String),
+    BrowserSkill(BrowserSkill),
     UserRoutine(String),
 }
 
@@ -75,6 +77,7 @@ pub enum RouteResult {
     Action(RoutedAction),
     UnsupportedApp(String),
     InvalidKeyboard(String),
+    InvalidAppSkill(String),
     InvalidMouse(String),
     InvalidMedia(String),
     NoMatch,
@@ -366,6 +369,88 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
         let content = unwrap_text_quotes(value).trim();
         if !content.is_empty() {
             return Some(ActionIntent::MemoryForget(content.to_string()));
+        }
+    }
+
+    None
+}
+
+fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    const NEW_TAB_PREFIXES: &[&str] = &[
+        "new tab in ",
+        "open new tab in ",
+        "new tab on ",
+        "nova aba no ",
+        "nova aba no navegador ",
+        "novo separador no ",
+        "abre novo separador no ",
+        "abrir novo separador no ",
+    ];
+    const NEXT_TAB_PREFIXES: &[&str] = &[
+        "next tab in ",
+        "next tab on ",
+        "próximo separador no ",
+        "proximo separador no ",
+        "separador seguinte no ",
+    ];
+    const PREVIOUS_TAB_PREFIXES: &[&str] = &[
+        "previous tab in ",
+        "previous tab on ",
+        "prev tab in ",
+        "separador anterior no ",
+        "separador anterior em ",
+    ];
+    const FOCUS_ADDRESS_PREFIXES: &[&str] = &[
+        "focus address bar in ",
+        "focus url bar in ",
+        "focus address bar on ",
+        "foca a barra de endereços no ",
+        "foca a barra de enderecos no ",
+        "foca a barra de url no ",
+    ];
+    const REOPEN_PREFIXES: &[&str] = &[
+        "reopen closed tab in ",
+        "reopen last closed tab in ",
+        "reabrir separador fechado no ",
+        "reabre o separador fechado no ",
+        "reabre separador fechado no ",
+    ];
+
+    fn build(target_text: &str, action: BrowserSkillAction) -> Result<ActionIntent, String> {
+        let target_text = strip_article(target_text);
+        let Some(target) = AppTarget::from_alias(target_text) else {
+            return Err(format!(
+                "Unknown browser target “{}”. Browser Skills V1 supports Brave and Chrome.",
+                target_text
+            ));
+        };
+
+        BrowserSkill::new(target, action)
+            .map(ActionIntent::BrowserSkill)
+    }
+
+    for (prefixes, action) in [
+        (NEW_TAB_PREFIXES, BrowserSkillAction::NewTab),
+        (NEXT_TAB_PREFIXES, BrowserSkillAction::NextTab),
+        (PREVIOUS_TAB_PREFIXES, BrowserSkillAction::PreviousTab),
+        (FOCUS_ADDRESS_PREFIXES, BrowserSkillAction::FocusAddressBar),
+        (REOPEN_PREFIXES, BrowserSkillAction::ReopenClosedTab),
+    ] {
+        if let Some(value) = value_after_prefix(input, prefixes) {
+            return Some(build(value, action));
+        }
+    }
+
+    let normalized = normalize_command(input);
+    for (prefix, action) in [
+        ("reload ", BrowserSkillAction::Reload),
+        ("refresh ", BrowserSkillAction::Reload),
+        ("recarrega ", BrowserSkillAction::Reload),
+        ("recarregar ", BrowserSkillAction::Reload),
+        ("atualiza ", BrowserSkillAction::Reload),
+    ] {
+        if let Some(value) = normalized.strip_prefix(prefix) {
+            return Some(build(value, action));
         }
     }
 
@@ -1375,6 +1460,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(skill) = browser_skill_request(input) {
+        return match skill {
+            Ok(intent) => {
+                let permission = PermissionClass::Act;
+                RouteResult::Action(RoutedAction {
+                    intent,
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Err(message) => RouteResult::InvalidAppSkill(message),
+        };
+    }
+
     if let Some(intent) = recent_file_request(input) {
         let permission = PermissionClass::Read;
         return RouteResult::Action(RoutedAction {
@@ -1665,6 +1764,47 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_brave_new_tab_as_app_skill() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Brave,
+                    action: BrowserSkillAction::NewTab,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_portuguese_chrome_address_bar_skill() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Foca a barra de endereços no Chrome", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Chrome,
+                    action: BrowserSkillAction::FocusAddressBar,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_browser_skill_for_non_browser_target() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in Notepad", &policy),
+            RouteResult::InvalidAppSkill(_)
         ));
     }
 
