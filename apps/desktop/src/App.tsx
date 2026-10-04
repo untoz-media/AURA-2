@@ -673,7 +673,10 @@ function App() {
               recentFiles={recentFiles}
               onRecentFilesRefresh={refreshRecentFiles}
               onCommand={async (value) => {
-                if (value === "Read clipboard") {
+                if (
+                  value === "Read clipboard" ||
+                  value.toLowerCase().startsWith("find file ")
+                ) {
                   setView("chat");
                 }
                 await runQuickCommand(value);
