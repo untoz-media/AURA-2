@@ -758,6 +758,16 @@ export default function Settings({
                 trailing={<Badge tone={runtimeState.paused ? "warning" : "ready"}>{runtimeState.paused ? "Paused" : "Policy-bound"}</Badge>}
               />
               <SettingRow
+                title="Product telemetry"
+                description="AURA-2 Beta sends no automatic product analytics, usage telemetry or crash reports to Untoz."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+              <SettingRow
+                title="Crash reporting"
+                description="Crash dumps are not uploaded automatically. Bug reports are shared manually by the user."
+                trailing={<Badge tone="ready">Manual only</Badge>}
+              />
+              <SettingRow
                 title="Cloud assistance"
                 description="Optional cloud routing is not configured and is not required for local computer control."
                 trailing={<Badge tone="planned">Off</Badge>}
