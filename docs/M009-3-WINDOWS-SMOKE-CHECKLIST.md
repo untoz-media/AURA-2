@@ -56,6 +56,12 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Restore a known application by name.
 - [ ] Confirm the Computer workspace exposes contextual window controls only for a known app identity.
 - [ ] Confirm an unknown app name is rejected instead of guessed.
+- [ ] Read clipboard text and confirm Sensitive permission is requested.
+- [ ] Copy text to the clipboard and confirm Modify permission is requested.
+- [ ] Clear the clipboard and confirm Destructive permission is requested.
+- [ ] Confirm clipboard text is not present in exported Beta diagnostics.
+- [ ] Trigger a clipboard read through Voice and confirm the content is displayed but not spoken by TTS.
+- [ ] Confirm AURA does not react to clipboard changes unless an explicit clipboard command is issued.
 - [ ] Type controlled text into a safe test field.
 - [ ] Execute a safe keyboard shortcut.
 - [ ] Move/click/scroll with bounded mouse actions.
