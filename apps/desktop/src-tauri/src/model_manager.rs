@@ -1461,3 +1461,17 @@ mod tests {
         );
     }
 }
+
+    #[test]
+    fn vision_model_is_feature_specific_and_local_downloadable() {
+        let vision = definition_for("vision-smolvlm2-500m").unwrap();
+        assert_eq!(vision.role, "vision");
+        assert!(!vision.selectable);
+        assert_eq!(
+            vision.source_repo,
+            Some("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
+        );
+        assert_eq!(vision.license, Some("Apache-2.0"));
+        assert!(vision.files.contains(&"model.safetensors"));
+    }
+}
