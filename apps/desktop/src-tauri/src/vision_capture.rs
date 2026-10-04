@@ -170,13 +170,14 @@ pub fn region_from_points(
     let top = first.1.min(second.1);
     let right = first.0.max(second.0);
     let bottom = first.1.max(second.1);
-
-    validate_rect(CaptureRect {
+    let rect = CaptureRect {
         x: left,
         y: top,
         width: right.saturating_sub(left),
         height: bottom.saturating_sub(top),
-    })
+    };
+
+    validate_dimensions(rect)
 }
 
 pub fn remove_capture(path: &str) {
@@ -309,7 +310,7 @@ fn capture_rect(
     })
 }
 
-fn validate_rect(rect: CaptureRect) -> Result<CaptureRect, String> {
+fn validate_dimensions(rect: CaptureRect) -> Result<CaptureRect, String> {
     if rect.width < 8 || rect.height < 8 {
         return Err("Vision capture region must be at least 8×8 pixels.".to_string());
     }
@@ -319,6 +320,11 @@ fn validate_rect(rect: CaptureRect) -> Result<CaptureRect, String> {
         return Err("Vision capture region is too large.".to_string());
     }
 
+    Ok(rect)
+}
+
+fn validate_rect(rect: CaptureRect) -> Result<CaptureRect, String> {
+    let rect = validate_dimensions(rect)?;
     let desktop = virtual_desktop_rect();
     let right = rect.x.saturating_add(rect.width);
     let bottom = rect.y.saturating_add(rect.height);
