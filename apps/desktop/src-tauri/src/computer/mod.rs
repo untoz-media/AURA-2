@@ -1,6 +1,7 @@
 pub mod app_launcher;
 pub mod app_lifecycle;
 pub mod audio;
+pub mod clipboard;
 pub mod keyboard;
 pub mod mouse;
 pub mod recent_files;
