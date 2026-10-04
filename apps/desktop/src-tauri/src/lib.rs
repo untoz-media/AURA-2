@@ -10,6 +10,7 @@ mod permissions;
 mod project_memory;
 mod routines;
 mod speech_runtime;
+mod tts_runtime;
 
 use audio_input::{AudioInputManager, AudioInputSnapshot};
 use computer::app_launcher::launch_app;
@@ -52,9 +53,10 @@ use routines::{
     SaveRoutineRequest, UserRoutine,
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
+use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::PathBuf,
     sync::{
@@ -83,6 +85,7 @@ struct RuntimeState {
     autostart_enabled: Mutex<bool>,
     permission_policy: Mutex<PermissionPolicy>,
     pending_confirmations: Mutex<HashMap<String, PendingConfirmation>>,
+    voice_command_ids: Mutex<HashSet<String>>,
 }
 
 impl Default for RuntimeState {
@@ -93,6 +96,7 @@ impl Default for RuntimeState {
             autostart_enabled: Mutex::new(false),
             permission_policy: Mutex::new(PermissionPolicy::default()),
             pending_confirmations: Mutex::new(HashMap::new()),
+            voice_command_ids: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -628,6 +632,33 @@ fn emit_voice_capture_event(app: &tauri::AppHandle, event: VoiceCaptureEvent) {
 }
 
 fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
+    let should_speak = {
+        let state = app.state::<RuntimeState>();
+        let mut voice_ids = state
+            .voice_command_ids
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let is_voice = voice_ids.contains(&event.id);
+        if matches!(
+            event.kind,
+            "command.completed" | "command.failed" | "command.cancelled"
+        ) {
+            voice_ids.remove(&event.id);
+        }
+        is_voice && matches!(event.kind, "command.completed" | "command.failed")
+    };
+
+    if should_speak {
+        let app_for_tts = app.clone();
+        let text = event.message.clone();
+        thread::spawn(move || {
+            let manager = app_for_tts.state::<ModelManager>();
+            let tts = app_for_tts.state::<TtsRuntime>();
+            let _ = tts.speak(&app_for_tts, &manager, &text);
+        });
+    }
+
     let _ = app.emit("aura:core-event", event);
 }
 
@@ -961,6 +992,14 @@ fn process_user_command(
     let source = request.source.clone();
     let approval_id = request.approval_id.clone();
     let id = approval_id.clone().unwrap_or_else(next_command_id);
+
+    if source == "voice" {
+        state
+            .voice_command_ids
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(id.clone());
+    }
 
     let approved_permission = if let Some(approval_id) = &approval_id {
         let pending = {
@@ -3489,9 +3528,13 @@ fn remove_model(
     manager: State<'_, ModelManager>,
     runtime: State<'_, ModelRuntime>,
     speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
 ) -> Result<ModelCatalog, String> {
     if model_id == "voice-whisper-base" {
         speech.stop();
+    }
+    if model_id == "voice-piper-ptpt" {
+        tts.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
@@ -3503,6 +3546,38 @@ fn get_speech_runtime_status(
     runtime: State<'_, SpeechRuntime>,
 ) -> SpeechRuntimeStatus {
     runtime.status()
+}
+
+#[tauri::command]
+fn get_tts_runtime_status(
+    app: AppHandle,
+    manager: State<'_, ModelManager>,
+    runtime: State<'_, TtsRuntime>,
+) -> TtsRuntimeStatus {
+    runtime.status(&app, &manager)
+}
+
+#[tauri::command]
+fn prepare_tts_runtime(
+    app: AppHandle,
+    manager: State<'_, ModelManager>,
+    runtime: State<'_, TtsRuntime>,
+) -> Result<TtsRuntimeStatus, String> {
+    runtime.prepare_dependency(&app, &manager)
+}
+
+#[tauri::command]
+fn test_tts_voice(
+    app: AppHandle,
+    manager: State<'_, ModelManager>,
+    runtime: State<'_, TtsRuntime>,
+    text: Option<String>,
+) -> Result<TtsRuntimeStatus, String> {
+    let phrase = text
+        .as_deref()
+        .unwrap_or("Olá. Eu sou a AURA, o teu assistente pessoal.")
+        .trim();
+    runtime.speak(&app, &manager, phrase)
 }
 
 #[tauri::command]
@@ -3817,6 +3892,7 @@ pub fn run() {
         .manage(ModelManager::default())
         .manage(ModelRuntime::default())
         .manage(SpeechRuntime::default())
+        .manage(TtsRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -4132,6 +4208,7 @@ pub fn run() {
                     "quit" => {
                         app.state::<ModelRuntime>().stop();
                         app.state::<SpeechRuntime>().stop();
+                        app.state::<TtsRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -4168,6 +4245,7 @@ pub fn run() {
                         } else {
                             app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.state::<SpeechRuntime>().stop();
+                            app_for_close.state::<TtsRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -4221,6 +4299,9 @@ pub fn run() {
             set_active_model,
             remove_model,
             get_speech_runtime_status,
+            get_tts_runtime_status,
+            prepare_tts_runtime,
+            test_tts_voice,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
