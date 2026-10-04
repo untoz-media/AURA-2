@@ -181,6 +181,10 @@ impl TtsRuntime {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+        if self.process_id.load(Ordering::Relaxed) == 0 {
+            process_guard.take();
+        }
+
         if process_guard.is_none() {
             *process_guard = Some(self.start_process(app, &voice_path)?);
         }
