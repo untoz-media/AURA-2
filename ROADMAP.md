@@ -87,12 +87,14 @@ This roadmap defines the first development path toward the AURA-2 Beta and stabl
 
 ## M007 — Vision
 
-- [ ] Screenshot understanding
-- [ ] Screen-region selection
-- [ ] Active-window vision
-- [ ] Visual UI understanding
-- [ ] Permission indicators
-- [ ] Vision history controls
+**Status: Complete — AURA-2 0.7.0-alpha.1**
+
+- [x] **M007.1** — Screenshot understanding
+- [x] **M007.2** — Screen-region selection
+- [x] **M007.3** — Active-window vision
+- [x] **M007.4** — Visual UI understanding
+- [x] **M007.5** — Permission indicators
+- [x] **M007.6** — Vision history controls
 
 ## M008 — Agents & Automations
 
