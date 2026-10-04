@@ -190,9 +190,15 @@ AURA Beta has no telemetry upload pipeline.
 
 ## Context Attachments V1
 
-V2 also includes a dedicated local **context attachment** contract through **Analyze with AURA**.
+V2 also includes a dedicated local **context attachment** contract through **Attach to Chat**, **Attach all to Chat** and the **Analyze with AURA** shortcut.
 
-The frontend sends only the current opaque drop IDs alongside a normal visible Chat request. The Core resolves those IDs and builds a separate ephemeral model context.
+Attach to Chat does not read the file immediately. It adds only the opaque drop ID to the next desktop Chat request. Attached items appear as removable filename chips above the composer.
+
+The user can then write a custom question such as "compare these two files", "what changed between these notes?" or "summarize the important points". If the user presses Send with attachments but no typed text, AURA submits the visible fallback request "Analyze the attached local files."
+
+After Core accepts the message, the frontend automatically detaches those items from the next turn. The temporary drop session itself remains available until replaced or dismissed.
+
+The frontend sends only the selected current opaque drop IDs alongside the visible Chat request. The Core resolves those IDs and builds a separate ephemeral model context.
 
 The attachment context:
 
@@ -204,7 +210,9 @@ The attachment context:
 - caps each text-file excerpt again before model handoff;
 - labels attached file data as untrusted;
 - is supplied as turn-only context, separate from the visible user message;
-- is not persisted in the model conversation history.
+- is not persisted in the model conversation history;
+- leaves only safe filenames as local UI labels on the user message;
+- is automatically detached from subsequent Chat turns after the request is accepted.
 
 When any drop attachment is present, AURA deliberately bypasses deterministic action, Routine and Director routing and sends the request only to local model reasoning. Attached file text therefore cannot directly trigger computer actions.
 
