@@ -12,6 +12,7 @@ type Props = {
   onClear: () => Promise<DropIntakeSnapshot>;
   onReveal: (dropId: string) => Promise<string>;
   onInspect: (dropId: string) => Promise<DroppedFileInspection>;
+  onAnalyze: (dropIds: string[]) => Promise<unknown>;
   onUseVision: (dropId: string) => Promise<unknown>;
 };
 
@@ -46,6 +47,7 @@ export default function DropTray({
   onClear,
   onReveal,
   onInspect,
+  onAnalyze,
   onUseVision,
 }: Props) {
   const [inspections, setInspections] = useState<
@@ -55,12 +57,16 @@ export default function DropTray({
     Record<string, string>
   >({});
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
   const visible = hovering || snapshot.items.length > 0;
 
   useEffect(() => {
     setInspections({});
     setInspectionErrors({});
     setBusyIds({});
+    setAnalyzing(false);
+    setBatchError(null);
   }, [snapshot.refreshedAtMs]);
 
   if (!visible) return null;
@@ -93,6 +99,18 @@ export default function DropTray({
     await Promise.all(snapshot.items.map((item) => inspectOne(item.id)));
   }
 
+  async function analyzeAll() {
+    setAnalyzing(true);
+    setBatchError(null);
+    try {
+      await onAnalyze(snapshot.items.map((item) => item.id));
+    } catch (error) {
+      setBatchError(String(error));
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   return (
     <>
       {hovering && (
@@ -120,8 +138,16 @@ export default function DropTray({
             <div className="drop-tray-heading-actions">
               <button
                 type="button"
+                className="feature-primary-button"
+                disabled={paused || snapshot.items.length === 0 || analyzing}
+                onClick={() => void analyzeAll()}
+              >
+                {analyzing ? "Analyzing…" : "Analyze with AURA"}
+              </button>
+              <button
+                type="button"
                 className="feature-secondary-button"
-                disabled={paused || snapshot.items.length === 0}
+                disabled={paused || snapshot.items.length === 0 || analyzing}
                 onClick={() => void inspectAll()}
               >
                 Inspect all
@@ -149,6 +175,12 @@ export default function DropTray({
               {snapshot.truncated
                 ? "AURA accepts at most 8 files in one drop."
                 : ""}
+            </div>
+          )}
+
+          {batchError && (
+            <div className="drop-tray-warning">
+              Analyze with AURA failed: {batchError}
             </div>
           )}
 
@@ -255,9 +287,10 @@ export default function DropTray({
           <div className="drop-tray-privacy">
             <strong>Temporary session context</strong>
             <span>
-              File paths remain inside AURA Core memory. Inspect reads only
-              bounded allowlisted content. Dropped items are not added to Memory,
-              diagnostics, Agents or Automations.
+              File paths remain inside AURA Core memory. Inspect and Analyze use
+              only bounded allowlisted context. Attached file context is ephemeral
+              for that model turn and is not added to Memory, diagnostics, Agents
+              or Automations.
             </span>
           </div>
         </aside>
