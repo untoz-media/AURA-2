@@ -263,12 +263,16 @@ Current V1 boundary:
 - hidden dot-prefixed entries are skipped
 - only names and filesystem metadata are inspected
 - file contents are never opened by the search engine
+- a returned path can be revealed in File Explorer after a separate Act action
+- reveal validates the canonical path remains inside an allowed personal folder
+- AURA does not execute/open the matched file in V1
 
 Examples:
 
 - `Find file Artemis`
 - `Search files WorldUnited`
 - `Procura ficheiro thumbnail`
+- `Reveal file "C:\\Users\\…\\Documents\\report.pdf"`
 
 ### Clipboard Intelligence
 
