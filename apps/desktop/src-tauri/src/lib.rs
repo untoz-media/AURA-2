@@ -45,7 +45,8 @@ use computer::clipboard::{
     summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
 };
 use computer::drop_intake::{
-    is_supported_vision_image, reveal_drop, DropIntakeSnapshot, DropIntakeState,
+    inspect_drop, is_supported_vision_image, reveal_drop, DropIntakeSnapshot, DropIntakeState,
+    DroppedFileInspection,
 };
 use computer::file_intelligence::{
     recent_personal_files, reveal_personal_path, search_personal_files,
@@ -6153,6 +6154,27 @@ fn reveal_dropped_file(
 }
 
 #[tauri::command]
+fn inspect_dropped_file(
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<DroppedFileInspection, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Dropped-file inspection is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    // Inspection is only exposed through an explicit dropped-file UI action.
+    // If Read=Ask, the click is the one-shot confirmation for this temporary item.
+    inspect_drop(&drops, &drop_id)
+}
+
+#[tauri::command]
 fn stage_dropped_image_for_vision(
     app: AppHandle,
     drop_id: String,
@@ -7043,6 +7065,7 @@ pub fn run() {
             get_drop_intake,
             clear_drop_intake,
             reveal_dropped_file,
+            inspect_dropped_file,
             stage_dropped_image_for_vision,
             get_audio_input_state,
             select_audio_input_device,
