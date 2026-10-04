@@ -383,6 +383,25 @@ export type DroppedFileItem = {
   modifiedAtMs: number;
   canUseVision: boolean;
   canReveal: boolean;
+  canInspect: boolean;
+  canPreviewText: boolean;
+};
+
+export type DroppedFileInspection = {
+  id: string;
+  name: string;
+  kind: string;
+  extension?: string | null;
+  sizeBytes: number;
+  modifiedAtMs: number;
+  contentMode: "metadataOnly" | "textPreview" | "imageMetadata" | string;
+  summary: string;
+  textPreview?: string | null;
+  previewTruncated: boolean;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  note?: string | null;
+  inspectedAtMs: number;
 };
 
 export type DropIntakeSnapshot = {
