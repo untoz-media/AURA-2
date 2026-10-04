@@ -84,7 +84,8 @@ export type LifecycleEventKind =
   | "startup.background"
   | "permissions.updated"
   | "permissions.reset"
-  | "pause.persistence_failed";
+  | "pause.persistence_failed"
+  | "agents.recovery_failed";
 
 export type LifecycleEvent = {
   kind: LifecycleEventKind;
