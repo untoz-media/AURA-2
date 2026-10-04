@@ -374,15 +374,13 @@ export function useAuraBridge() {
       getRuntimeState(),
       getPermissionPolicy(),
       getObsConnectionState(),
-      getDirectorPresets(),
     ])
-      .then(([app, runtime, permissions, obs, presets]) => {
+      .then(([app, runtime, permissions, obs]) => {
         if (cancelled) return;
         setAppStatus(app);
         setRuntimeState(runtime);
         setPermissionPolicyState(permissions);
         setObsConnection(obs);
-        setDirectorPresets(presets);
 
         if (runtime.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
@@ -398,6 +396,21 @@ export function useAuraBridge() {
             code: "bridge.status_failed",
             message: String(error),
           });
+        }
+      });
+
+    getDirectorPresets()
+      .then((presets) => {
+        if (!cancelled) setDirectorPresets(presets);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          const message = String(error);
+          setBridgeError({
+            code: "director.load_failed",
+            message,
+          });
+          setActivity(message);
         }
       });
 
@@ -1589,9 +1602,19 @@ export function useAuraBridge() {
   }, []);
 
   const refreshDirectorPresets = useCallback(async () => {
-    const presets = await getDirectorPresets();
-    setDirectorPresets(presets);
-    return presets;
+    try {
+      const presets = await getDirectorPresets();
+      setDirectorPresets(presets);
+      return presets;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "director.load_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
   }, []);
 
   const saveDirectorPresetControl = useCallback(async (
