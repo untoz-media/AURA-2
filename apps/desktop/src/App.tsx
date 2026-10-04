@@ -15,6 +15,7 @@ import Create from "./Create";
 import Computer from "./Computer";
 import Tasks from "./Tasks";
 import DirectorMode from "./DirectorMode";
+import Vision from "./Vision";
 import {
   applyAuraTheme,
   readAuraTheme,
@@ -27,6 +28,7 @@ type AppView =
   | "models"
   | "create"
   | "computer"
+  | "vision"
   | "tasks"
   | "director"
   | "settings";
@@ -64,6 +66,10 @@ function App() {
     speechRuntime,
     ttsRuntime,
     voicePreferences,
+    visionRuntime,
+    visionHistory,
+    visionCapture,
+    visionEvent,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -95,6 +101,14 @@ function App() {
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
     updateVoicePreferences,
+    refreshVisionRuntime,
+    updateVisionPreferences,
+    clearVisionHistoryControl,
+    captureVisionScreenControl,
+    captureVisionActiveWindowControl,
+    captureVisionRegionControl,
+    analyzeVisionControl,
+    clearVisionCaptureControl,
     stopSpeakingControl,
     refreshTtsRuntime,
     prepareTtsRuntimeControl,
@@ -246,6 +260,13 @@ function App() {
             Computer
           </NavItem>
           <NavItem
+            active={view === "vision"}
+            icon="▣"
+            onClick={() => setView("vision")}
+          >
+            Vision
+          </NavItem>
+          <NavItem
             active={view === "tasks"}
             icon="↻"
             onClick={() => setView("tasks")}
@@ -299,6 +320,9 @@ function App() {
             </button>
             <button type="button" onClick={() => setView("memory")}>
               Memory
+            </button>
+            <button type="button" onClick={() => setView("vision")}>
+              Vision
             </button>
             <button type="button" onClick={() => setView("director")}>
               OBS
@@ -354,6 +378,13 @@ function App() {
                     >
                       <strong>Computer status</strong>
                       <span>Understand what you are working in</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void runQuickCommand("Look at my screen. What do you see?")}
+                    >
+                      <strong>Look at my screen</strong>
+                      <span>Use local AURA Vision on an explicit screenshot</span>
                     </button>
                     <button type="button" onClick={() => setView("create")}>
                       <strong>Create with AURA</strong>
@@ -529,6 +560,27 @@ function App() {
               recentFiles={recentFiles}
               onRecentFilesRefresh={refreshRecentFiles}
               onCommand={runQuickCommand}
+            />
+          )}
+
+          {view === "vision" && (
+            <Vision
+              catalog={modelCatalog}
+              managedRuntime={managedRuntimeStatus}
+              runtime={visionRuntime}
+              history={visionHistory}
+              capture={visionCapture}
+              event={visionEvent}
+              readPermission={permissionPolicy.read}
+              onModelOperation={runModelOperation}
+              onCaptureScreen={captureVisionScreenControl}
+              onCaptureActiveWindow={captureVisionActiveWindowControl}
+              onCaptureRegion={captureVisionRegionControl}
+              onAnalyze={analyzeVisionControl}
+              onPreferencesChange={updateVisionPreferences}
+              onHistoryClear={clearVisionHistoryControl}
+              onCaptureClear={clearVisionCaptureControl}
+              onRuntimeRefresh={refreshVisionRuntime}
             />
           )}
 

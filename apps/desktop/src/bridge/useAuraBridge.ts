@@ -23,6 +23,17 @@ import {
   listenToModelDownloads,
   listenToManagedRuntime,
   listenToVoiceCapture,
+  listenToVision,
+  getVisionRuntimeStatus,
+  getVisionHistory,
+  setVisionPreferences,
+  clearVisionHistory,
+  getLastVisionCapture,
+  clearLastVisionCapture,
+  captureVisionScreen,
+  captureVisionActiveWindow,
+  captureVisionRegion,
+  analyzeLastVisionCapture,
   resetPermissionPolicy,
   resolveConfirmation,
   setAutostartEnabled,
@@ -122,6 +133,13 @@ import type {
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
   VoicePreferences,
+  VisionCapture,
+  VisionEvent,
+  VisionRuntimeStatus,
+  VisionPreferences,
+  VisionHistorySnapshot,
+  VisionAnalysisPayload,
+  VisionRegionRequest,
 } from "./types";
 
 const DEFAULT_ACTIVITY =
@@ -203,6 +221,22 @@ const DEFAULT_VOICE_PREFERENCES: VoicePreferences = {
   ttsVoiceId: "voice-piper-ptpt",
 };
 
+const DEFAULT_VISION_RUNTIME: VisionRuntimeStatus = {
+  state: "stopped",
+  modelId: "vision-smolvlm2-500m",
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_VISION_HISTORY: VisionHistorySnapshot = {
+  preferences: {
+    historyEnabled: false,
+    retainImages: false,
+    maxHistory: 20,
+  },
+  items: [],
+  refreshedAtMs: 0,
+};
+
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
   models: [],
   modelsRoot: "",
@@ -269,6 +303,14 @@ export function useAuraBridge() {
     useState<TtsRuntimeStatus>(DEFAULT_TTS_RUNTIME);
   const [voicePreferences, setVoicePreferencesState] =
     useState<VoicePreferences>(DEFAULT_VOICE_PREFERENCES);
+  const [visionRuntime, setVisionRuntime] =
+    useState<VisionRuntimeStatus>(DEFAULT_VISION_RUNTIME);
+  const [visionHistory, setVisionHistory] =
+    useState<VisionHistorySnapshot>(DEFAULT_VISION_HISTORY);
+  const [visionCapture, setVisionCapture] =
+    useState<VisionCapture | null>(null);
+  const [visionEvent, setVisionEvent] =
+    useState<VisionEvent | null>(null);
   const [permissionPolicy, setPermissionPolicyState] = useState<PermissionPolicy>({
     read: "allow",
     act: "allow",
@@ -287,6 +329,7 @@ export function useAuraBridge() {
     let cleanupModels: (() => void) | undefined;
     let cleanupManagedRuntime: (() => void) | undefined;
     let cleanupVoiceCapture: (() => void) | undefined;
+    let cleanupVision: (() => void) | undefined;
 
     Promise.all([
       getAppStatus(),
@@ -366,6 +409,30 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Defaults remain active until preferences can be read.
+      });
+
+    getVisionRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setVisionRuntime(runtime);
+      })
+      .catch(() => {
+        // Vision remains stopped until its local model is used.
+      });
+
+    getVisionHistory()
+      .then((snapshot) => {
+        if (!cancelled) setVisionHistory(snapshot);
+      })
+      .catch(() => {
+        // Vision history is optional and disabled by default.
+      });
+
+    getLastVisionCapture()
+      .then((capture) => {
+        if (!cancelled) setVisionCapture(capture);
+      })
+      .catch(() => {
+        // No current screenshot is a supported state.
       });
 
     getAudioInputState()
@@ -545,6 +612,59 @@ export function useAuraBridge() {
         // Voice capture events are supplementary to the microphone state.
       });
 
+    listenToVision((event: VisionEvent) => {
+      if (cancelled) return;
+
+      setVisionEvent(event);
+      setActivity(event.message);
+
+      if (
+        event.capture &&
+        !["completed", "historyError", "error"].includes(event.phase)
+      ) {
+        setVisionCapture(event.capture);
+      }
+
+      if (event.phase === "completed") {
+        setVisionCapture(null);
+      }
+
+      if (event.phase === "capturing" || event.phase === "analyzing") {
+        setStatus("Working");
+      } else if (
+        event.phase === "completed" ||
+        event.phase === "error" ||
+        event.phase === "historyError"
+      ) {
+        setStatus("Idle");
+      }
+
+      if (
+        event.phase === "completed" ||
+        event.phase === "historyError" ||
+        event.phase === "error"
+      ) {
+        void getVisionRuntimeStatus()
+          .then((runtime) => {
+            if (!cancelled) setVisionRuntime(runtime);
+          })
+          .catch(() => undefined);
+
+        void getVisionHistory()
+          .then((snapshot) => {
+            if (!cancelled) setVisionHistory(snapshot);
+          })
+          .catch(() => undefined);
+      }
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else cleanupVision = unlisten;
+      })
+      .catch(() => {
+        // Vision events supplement explicit capture/analysis results.
+      });
+
     listenToManagedRuntime((runtime: ManagedRuntimeStatus) => {
       if (cancelled) return;
       setManagedRuntimeStatus(runtime);
@@ -705,6 +825,7 @@ export function useAuraBridge() {
       cleanupModels?.();
       cleanupManagedRuntime?.();
       cleanupVoiceCapture?.();
+      cleanupVision?.();
     };
   }, []);
 
@@ -1014,6 +1135,73 @@ export function useAuraBridge() {
     const runtime = await stopTtsSpeaking();
     setTtsRuntime(runtime);
     return runtime;
+  }, []);
+
+  const refreshVisionRuntime = useCallback(async () => {
+    const runtime = await getVisionRuntimeStatus();
+    setVisionRuntime(runtime);
+    return runtime;
+  }, []);
+
+  const refreshVisionHistory = useCallback(async () => {
+    const snapshot = await getVisionHistory();
+    setVisionHistory(snapshot);
+    return snapshot;
+  }, []);
+
+  const updateVisionPreferences = useCallback(async (
+    preferences: VisionPreferences,
+  ) => {
+    const snapshot = await setVisionPreferences(preferences);
+    setVisionHistory(snapshot);
+    return snapshot;
+  }, []);
+
+  const clearVisionHistoryControl = useCallback(async () => {
+    const snapshot = await clearVisionHistory();
+    setVisionHistory(snapshot);
+    return snapshot;
+  }, []);
+
+  const captureVisionScreenControl = useCallback(async () => {
+    const capture = await captureVisionScreen();
+    setVisionCapture(capture);
+    return capture;
+  }, []);
+
+  const captureVisionActiveWindowControl = useCallback(async () => {
+    const capture = await captureVisionActiveWindow();
+    setVisionCapture(capture);
+    return capture;
+  }, []);
+
+  const captureVisionRegionControl = useCallback(async (
+    request: VisionRegionRequest,
+  ) => {
+    const capture = await captureVisionRegion(request);
+    setVisionCapture(capture);
+    return capture;
+  }, []);
+
+  const analyzeVisionControl = useCallback(async (prompt: string) => {
+    const result = await analyzeLastVisionCapture(prompt);
+    setVisionCapture(null);
+    setVisionHistory(result.history);
+    setVisionRuntime((current) => ({
+      ...current,
+      state: "ready",
+      lastPrompt: result.prompt,
+      lastAnalysis: result.analysis,
+      lastError: null,
+      refreshedAtMs: result.completedAtMs,
+    }));
+    return result;
+  }, []);
+
+  const clearVisionCaptureControl = useCallback(async () => {
+    await clearLastVisionCapture();
+    setVisionCapture(null);
+    setVisionEvent(null);
   }, []);
 
   const refreshTtsRuntime = useCallback(async () => {
@@ -1900,6 +2088,10 @@ export function useAuraBridge() {
     speechRuntime,
     ttsRuntime,
     voicePreferences,
+    visionRuntime,
+    visionHistory,
+    visionCapture,
+    visionEvent,
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
@@ -1932,6 +2124,15 @@ export function useAuraBridge() {
     deleteProjectMemoryControl,
     setActiveProjectMemoryControl,
     updateVoicePreferences,
+    refreshVisionRuntime,
+    refreshVisionHistory,
+    updateVisionPreferences,
+    clearVisionHistoryControl,
+    captureVisionScreenControl,
+    captureVisionActiveWindowControl,
+    captureVisionRegionControl,
+    analyzeVisionControl,
+    clearVisionCaptureControl,
     stopSpeakingControl,
     refreshTtsRuntime,
     prepareTtsRuntimeControl,

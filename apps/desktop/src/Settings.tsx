@@ -1514,6 +1514,16 @@ export default function Settings({
                 trailing={<span className="settings-keys"><ShortcutKey>Ctrl</ShortcutKey><span>+</span><ShortcutKey>Shift</ShortcutKey><span>+</span><ShortcutKey>Space</ShortcutKey></span>}
               />
               <SettingRow
+                title="Push-to-Talk"
+                description="Hold anywhere in Windows to speak to AURA."
+                trailing={<span className="settings-keys"><ShortcutKey>Ctrl</ShortcutKey><span>+</span><ShortcutKey>Shift</ShortcutKey><span>+</span><ShortcutKey>F8</ShortcutKey></span>}
+              />
+              <SettingRow
+                title="Select Vision region"
+                description="Press once on the first corner and again on the opposite corner."
+                trailing={<span className="settings-keys"><ShortcutKey>Ctrl</ShortcutKey><span>+</span><ShortcutKey>Shift</ShortcutKey><span>+</span><ShortcutKey>F9</ShortcutKey></span>}
+              />
+              <SettingRow
                 title="Custom shortcuts"
                 description="Shortcut editing and conflict detection arrive later in M002."
                 trailing={<Badge tone="planned">Planned</Badge>}

@@ -382,7 +382,7 @@ export type ModelStatus = {
   subtitle: string;
   description: string;
   generation: string;
-  role: "assistant" | "speechToText" | "textToSpeech" | string;
+  role: "assistant" | "speechToText" | "textToSpeech" | "vision" | string;
   state: ModelInstallState;
   downloadAvailable: boolean;
   installed: boolean;
@@ -619,4 +619,85 @@ export type VoicePreferences = {
   wakeWordEnabled: boolean;
   wakePhrase: string;
   ttsVoiceId: "voice-piper-ptpt" | "voice-piper-engb-alan" | string;
+};
+
+
+export type CaptureRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type VisionCapture = {
+  id: string;
+  kind: "screen" | "activeWindow" | "region" | string;
+  path: string;
+  rect: CaptureRect;
+  windowTitle?: string | null;
+  createdAtMs: number;
+};
+
+export type VisionEvent = {
+  phase:
+    | "capturing"
+    | "captured"
+    | "regionSelecting"
+    | "analyzing"
+    | "completed"
+    | "historyError"
+    | "error"
+    | string;
+  message: string;
+  capture?: VisionCapture | null;
+  analysis?: string | null;
+  timestampMs: number;
+};
+
+export type VisionRuntimeStatus = {
+  state: "stopped" | "loading" | "ready" | "analyzing" | "error" | string;
+  modelId: string;
+  device?: string | null;
+  cuda?: boolean | null;
+  lastPrompt?: string | null;
+  lastAnalysis?: string | null;
+  lastError?: string | null;
+  refreshedAtMs: number;
+};
+
+export type VisionPreferences = {
+  historyEnabled: boolean;
+  retainImages: boolean;
+  maxHistory: number;
+};
+
+export type VisionHistoryItem = {
+  id: string;
+  captureKind: string;
+  prompt: string;
+  analysis: string;
+  windowTitle?: string | null;
+  imagePath?: string | null;
+  createdAtMs: number;
+};
+
+export type VisionHistorySnapshot = {
+  preferences: VisionPreferences;
+  items: VisionHistoryItem[];
+  refreshedAtMs: number;
+};
+
+export type VisionAnalysisPayload = {
+  capture: VisionCapture;
+  prompt: string;
+  analysis: string;
+  completedAtMs: number;
+  history: VisionHistorySnapshot;
+};
+
+export type VisionRegionRequest = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };

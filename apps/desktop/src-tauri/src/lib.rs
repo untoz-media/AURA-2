@@ -11,6 +11,9 @@ mod project_memory;
 mod routines;
 mod speech_runtime;
 mod tts_runtime;
+mod vision_capture;
+mod vision_history;
+mod vision_runtime;
 
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use computer::app_launcher::launch_app;
@@ -22,7 +25,9 @@ use computer::recent_files::{
     default_recent_files_snapshot, recent_files_snapshot, summarize_recent_files, RecentFilesSnapshot,
 };
 use computer::system::{execute_system_action, summarize_system, SystemAction};
-use computer::window_manager::{summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo};
+use computer::window_manager::{
+    list_windows, summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo,
+};
 use core::{
     action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
     confirmation::{
@@ -54,11 +59,21 @@ use routines::{
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
+use vision_capture::{
+    capture_active_window, capture_full_screen, capture_region, capture_window_handle,
+    cursor_position, region_from_points, remove_capture, CaptureRect, VisionCapture,
+};
+use vision_history::{
+    clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
+    save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
+    VisionHistorySnapshot, VisionPreferences,
+};
+use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex,
@@ -89,6 +104,12 @@ struct RuntimeState {
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
     conversation_active: AtomicBool,
+}
+
+#[derive(Default)]
+struct VisionSession {
+    last_capture: Mutex<Option<VisionCapture>>,
+    region_start: Mutex<Option<(i32, i32)>>,
 }
 
 impl Default for RuntimeState {
@@ -215,6 +236,35 @@ struct VoiceCaptureEvent {
     message: String,
     text: Option<String>,
     timestamp_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionEvent {
+    phase: &'static str,
+    message: String,
+    capture: Option<VisionCapture>,
+    analysis: Option<String>,
+    timestamp_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionAnalysisPayload {
+    capture: VisionCapture,
+    prompt: String,
+    analysis: String,
+    completed_at_ms: u64,
+    history: VisionHistorySnapshot,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VisionRegionRequest {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 }
 
 #[derive(Deserialize)]
@@ -520,6 +570,41 @@ mod voice_command_tests {
     }
 }
 
+#[cfg(test)]
+mod vision_route_tests {
+    use super::*;
+
+    #[test]
+    fn detects_full_screen_visual_questions() {
+        assert!(matches!(
+            vision_query_target("AURA, o que vês no meu ecrã?"),
+            Some(VisionQueryTarget::Screen)
+        ));
+        assert!(matches!(
+            vision_query_target("look at my screen"),
+            Some(VisionQueryTarget::Screen)
+        ));
+    }
+
+    #[test]
+    fn detects_active_window_visual_questions() {
+        assert!(matches!(
+            vision_query_target("what's wrong here?"),
+            Some(VisionQueryTarget::ActiveWindow)
+        ));
+        assert!(matches!(
+            vision_query_target("onde devo clicar nesta janela ativa?"),
+            Some(VisionQueryTarget::ActiveWindow)
+        ));
+    }
+
+    #[test]
+    fn ordinary_commands_do_not_trigger_screen_capture() {
+        assert!(vision_query_target("open Brave").is_none());
+        assert!(vision_query_target("what app am I using?").is_none());
+    }
+}
+
 fn next_command_id() -> String {
     let counter = COMMAND_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("cmd-{}-{}", unix_timestamp_ms(), counter)
@@ -792,6 +877,268 @@ fn set_autostart_state(
 
 fn emit_voice_capture_event(app: &tauri::AppHandle, event: VoiceCaptureEvent) {
     let _ = app.emit("aura:voice-capture", event);
+}
+
+#[derive(Clone, Copy)]
+enum VisionQueryTarget {
+    Screen,
+    ActiveWindow,
+}
+
+fn emit_vision_event(app: &tauri::AppHandle, event: VisionEvent) {
+    let _ = app.emit("aura:vision-event", event);
+}
+
+fn store_last_vision_capture(app: &tauri::AppHandle, capture: VisionCapture) -> VisionCapture {
+    let session = app.state::<VisionSession>();
+    let mut current = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    if let Some(previous) = current.replace(capture.clone()) {
+        if previous.path != capture.path {
+            remove_capture(&previous.path);
+        }
+    }
+
+    capture
+}
+
+fn vision_query_target(text: &str) -> Option<VisionQueryTarget> {
+    let normalized = text
+        .trim()
+        .trim_matches(|character: char| {
+            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
+        })
+        .to_lowercase();
+
+    let active_window_phrases = [
+        "active window",
+        "current window",
+        "this window",
+        "janela ativa",
+        "janela actual",
+        "janela atual",
+        "esta janela",
+        "what's wrong here",
+        "what is wrong here",
+        "onde devo clicar",
+        "onde clico",
+        "where do i click",
+    ];
+
+    if active_window_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+    {
+        return Some(VisionQueryTarget::ActiveWindow);
+    }
+
+    let screen_phrases = [
+        "my screen",
+        "the screen",
+        "screen right now",
+        "meu ecrã",
+        "meu ecra",
+        "no ecrã",
+        "no ecra",
+        "look at my screen",
+        "olha para o meu ecrã",
+        "olha para o meu ecra",
+        "what do you see",
+        "o que vês",
+        "o que ves",
+    ];
+
+    screen_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+        .then_some(VisionQueryTarget::Screen)
+}
+
+fn vision_prompt(user_text: &str) -> String {
+    format!(
+        "You are AURA Vision, a local PC visual understanding component. Analyze only what is visibly present in the screenshot. Read visible UI text when possible, identify relevant controls and describe likely interface state, but do not claim hidden information and do not say that you clicked anything. User request: {}",
+        user_text.trim()
+    )
+}
+
+fn analyze_capture_internal(
+    app: &tauri::AppHandle,
+    capture: &VisionCapture,
+    prompt: &str,
+) -> Result<VisionAnalysisPayload, String> {
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "analyzing",
+            message: "Analyzing the screenshot locally…".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let manager = app.state::<ModelManager>();
+    let runtime = app.state::<VisionRuntime>();
+    let result = runtime.analyze(app, &manager, Path::new(&capture.path), prompt);
+
+    match result {
+        Ok(VisionAnalysisResult {
+            text,
+            prompt,
+            completed_at_ms,
+        }) => {
+            let history = match record_vision_analysis(app, capture, &prompt, &text) {
+                Ok(history) => history,
+                Err(error) => {
+                    remove_capture(&capture.path);
+                    emit_vision_event(
+                        app,
+                        VisionEvent {
+                            phase: "historyError",
+                            message: format!("Vision analysis completed, but history could not be updated: {error}"),
+                            capture: Some(capture.clone()),
+                            analysis: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                    vision_history_snapshot(app)?
+                }
+            };
+
+            {
+                let session = app.state::<VisionSession>();
+                let mut current = session
+                    .last_capture
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if current
+                    .as_ref()
+                    .is_some_and(|item| item.path == capture.path)
+                {
+                    current.take();
+                }
+            }
+
+            emit_vision_event(
+                app,
+                VisionEvent {
+                    phase: "completed",
+                    message: "Local visual analysis complete.".to_string(),
+                    capture: Some(capture.clone()),
+                    analysis: Some(text.clone()),
+                    timestamp_ms: completed_at_ms,
+                },
+            );
+
+            Ok(VisionAnalysisPayload {
+                capture: capture.clone(),
+                prompt,
+                analysis: text,
+                completed_at_ms,
+                history,
+            })
+        }
+        Err(error) => {
+            let preferences = vision_history::load_preferences(app);
+            if !preferences.history_enabled {
+                remove_capture(&capture.path);
+            }
+
+            emit_vision_event(
+                app,
+                VisionEvent {
+                    phase: "error",
+                    message: error.clone(),
+                    capture: Some(capture.clone()),
+                    analysis: None,
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            Err(error)
+        }
+    }
+}
+
+fn capture_for_vision_query(
+    app: &tauri::AppHandle,
+    target: VisionQueryTarget,
+) -> Result<VisionCapture, String> {
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "capturing",
+            message: match target {
+                VisionQueryTarget::Screen => "Capturing the Windows desktop…".to_string(),
+                VisionQueryTarget::ActiveWindow => "Capturing the active window…".to_string(),
+            },
+            capture: None,
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let capture = match target {
+        VisionQueryTarget::Screen => capture_full_screen(app),
+        VisionQueryTarget::ActiveWindow => {
+            let awareness = app.state::<CurrentAppAwareness>();
+            let context = awareness.snapshot().ok();
+
+            if let Some(context) = context.filter(|item| item.context_source == "lastExternal") {
+                let windows = list_windows().ok();
+                let candidate = windows.as_ref().and_then(|items| {
+                    let preferred_title = context.window_title.as_deref();
+                    items
+                        .iter()
+                        .find(|window| {
+                            window
+                                .process_name
+                                .as_deref()
+                                .is_some_and(|name| name.eq_ignore_ascii_case(&context.process_name))
+                                && preferred_title
+                                    .is_some_and(|title| window.title.eq_ignore_ascii_case(title))
+                        })
+                        .or_else(|| {
+                            items.iter().find(|window| {
+                                window
+                                    .process_name
+                                    .as_deref()
+                                    .is_some_and(|name| {
+                                        name.eq_ignore_ascii_case(&context.process_name)
+                                    })
+                            })
+                        })
+                });
+
+                if let Some(window) = candidate {
+                    capture_window_handle(
+                        app,
+                        window.handle,
+                        Some(window.title.clone()),
+                    )
+                } else {
+                    capture_active_window(app)
+                }
+            } else {
+                capture_active_window(app)
+            }
+        },
+    }?;
+
+    let capture = store_last_vision_capture(app, capture);
+    emit_vision_event(
+        app,
+        VisionEvent {
+            phase: "captured",
+            message: "Screenshot captured locally.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+    Ok(capture)
 }
 
 fn process_voice_capture(
@@ -1353,7 +1700,7 @@ fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M006 Complete · Voice · 0.6.0-alpha.1",
+        stage: "M007 Complete · Vision · 0.7.0-alpha.1",
         local_first: true,
     }
 }
@@ -3897,126 +4244,211 @@ fn process_user_command(
             );
         }
         RouteResult::NoMatch => {
-            let worker_app = app.clone();
-            let worker_id = id.clone();
-            let worker_text = text.clone();
+            if let Some(target) = vision_query_target(&text) {
+                let read_decision = state
+                    .permission_policy
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .decision_for(PermissionClass::Read);
 
-            thread::spawn(move || {
-                emit_core_event(
-                    &worker_app,
-                    CoreEvent {
-                        id: worker_id.clone(),
-                        kind: "command.processing",
-                        status: AuraRuntimeStatus::Working,
-                        message: "Thinking with the selected local model…".to_string(),
-                        command: Some(worker_text.clone()),
-                        timestamp_ms: unix_timestamp_ms(),
-                    },
-                );
+                if read_decision == PermissionDecision::Never {
+                    emit_core_event(
+                        &app,
+                        CoreEvent {
+                            id: id.clone(),
+                            kind: "command.failed",
+                            status: AuraRuntimeStatus::Idle,
+                            message: "Screen reading is blocked by AURA's Read permission policy.".to_string(),
+                            command: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                } else {
+                    let worker_app = app.clone();
+                    let worker_id = id.clone();
+                    let worker_text = text.clone();
 
-                let manager = worker_app.state::<ModelManager>();
-                let runtime = worker_app.state::<ModelRuntime>();
-                let desktop_context = {
-                    let awareness = worker_app.state::<CurrentAppAwareness>();
-                    let foreground = awareness.snapshot().ok();
-                    let recent = recent_files_snapshot(5).ok();
-                    let project = summarize_active_project(&worker_app).ok().flatten();
-
-                    if foreground.is_none() && recent.is_none() && project.is_none() {
-                        None
-                    } else {
-                        let mut summary = String::new();
-
-                        if let Some(context) = foreground {
-                            summary.push_str(&format!(
-                                "Current app: {}\nProcess: {}",
-                                context.app_name, context.process_name
-                            ));
-
-                            if let Some(title) = context.window_title.as_deref() {
-                                summary.push_str(&format!("\nActive window title: {title}"));
-                            }
-
-                            if context.context_source == "lastExternal" {
-                                summary.push_str(
-                                    "\nContext source: last external window before AURA took focus",
-                                );
-                            } else {
-                                summary.push_str("\nContext source: foreground");
-                            }
-                        }
-
-                        if let Some(snapshot) = recent {
-                            if !snapshot.items.is_empty() {
-                                if !summary.is_empty() {
-                                    summary.push_str("\n");
-                                }
-                                let names = snapshot
-                                    .items
-                                    .iter()
-                                    .map(|item| item.name.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" · ");
-                                summary.push_str(&format!("Recent files: {names}"));
-                            }
-                        }
-
-                        if let Some(project) = project {
-                            if !summary.is_empty() {
-                                summary.push_str("\n");
-                            }
-                            summary.push_str(&project);
-                        }
-
-                        (!summary.is_empty()).then_some(summary)
-                    }
-                };
-
-                match runtime.generate(
-                    &worker_app,
-                    &manager,
-                    &worker_text,
-                    desktop_context.as_deref(),
-                ) {
-                    Ok(response) => {
-                        emit_core_event(
-                            &worker_app,
-                            CoreEvent {
-                                id: worker_id,
-                                kind: "command.completed",
-                                status: AuraRuntimeStatus::Idle,
-                                message: response,
-                                command: Some(worker_text),
-                                timestamp_ms: unix_timestamp_ms(),
-                            },
-                        );
-                    }
-                    Err(error) => {
-                        let message = format!("Local model unavailable: {error}");
-
+                    thread::spawn(move || {
                         emit_core_event(
                             &worker_app,
                             CoreEvent {
                                 id: worker_id.clone(),
-                                kind: "command.failed",
-                                status: AuraRuntimeStatus::Idle,
-                                message: message.clone(),
-                                command: Some(worker_text),
+                                kind: "command.processing",
+                                status: AuraRuntimeStatus::Working,
+                                message: "Looking at the requested local screen context…".to_string(),
+                                command: Some(worker_text.clone()),
                                 timestamp_ms: unix_timestamp_ms(),
                             },
                         );
 
-                        emit_core_error(
-                            &worker_app,
-                            CoreError {
-                                id: Some(worker_id),
-                                code: "model.runtime_failed",
-                                message,
-                            },
-                        );
-                    }
+                        let result = capture_for_vision_query(&worker_app, target)
+                            .and_then(|capture| {
+                                analyze_capture_internal(
+                                    &worker_app,
+                                    &capture,
+                                    &vision_prompt(&worker_text),
+                                )
+                            });
+
+                        match result {
+                            Ok(analysis) => emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id,
+                                    kind: "command.completed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: analysis.analysis,
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            ),
+                            Err(error) => {
+                                let message = format!("Vision unavailable: {error}");
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "vision.runtime_failed",
+                                        message,
+                                    },
+                                );
+                            }
+                        }
+                    });
                 }
-            });
+            } else {
+                let worker_app = app.clone();
+                let worker_id = id.clone();
+                let worker_text = text.clone();
+    
+                thread::spawn(move || {
+                    emit_core_event(
+                        &worker_app,
+                        CoreEvent {
+                            id: worker_id.clone(),
+                            kind: "command.processing",
+                            status: AuraRuntimeStatus::Working,
+                            message: "Thinking with the selected local model…".to_string(),
+                            command: Some(worker_text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+    
+                    let manager = worker_app.state::<ModelManager>();
+                    let runtime = worker_app.state::<ModelRuntime>();
+                    let desktop_context = {
+                        let awareness = worker_app.state::<CurrentAppAwareness>();
+                        let foreground = awareness.snapshot().ok();
+                        let recent = recent_files_snapshot(5).ok();
+                        let project = summarize_active_project(&worker_app).ok().flatten();
+    
+                        if foreground.is_none() && recent.is_none() && project.is_none() {
+                            None
+                        } else {
+                            let mut summary = String::new();
+    
+                            if let Some(context) = foreground {
+                                summary.push_str(&format!(
+                                    "Current app: {}\nProcess: {}",
+                                    context.app_name, context.process_name
+                                ));
+    
+                                if let Some(title) = context.window_title.as_deref() {
+                                    summary.push_str(&format!("\nActive window title: {title}"));
+                                }
+    
+                                if context.context_source == "lastExternal" {
+                                    summary.push_str(
+                                        "\nContext source: last external window before AURA took focus",
+                                    );
+                                } else {
+                                    summary.push_str("\nContext source: foreground");
+                                }
+                            }
+    
+                            if let Some(snapshot) = recent {
+                                if !snapshot.items.is_empty() {
+                                    if !summary.is_empty() {
+                                        summary.push_str("\n");
+                                    }
+                                    let names = snapshot
+                                        .items
+                                        .iter()
+                                        .map(|item| item.name.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join(" · ");
+                                    summary.push_str(&format!("Recent files: {names}"));
+                                }
+                            }
+    
+                            if let Some(project) = project {
+                                if !summary.is_empty() {
+                                    summary.push_str("\n");
+                                }
+                                summary.push_str(&project);
+                            }
+    
+                            (!summary.is_empty()).then_some(summary)
+                        }
+                    };
+    
+                    match runtime.generate(
+                        &worker_app,
+                        &manager,
+                        &worker_text,
+                        desktop_context.as_deref(),
+                    ) {
+                        Ok(response) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id,
+                                    kind: "command.completed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: response,
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+                        }
+                        Err(error) => {
+                            let message = format!("Local model unavailable: {error}");
+    
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.failed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: message.clone(),
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+    
+                            emit_core_error(
+                                &worker_app,
+                                CoreError {
+                                    id: Some(worker_id),
+                                    code: "model.runtime_failed",
+                                    message,
+                                },
+                            );
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -4039,9 +4471,11 @@ fn get_managed_runtime_status(
 fn install_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.start_install(app, false)
 }
 
@@ -4049,9 +4483,11 @@ fn install_managed_runtime(
 fn repair_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.start_install(app, true)
 }
 
@@ -4059,9 +4495,11 @@ fn repair_managed_runtime(
 fn remove_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    vision: State<'_, VisionRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    vision.stop();
     setup.remove(&app)
 }
 
@@ -4144,6 +4582,7 @@ fn remove_model(
     runtime: State<'_, ModelRuntime>,
     speech: State<'_, SpeechRuntime>,
     tts: State<'_, TtsRuntime>,
+    vision: State<'_, VisionRuntime>,
 ) -> Result<ModelCatalog, String> {
     if model_id == "voice-whisper-base" {
         speech.stop();
@@ -4153,6 +4592,9 @@ fn remove_model(
         "voice-piper-ptpt" | "voice-piper-engb-alan"
     ) {
         tts.stop();
+    }
+    if model_id == "vision-smolvlm2-500m" {
+        vision.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
@@ -4216,6 +4658,171 @@ fn test_tts_voice(
         .tts_voice_id
         .clone();
     runtime.speak(&app, &manager, phrase, speed, &voice_id)
+}
+
+#[tauri::command]
+fn get_vision_runtime_status(
+    runtime: State<'_, VisionRuntime>,
+) -> VisionRuntimeStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+fn get_vision_history(
+    app: AppHandle,
+) -> Result<VisionHistorySnapshot, String> {
+    vision_history_snapshot(&app)
+}
+
+#[tauri::command]
+fn set_vision_preferences(
+    app: AppHandle,
+    preferences: VisionPreferences,
+) -> Result<VisionHistorySnapshot, String> {
+    save_vision_preferences(&app, preferences)
+}
+
+#[tauri::command]
+fn clear_vision_history(
+    app: AppHandle,
+) -> Result<VisionHistorySnapshot, String> {
+    clear_vision_history_store(&app)
+}
+
+#[tauri::command]
+fn get_last_vision_capture(
+    session: State<'_, VisionSession>,
+) -> Option<VisionCapture> {
+    session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+#[tauri::command]
+fn clear_last_vision_capture(
+    session: State<'_, VisionSession>,
+) {
+    if let Some(capture) = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+    {
+        remove_capture(&capture.path);
+    }
+}
+
+#[tauri::command]
+fn capture_vision_screen(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    capture_for_vision_query(&app, VisionQueryTarget::Screen)
+}
+
+#[tauri::command]
+fn capture_vision_active_window(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    capture_for_vision_query(&app, VisionQueryTarget::ActiveWindow)
+}
+
+#[tauri::command]
+fn capture_vision_region(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    request: VisionRegionRequest,
+) -> Result<VisionCapture, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Screen reading is blocked by AURA's Read permission policy.".to_string());
+    }
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "capturing",
+            message: "Capturing the selected screen region…".to_string(),
+            capture: None,
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    let capture = capture_region(
+        &app,
+        request.x,
+        request.y,
+        request.width,
+        request.height,
+    )?;
+    let capture = store_last_vision_capture(&app, capture);
+
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "captured",
+            message: "Screen region captured locally.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    Ok(capture)
+}
+
+#[tauri::command]
+fn analyze_last_vision_capture(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    prompt: String,
+    session: State<'_, VisionSession>,
+) -> Result<VisionAnalysisPayload, String> {
+    if state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Visual analysis is blocked by AURA's Read permission policy.".to_string());
+    }
+    let capture = session
+        .last_capture
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+        .ok_or_else(|| "Capture the screen, a window or a region before asking Vision to analyze it.".to_string())?;
+
+    analyze_capture_internal(&app, &capture, &prompt)
 }
 
 #[tauri::command]
@@ -4524,6 +5131,7 @@ async fn stop_obs_streaming(
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(VisionSession::default())
         .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
         .manage(ManagedRuntimeSetup::default())
@@ -4531,6 +5139,7 @@ pub fn run() {
         .manage(ModelRuntime::default())
         .manage(SpeechRuntime::default())
         .manage(TtsRuntime::default())
+        .manage(VisionRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -4545,6 +5154,150 @@ pub fn run() {
                     ) {
                         if event.state() == ShortcutState::Pressed {
                             toggle_overlay(app);
+                        }
+                        return;
+                    }
+
+                    if shortcut.matches(
+                        Modifiers::CONTROL | Modifiers::SHIFT,
+                        Code::F9,
+                    ) {
+                        if event.state() != ShortcutState::Pressed {
+                            return;
+                        }
+
+                        let runtime = app.state::<RuntimeState>();
+                        if runtime_snapshot(&runtime).paused {
+                            return;
+                        }
+
+                        if runtime
+                            .permission_policy
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .decision_for(PermissionClass::Read)
+                            == PermissionDecision::Never
+                        {
+                            emit_vision_event(
+                                app,
+                                VisionEvent {
+                                    phase: "error",
+                                    message: "Region capture is blocked by AURA's Read permission policy.".to_string(),
+                                    capture: None,
+                                    analysis: None,
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+                            return;
+                        }
+
+                        let point = match cursor_position() {
+                            Ok(point) => point,
+                            Err(error) => {
+                                emit_vision_event(
+                                    app,
+                                    VisionEvent {
+                                        phase: "error",
+                                        message: error,
+                                        capture: None,
+                                        analysis: None,
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                return;
+                            }
+                        };
+
+                        let session = app.state::<VisionSession>();
+                        let first = {
+                            let mut start = session
+                                .region_start
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                            match start.take() {
+                                Some(first) => Some(first),
+                                None => {
+                                    *start = Some(point);
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(first) = first {
+                            match region_from_points(first, point) {
+                                Ok(rect) => {
+                                    let app_for_capture = app.clone();
+                                    thread::spawn(move || {
+                                        emit_vision_event(
+                                            &app_for_capture,
+                                            VisionEvent {
+                                                phase: "capturing",
+                                                message: "Capturing the selected screen region…".to_string(),
+                                                capture: None,
+                                                analysis: None,
+                                                timestamp_ms: unix_timestamp_ms(),
+                                            },
+                                        );
+
+                                        match capture_region(
+                                            &app_for_capture,
+                                            rect.x,
+                                            rect.y,
+                                            rect.width,
+                                            rect.height,
+                                        ) {
+                                            Ok(capture) => {
+                                                let capture =
+                                                    store_last_vision_capture(&app_for_capture, capture);
+                                                emit_vision_event(
+                                                    &app_for_capture,
+                                                    VisionEvent {
+                                                        phase: "captured",
+                                                        message: "Region captured. Ask AURA Vision to analyze it.".to_string(),
+                                                        capture: Some(capture),
+                                                        analysis: None,
+                                                        timestamp_ms: unix_timestamp_ms(),
+                                                    },
+                                                );
+                                            }
+                                            Err(error) => emit_vision_event(
+                                                &app_for_capture,
+                                                VisionEvent {
+                                                    phase: "error",
+                                                    message: error,
+                                                    capture: None,
+                                                    analysis: None,
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            ),
+                                        }
+                                    });
+                                }
+                                Err(error) => emit_vision_event(
+                                    app,
+                                    VisionEvent {
+                                        phase: "error",
+                                        message: error,
+                                        capture: None,
+                                        analysis: None,
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                            }
+                        } else {
+                            emit_vision_event(
+                                app,
+                                VisionEvent {
+                                    phase: "regionSelecting",
+                                    message: format!(
+                                        "Vision region start marked at ({}, {}). Move the cursor to the opposite corner and press Ctrl+Shift+F9 again.",
+                                        point.0, point.1
+                                    ),
+                                    capture: None,
+                                    analysis: None,
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
                         }
                         return;
                     }
@@ -4725,6 +5478,12 @@ pub fn run() {
             );
             app.global_shortcut().register(push_to_talk_shortcut)?;
 
+            let vision_region_shortcut = Shortcut::new(
+                Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                Code::F9,
+            );
+            app.global_shortcut().register(vision_region_shortcut)?;
+
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
@@ -4762,6 +5521,7 @@ pub fn run() {
                         app.state::<ModelRuntime>().stop();
                         app.state::<SpeechRuntime>().stop();
                         app.state::<TtsRuntime>().stop();
+                        app.state::<VisionRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -4799,6 +5559,7 @@ pub fn run() {
                             app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.state::<TtsRuntime>().stop();
+                            app_for_close.state::<VisionRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -4858,6 +5619,16 @@ pub fn run() {
             prepare_tts_runtime,
             test_tts_voice,
             stop_tts_speaking,
+            get_vision_runtime_status,
+            get_vision_history,
+            set_vision_preferences,
+            clear_vision_history,
+            get_last_vision_capture,
+            clear_last_vision_capture,
+            capture_vision_screen,
+            capture_vision_active_window,
+            capture_vision_region,
+            analyze_last_vision_capture,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
