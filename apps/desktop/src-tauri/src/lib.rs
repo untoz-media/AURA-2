@@ -227,6 +227,15 @@ mod beta_self_test_tests {
     use super::*;
 
     #[test]
+    fn legacy_desktop_preferences_default_pause_to_false() {
+        let preferences: DesktopPreferences =
+            serde_json::from_str(r#"{"backgroundEnabled":false}"#).unwrap();
+
+        assert!(!preferences.background_enabled);
+        assert!(!preferences.paused);
+    }
+
+    #[test]
     fn required_failure_blocks_beta_readiness() {
         let report = finish_beta_self_test(vec![
             beta_self_test_check("storage", "Storage", "pass", true, "ok"),
