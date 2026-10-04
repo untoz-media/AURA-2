@@ -432,6 +432,36 @@ export type ModelRuntimeStatus = {
   refreshedAtMs: number;
 };
 
+export type ImageRuntimeStatus = {
+  state: "stopped" | "loading" | "ready" | "generating" | "error" | string;
+  modelId: string;
+  device?: string | null;
+  cuda?: boolean | null;
+  lastError?: string | null;
+  refreshedAtMs: number;
+};
+
+export type ImageGenerationRequest = {
+  prompt: string;
+  negativePrompt?: string | null;
+  aspectRatio?: "square" | "landscape" | "portrait";
+  steps?: number;
+  seed?: number | null;
+};
+
+export type ImageGenerationResult = {
+  prompt: string;
+  negativePrompt?: string | null;
+  path: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  seed: number;
+  device?: string | null;
+  cuda?: boolean | null;
+  completedAtMs: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
