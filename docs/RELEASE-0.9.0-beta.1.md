@@ -33,9 +33,11 @@ with new Beta-readiness work.
 - explicit zero-upload telemetry policy
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
 - named app window minimize/maximize/restore controls
-- App Skills V2 with a Core-owned dynamic Skill Registry
+- App Skills V3 with a Core-owned dynamic Skill Registry
 - focus-verified Brave/Chrome browser skills
 - focus-verified Notepad New note / Find / Select all / Undo / Redo skills
+- Windows Terminal navigation/UI skills with no arbitrary shell execution
+- Windows Calculator Standard/Scientific/Programmer/Date/Graphing mode skills
 - File Explorer Skills for safe Desktop/Documents/Downloads/Pictures/Videos/Music access
 - bounded File Intelligence across personal Windows folders without content scanning
 - recent-file/category queries for videos, images, audio, documents, archives and Downloads
