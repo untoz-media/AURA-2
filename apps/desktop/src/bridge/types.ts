@@ -597,6 +597,7 @@ export type VoiceCaptureEvent = {
     | "transcribed"
     | "submitted"
     | "conversationListening"
+    | "conversationPaused"
     | "conversationTimeout"
     | "wakeDetected"
     | "error";
