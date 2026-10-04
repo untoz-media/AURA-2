@@ -399,22 +399,33 @@ function App() {
 
         {betaStatus.onboardingComplete &&
           betaStatus.previousSessionUnclean &&
+          runtimeState.paused &&
           view === "chat" && (
-            <div className="beta-recovery-banner">
-              <div>
-                <strong>Recovered after an unclean previous session</strong>
+            <div className="beta-recovery-banner" role="status">
+              <div className="beta-recovery-copy">
+                <span className="beta-recovery-kicker">RECOVERY SAFE MODE</span>
+                <strong>AURA recovered after an unclean previous session</strong>
                 <span>
-                  Nothing was uploaded. Local diagnostics are available if you
-                  want to inspect the runtime state.
+                  Agents and Automations are paused so nothing can run
+                  unexpectedly. Review diagnostics if needed, then resume AURA.
                 </span>
               </div>
-              <button
-                type="button"
-                className="feature-secondary-button"
-                onClick={() => openSettings("beta")}
-              >
-                Open diagnostics
-              </button>
+              <div className="beta-recovery-actions">
+                <button
+                  type="button"
+                  className="feature-secondary-button"
+                  onClick={() => openSettings("beta")}
+                >
+                  Review diagnostics
+                </button>
+                <button
+                  type="button"
+                  className="feature-primary-button"
+                  onClick={() => void setPaused(false)}
+                >
+                  Resume AURA
+                </button>
+              </div>
             </div>
           )}
 
