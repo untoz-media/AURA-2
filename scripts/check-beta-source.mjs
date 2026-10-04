@@ -69,6 +69,12 @@ requireFragments("apps/desktop/src-tauri/src/lib.rs", [
   ".set_global_paused(app.handle(), preferences.paused)",
 ]);
 
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "fn fail_closed() -> Self",
+  "paused: true",
+  "DesktopPreferences::fail_closed()",
+]);
+
 requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "const MAX_PLAN_STEPS: usize = 12;",
   "const MAX_WAIT_MS: u64 = 30_000;",
