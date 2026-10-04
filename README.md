@@ -248,6 +248,8 @@ The desktop now includes a Managed Runtime installer that can prepare a private 
 
 AURA can now perform bounded filename/metadata search across the user's personal Windows libraries without scanning the whole machine or reading file contents.
 
+V2 also supports deterministic recent-file queries by filesystem modified time, including videos, images, audio, documents, archives and Downloads.
+
 Current V1 boundary:
 
 - Desktop
@@ -272,7 +274,14 @@ Examples:
 - `Find file Artemis`
 - `Search files WorldUnited`
 - `Procura ficheiro thumbnail`
+- `Latest video`
+- `Latest video I exported`
+- `Imagens recentes`
+- `Último download`
+- `Recent documents`
 - `Reveal file "C:\\Users\\…\\Documents\\report.pdf"`
+
+For phrases such as “latest video I exported”, AURA explicitly reports the **most recently modified matching file**. It does not claim to know which application created or exported the file.
 
 ### Clipboard Intelligence
 
