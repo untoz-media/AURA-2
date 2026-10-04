@@ -33,6 +33,8 @@ with new Beta-readiness work.
 - explicit zero-upload telemetry policy
 - synchronized 0.9.0-beta.1 version metadata across the monorepo
 - named app window minimize/maximize/restore controls
+- privacy-first Clipboard Intelligence for explicit text read/write/clear
+- voice privacy suppression for sensitive clipboard reads
 - local AURA Create text-to-image generation
 - pinned SafeTensors-only Create model manifest
 - Diffusers managed-runtime support
