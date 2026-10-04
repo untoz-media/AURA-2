@@ -8,7 +8,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 use windows_sys::Win32::{
-    Foundation::{POINT, RECT},
+    Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
         GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CAPTUREBLT,
@@ -112,6 +112,34 @@ pub fn capture_full_screen(app: &AppHandle) -> Result<VisionCapture, String> {
 pub fn capture_active_window(app: &AppHandle) -> Result<VisionCapture, String> {
     let (rect, title) = active_window_rect()?;
     capture_rect(app, rect, "activeWindow", title)
+}
+
+pub fn capture_window_handle(
+    app: &AppHandle,
+    handle: isize,
+    title: Option<String>,
+) -> Result<VisionCapture, String> {
+    let hwnd = handle as HWND;
+    if hwnd.is_null() {
+        return Err("The requested Windows window handle is invalid.".to_string());
+    }
+
+    let mut rect: RECT = unsafe { zeroed() };
+    if unsafe { GetWindowRect(hwnd, &mut rect) } == 0 {
+        return Err("Windows could not read the requested window bounds.".to_string());
+    }
+
+    capture_rect(
+        app,
+        validate_rect(CaptureRect {
+            x: rect.left,
+            y: rect.top,
+            width: rect.right.saturating_sub(rect.left),
+            height: rect.bottom.saturating_sub(rect.top),
+        })?,
+        "activeWindow",
+        title,
+    )
 }
 
 pub fn capture_region(
