@@ -214,12 +214,20 @@ export default function DropTray({
                       <button
                         type="button"
                         className="feature-secondary-button"
-                        disabled={paused || busy}
+                        disabled={paused || busy || analyzing}
                         onClick={() => void inspectOne(item.id)}
                       >
                         {busy ? "Inspecting…" : "Inspect"}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="feature-secondary-button"
+                      disabled={paused || analyzing}
+                      onClick={() => void onAnalyze([item.id])}
+                    >
+                      Analyze
+                    </button>
                     {item.canUseVision && (
                       <button
                         type="button"
