@@ -91,6 +91,7 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 ### Beta diagnostics
 
 - in-app **Settings → Diagnostics** readiness center
+- one-click local Core self-test for stores, permission policy, model catalog and runtime health
 - runtime/model/Voice/Vision/OBS technical state
 - Agent and Automation health summary
 - privacy-safe diagnostics report for bug reports
