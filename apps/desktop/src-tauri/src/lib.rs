@@ -802,6 +802,9 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
         *current = paused;
     }
 
+    app.state::<AgentEngine>().set_global_paused(app, paused);
+    app.state::<AutomationScheduler>().set_paused(paused);
+
     emit_runtime_state(app)
 }
 
@@ -1784,6 +1787,9 @@ fn set_permission_decision(
         *current = next.clone();
     }
 
+    app.state::<AutomationScheduler>()
+        .set_permission_policy(next.clone());
+
     emit_lifecycle_event(
         &app,
         "permissions.updated",
@@ -1808,6 +1814,9 @@ fn reset_permission_policy(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *current = next.clone();
     }
+
+    app.state::<AutomationScheduler>()
+        .set_permission_policy(next.clone());
 
     emit_lifecycle_event(
         &app,
@@ -4469,11 +4478,22 @@ fn process_user_command(
 #[tauri::command]
 fn create_agent_plan(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     manager: State<'_, ModelManager>,
     runtime: State<'_, ModelRuntime>,
     goal: String,
 ) -> Result<AgentPlan, String> {
-    plan_goal(&app, &manager, &runtime, &goal)
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before asking an Agent to plan.".to_string());
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    plan_goal(&app, &manager, &runtime, &policy, &goal)
 }
 
 #[tauri::command]
@@ -4548,9 +4568,20 @@ fn delete_aura_action(
 #[tauri::command]
 fn run_aura_action(
     app: AppHandle,
+    state: State<'_, RuntimeState>,
     action_id: String,
 ) -> Result<String, String> {
-    run_saved_action(&app, &action_id)
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before running a saved Action.".to_string());
+    }
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+
+    run_saved_action(&app, &action_id, &policy)
 }
 
 #[tauri::command]
@@ -5575,7 +5606,7 @@ pub fn run() {
                     .permission_policy
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                *current_policy = permission_policy;
+                *current_policy = permission_policy.clone();
 
                 *runtime
                     .voice_preferences
@@ -5584,6 +5615,9 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
+            app.state::<AutomationScheduler>()
+                .set_permission_policy(permission_policy);
+            app.state::<AutomationScheduler>().set_paused(false);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
 
