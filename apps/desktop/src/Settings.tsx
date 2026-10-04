@@ -313,6 +313,9 @@ export default function Settings({
   const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
   const [ttsBusy, setTtsBusy] = useState<string | null>(null);
   const [voicePrefsBusy, setVoicePrefsBusy] = useState(false);
+  const [wakePhraseDraft, setWakePhraseDraft] = useState(
+    voicePreferences.wakePhrase,
+  );
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -402,6 +405,10 @@ export default function Settings({
       setTtsBusy(null);
     }
   }
+
+  useEffect(() => {
+    setWakePhraseDraft(voicePreferences.wakePhrase);
+  }, [voicePreferences.wakePhrase]);
 
   useEffect(() => {
     setObsHost(obsConnection.host);
@@ -1106,12 +1113,13 @@ export default function Settings({
                 <span>Wake phrase</span>
                 <input
                   type="text"
-                  value={voicePreferences.wakePhrase}
+                  value={wakePhraseDraft}
                   disabled={voicePrefsBusy || !voicePreferences.wakeWordEnabled}
                   maxLength={32}
-                  onChange={(event) =>
+                  onChange={(event) => setWakePhraseDraft(event.target.value)}
+                  onBlur={() =>
                     void updateVoicePreference({
-                      wakePhrase: event.target.value,
+                      wakePhrase: wakePhraseDraft,
                     })
                   }
                 />
@@ -1421,7 +1429,8 @@ export default function Settings({
                     </button>
                   )}
 
-                  {ttsRuntime.state === "speaking" && (
+                  {ttsModel?.state === "installed" &&
+                    ttsRuntime.dependencyReady && (
                     <button
                       type="button"
                       className="feature-secondary-button"
