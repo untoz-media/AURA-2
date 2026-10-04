@@ -79,6 +79,13 @@ A further re-check after File Intelligence V2 and App Skills V1 produced the sam
 
 Those runs did not execute the new File Intelligence V2 or App Skills code either.
 
+After the App Skills V2 registry + Notepad pass, the failure signature remains unchanged:
+
+- Static Checks run `37239755921`: empty runner name, `steps: []`, failed before source validation
+- Windows Build run `37239755865`: empty runner name, `steps: []`, failed before installer build
+
+Therefore the App Skills V2/Notepad changes were not executed by GitHub-hosted CI.
+
 This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
 
 Before retrying, check the Untoz organization:
