@@ -4,6 +4,7 @@ mod beta;
 mod computer;
 mod core;
 mod integrations;
+mod image_runtime;
 mod managed_runtime;
 mod memory;
 mod model_manager;
@@ -57,6 +58,7 @@ use integrations::director::{
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
+use image_runtime::{ImageGenerationRequest, ImageGenerationResult, ImageRuntime, ImageRuntimeStatus};
 use memory::{
     create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
     CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
@@ -5103,6 +5105,7 @@ fn remove_model(
     speech: State<'_, SpeechRuntime>,
     tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
 ) -> Result<ModelCatalog, String> {
     if model_id == "voice-whisper-base" {
         speech.stop();
@@ -5115,6 +5118,9 @@ fn remove_model(
     }
     if model_id == "vision-smolvlm2-500m" {
         vision.stop();
+    }
+    if model_id == "create-tiny-sd" {
+        image.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
@@ -5178,6 +5184,28 @@ fn test_tts_voice(
         .tts_voice_id
         .clone();
     runtime.speak(&app, &manager, phrase, speed, &voice_id)
+}
+
+#[tauri::command]
+fn get_create_image_runtime_status(
+    runtime: State<'_, ImageRuntime>,
+) -> ImageRuntimeStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+fn generate_create_image(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    runtime: State<'_, ImageRuntime>,
+    manager: State<'_, ModelManager>,
+    request: ImageGenerationRequest,
+) -> Result<ImageGenerationResult, String> {
+    if runtime_snapshot(&state).paused {
+        return Err("AURA is paused. Resume it before generating an image.".to_string());
+    }
+
+    runtime.generate(&app, &manager, request)
 }
 
 #[tauri::command]
@@ -5663,6 +5691,7 @@ pub fn run() {
         .manage(SpeechRuntime::default())
         .manage(TtsRuntime::default())
         .manage(VisionRuntime::default())
+        .manage(ImageRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -6079,6 +6108,7 @@ pub fn run() {
                         app.state::<SpeechRuntime>().stop();
                         app.state::<TtsRuntime>().stop();
                         app.state::<VisionRuntime>().stop();
+                        app.state::<ImageRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -6118,6 +6148,7 @@ pub fn run() {
                             app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.state::<TtsRuntime>().stop();
                             app_for_close.state::<VisionRuntime>().stop();
+                            app_for_close.state::<ImageRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -6194,6 +6225,8 @@ pub fn run() {
             prepare_tts_runtime,
             test_tts_voice,
             stop_tts_speaking,
+            get_create_image_runtime_status,
+            generate_create_image,
             get_vision_runtime_status,
             get_vision_history,
             set_vision_preferences,
