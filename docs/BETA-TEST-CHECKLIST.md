@@ -29,6 +29,8 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] Background Mode works
 - [ ] optional Start with Windows setting persists
 - [ ] Global Pause blocks new actions
+- [ ] Global Pause remains enabled after quitting and reopening AURA
+- [ ] Startup Automations do not fire while persisted Global Pause is enabled
 - [ ] resuming AURA restores normal execution
 
 ## Settings & permissions
