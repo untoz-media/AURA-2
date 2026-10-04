@@ -1,4 +1,4 @@
-use image::RgbaImage;
+use image::{ImageReader, RgbaImage};
 use serde::Serialize;
 use std::{
     fs,
@@ -184,6 +184,74 @@ pub fn remove_capture(path: &str) {
     let _ = fs::remove_file(path);
 }
 
+pub fn import_local_image(
+    app: &AppHandle,
+    source: &Path,
+) -> Result<VisionCapture, String> {
+    const MAX_IMPORT_BYTES: u64 = 40 * 1024 * 1024;
+
+    if !source.exists() || !source.is_file() {
+        return Err("The dropped image no longer exists.".to_string());
+    }
+
+    let metadata = fs::metadata(source)
+        .map_err(|error| format!("Could not inspect the dropped image: {error}"))?;
+    if metadata.len() == 0 {
+        return Err("The dropped image is empty.".to_string());
+    }
+    if metadata.len() > MAX_IMPORT_BYTES {
+        return Err("Dropped images are limited to 40 MB for local Vision import.".to_string());
+    }
+
+    let reader = ImageReader::open(source)
+        .map_err(|error| format!("Could not open the dropped image: {error}"))?
+        .with_guessed_format()
+        .map_err(|error| format!("Could not identify the dropped image format: {error}"))?;
+    let image = reader
+        .decode()
+        .map_err(|error| format!("Could not decode the dropped image safely: {error}"))?;
+
+    let width = image.width();
+    let height = image.height();
+    let pixels = i64::from(width) * i64::from(height);
+    if width < 8 || height < 8 || pixels <= 0 || pixels > MAX_CAPTURE_PIXELS {
+        return Err(
+            "Dropped image dimensions are outside AURA Vision's safe local limits."
+                .to_string(),
+        );
+    }
+
+    let output = capture_path(app)?;
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create Vision capture cache: {error}"))?;
+    }
+
+    image
+        .save(&output)
+        .map_err(|error| format!("Could not normalize the dropped image to Vision cache: {error}"))?;
+
+    Ok(VisionCapture {
+        id: output
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or("vision-import")
+            .to_string(),
+        kind: "droppedImage".to_string(),
+        path: output.to_string_lossy().to_string(),
+        rect: CaptureRect {
+            x: 0,
+            y: 0,
+            width: width as i32,
+            height: height as i32,
+        },
+        window_title: source
+            .file_name()
+            .map(|name| format!("Dropped image · {}", name.to_string_lossy())),
+        created_at_ms: timestamp_ms(),
+    })
+}
+
 fn capture_rect(
     app: &AppHandle,
     rect: CaptureRect,
@@ -361,6 +429,12 @@ fn timestamp_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dropped_image_pixel_limit_matches_capture_limit() {
+        assert!(MAX_CAPTURE_PIXELS >= 512 * 512);
+        assert!(MAX_CAPTURE_PIXELS < i64::from(i32::MAX));
+    }
 
     #[test]
     fn region_from_points_normalizes_drag_direction() {
