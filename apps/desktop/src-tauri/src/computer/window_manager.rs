@@ -9,7 +9,7 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{
         EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
         GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow,
-        SW_RESTORE,
+        SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE,
     },
 };
 
@@ -20,6 +20,47 @@ pub struct WindowInfo {
     pub handle: isize,
     pub title: String,
     pub process_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowDisplayAction {
+    Minimize,
+    Maximize,
+    Restore,
+}
+
+impl WindowDisplayAction {
+    fn show_command(self) -> i32 {
+        match self {
+            Self::Minimize => SW_MINIMIZE,
+            Self::Maximize => SW_MAXIMIZE,
+            Self::Restore => SW_RESTORE,
+        }
+    }
+
+    pub fn verb(self) -> &'static str {
+        match self {
+            Self::Minimize => "minimize",
+            Self::Maximize => "maximize",
+            Self::Restore => "restore",
+        }
+    }
+
+    pub fn gerund(self) -> &'static str {
+        match self {
+            Self::Minimize => "Minimizing",
+            Self::Maximize => "Maximizing",
+            Self::Restore => "Restoring",
+        }
+    }
+
+    pub fn completed_verb(self) -> &'static str {
+        match self {
+            Self::Minimize => "Minimized",
+            Self::Maximize => "Maximized",
+            Self::Restore => "Restored",
+        }
+    }
 }
 
 
@@ -301,6 +342,26 @@ pub fn switch_to_app(target: AppTarget) -> Result<WindowInfo, WindowError> {
     Ok(window)
 }
 
+pub fn set_app_window_state(
+    target: AppTarget,
+    action: WindowDisplayAction,
+) -> Result<WindowInfo, WindowError> {
+    let windows = list_windows()?;
+
+    let Some(window) = windows
+        .into_iter()
+        .find(|window| window_matches_target(window, target))
+    else {
+        return Err(WindowError::TargetNotFound(target.display_name()));
+    };
+
+    unsafe {
+        ShowWindow(window.handle as HWND, action.show_command());
+    }
+
+    Ok(window)
+}
+
 pub fn summarize_windows(limit: usize) -> Result<String, WindowError> {
     let windows = list_windows()?;
 
@@ -338,6 +399,13 @@ mod tests {
         };
 
         assert!(window_matches_target(&window, AppTarget::ObsStudio));
+    }
+
+    #[test]
+    fn window_display_action_labels_are_stable() {
+        assert_eq!(WindowDisplayAction::Minimize.verb(), "minimize");
+        assert_eq!(WindowDisplayAction::Maximize.gerund(), "Maximizing");
+        assert_eq!(WindowDisplayAction::Restore.completed_verb(), "Restored");
     }
 
     #[test]
