@@ -50,6 +50,7 @@ import type {
   AudioInputSnapshot,
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
+  TtsRuntimeStatus,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -463,4 +464,19 @@ export async function listenToVoiceCapture(
 
 export async function getSpeechRuntimeStatus(): Promise<SpeechRuntimeStatus> {
   return invoke<SpeechRuntimeStatus>("get_speech_runtime_status");
+}
+
+
+export async function getTtsRuntimeStatus(): Promise<TtsRuntimeStatus> {
+  return invoke<TtsRuntimeStatus>("get_tts_runtime_status");
+}
+
+export async function prepareTtsRuntime(): Promise<TtsRuntimeStatus> {
+  return invoke<TtsRuntimeStatus>("prepare_tts_runtime");
+}
+
+export async function testTtsVoice(text?: string): Promise<TtsRuntimeStatus> {
+  return invoke<TtsRuntimeStatus>("test_tts_voice", {
+    text: text ?? null,
+  });
 }
