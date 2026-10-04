@@ -123,6 +123,11 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 ## Diagnostics Center
 
 - [ ] Settings → Diagnostics opens
+- [ ] Run self-test completes without executing computer/OBS actions
+- [ ] Local Data check reports Pass/Warning/Fail coherently
+- [ ] Permission policy self-test reports Pass with safe policy
+- [ ] Saved Actions, Automations and Agent history stores are readable
+- [ ] model catalog check completes
 - [ ] candidate version/stage are correct
 - [ ] Managed Runtime readiness matches Models
 - [ ] selected assistant model readiness matches Models
