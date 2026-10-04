@@ -157,7 +157,7 @@ export default function Agents({
   const activeRuns = useMemo(
     () =>
       runs.runs.filter((run) =>
-        ["queued", "running", "paused"].includes(run.state),
+        ["queued", "running", "paused", "cancelling"].includes(run.state),
       ),
     [runs.runs],
   );
