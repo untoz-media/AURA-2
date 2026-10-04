@@ -227,6 +227,20 @@ mod beta_self_test_tests {
     use super::*;
 
     #[test]
+    fn global_pause_guard_blocks_new_execution() {
+        let state = RuntimeState::default();
+        assert!(ensure_runtime_active(&state, "running work").is_ok());
+
+        *state
+            .paused
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+
+        let error = ensure_runtime_active(&state, "running work").unwrap_err();
+        assert!(error.contains("AURA is paused"));
+    }
+
+    #[test]
     fn corrupted_desktop_preferences_fail_closed_to_paused() {
         let recovery = DesktopPreferences::fail_closed();
         assert!(recovery.background_enabled);
