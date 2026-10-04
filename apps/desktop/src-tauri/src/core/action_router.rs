@@ -1,6 +1,7 @@
 use crate::computer::{
     app_launcher::AppTarget,
     audio::MediaAction,
+    file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
     keyboard::KeyboardShortcut,
     mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
     system::{SettingsPage, SystemAction},
@@ -57,6 +58,7 @@ pub enum ActionIntent {
     ClipboardWrite(String),
     ClipboardClear,
     FindPersonalFiles(String),
+    FindRecentPersonalFiles(RecentFileQuery),
     RevealPersonalPath(String),
     UserRoutine(String),
 }
@@ -368,6 +370,145 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn recent_file_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let request = match normalized.as_str() {
+        "latest file" | "last file" | "most recent file" | "newest file"
+        | "último ficheiro" | "ultimo ficheiro" | "ficheiro mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent files" | "latest files" | "newest files"
+        | "ficheiros recentes" | "últimos ficheiros" | "ultimos ficheiros" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest video" | "last video" | "most recent video" | "newest video"
+        | "latest video i exported" | "last video i exported"
+        | "most recent video i exported"
+        | "último vídeo" | "ultimo video" | "vídeo mais recente" | "video mais recente"
+        | "último vídeo que exportei" | "ultimo video que exportei" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent videos" | "latest videos" | "newest videos"
+        | "vídeos recentes" | "videos recentes" | "últimos vídeos" | "ultimos videos" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest image" | "last image" | "most recent image" | "newest image"
+        | "latest picture" | "last picture"
+        | "última imagem" | "ultima imagem" | "imagem mais recente"
+        | "última fotografia" | "ultima fotografia" | "fotografia mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Image,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent images" | "latest images" | "newest images"
+        | "recent pictures" | "latest pictures"
+        | "imagens recentes" | "últimas imagens" | "ultimas imagens"
+        | "fotografias recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Image,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest audio" | "last audio" | "most recent audio"
+        | "latest audio file" | "last audio file"
+        | "último áudio" | "ultimo audio" | "áudio mais recente" | "audio mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Audio,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent audio" | "recent audio files" | "latest audio files"
+        | "áudios recentes" | "audios recentes" | "ficheiros de áudio recentes"
+        | "ficheiros de audio recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Audio,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest document" | "last document" | "most recent document"
+        | "último documento" | "ultimo documento" | "documento mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Document,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent documents" | "latest documents" | "newest documents"
+        | "documentos recentes" | "últimos documentos" | "ultimos documentos" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Document,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest archive" | "last archive" | "most recent archive"
+        | "último arquivo" | "ultimo arquivo" | "arquivo mais recente"
+        | "último ficheiro comprimido" | "ultimo ficheiro comprimido" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Archive,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent archives" | "latest archives"
+        | "arquivos recentes" | "ficheiros comprimidos recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Archive,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest download" | "last download" | "most recent download" | "newest download"
+        | "último download" | "ultimo download" | "download mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::Downloads,
+                1,
+            ))
+        }
+        "recent downloads" | "latest downloads" | "newest downloads"
+        | "downloads recentes" | "últimos downloads" | "ultimos downloads" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::Downloads,
+                10,
+            ))
+        }
+
+        _ => None,
+    };
+
+    request.map(ActionIntent::FindRecentPersonalFiles)
 }
 
 fn file_reveal_request(input: &str) -> Option<ActionIntent> {
@@ -1234,6 +1375,15 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = recent_file_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = file_reveal_request(input) {
         let permission = PermissionClass::Act;
         return RouteResult::Action(RoutedAction {
@@ -1515,6 +1665,57 @@ mod tests {
         assert!(matches!(
             route_command("Minimize Photoshop", &policy),
             RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_latest_video_as_bounded_read_query() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Latest video I exported", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Video,
+                    root: PersonalRootFilter::All,
+                    limit: 1,
+                }),
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_portuguese_recent_images() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Imagens recentes", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Image,
+                    root: PersonalRootFilter::All,
+                    limit: 10,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn latest_download_is_scoped_to_downloads() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Último download", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Any,
+                    root: PersonalRootFilter::Downloads,
+                    limit: 1,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
         ));
     }
 
