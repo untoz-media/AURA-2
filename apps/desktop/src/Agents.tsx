@@ -346,21 +346,30 @@ export default function Agents({
                 ))}
               </ol>
 
-              {plan.requiresConfirmation && (
+              {plan.blockedByPolicy ? (
+                <div className="agents-warning">
+                  This plan contains an Action blocked by the current permission
+                  policy. Change that permission before it can run.
+                </div>
+              ) : plan.requiresConfirmation ? (
                 <div className="agents-warning">
                   This plan contains an Action whose current permission policy
                   requires explicit approval.
                 </div>
-              )}
+              ) : null}
 
               <div className="agents-actions-row">
                 <button
                   type="button"
                   className="feature-primary-button"
-                  disabled={busy !== null}
+                  disabled={busy !== null || plan.blockedByPolicy}
                   onClick={() => void runPlan()}
                 >
-                  {plan.requiresConfirmation ? "Approve & run plan" : "Run plan"}
+                  {plan.blockedByPolicy
+                    ? "Blocked by permissions"
+                    : plan.requiresConfirmation
+                      ? "Approve & run plan"
+                      : "Run plan"}
                 </button>
                 <button
                   type="button"
