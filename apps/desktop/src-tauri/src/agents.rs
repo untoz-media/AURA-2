@@ -441,7 +441,7 @@ impl AgentEngine {
         Ok(run.clone())
     }
 
-    pub fn cancel(&self, run_id: &str) -> Result<AgentRun, String> {
+    pub fn cancel(&self, app: &AppHandle, run_id: &str) -> Result<AgentRun, String> {
         let controls = self
             .controls
             .lock()
@@ -453,13 +453,23 @@ impl AgentEngine {
         control.paused.store(false, Ordering::SeqCst);
         drop(controls);
 
-        let runs = self
-            .runs
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runs.get(run_id)
-            .cloned()
-            .ok_or_else(|| "Agent run was not found.".to_string())
+        let snapshot = {
+            let mut runs = self
+                .runs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let run = runs
+                .get_mut(run_id)
+                .ok_or_else(|| "Agent run was not found.".to_string())?;
+            if !matches!(run.state.as_str(), "completed" | "failed" | "cancelled") {
+                run.state = "cancelling".to_string();
+            }
+            run.clone()
+        };
+
+        let _ = append_run_history(app, &snapshot);
+        emit_agent_event(app, &snapshot, "Cancelling Agent after the current safe boundary.");
+        Ok(snapshot)
     }
 
     pub fn set_global_paused(&self, app: &AppHandle, paused: bool) {
@@ -936,11 +946,31 @@ fn execute_agent_plan(
 
         while attempts < max_attempts {
             attempts += 1;
-            outcome = execute_step(app, step, false);
+            outcome = match step {
+                AgentStep::Wait { milliseconds } => execute_agent_wait(
+                    *milliseconds,
+                    control,
+                    global_paused,
+                ),
+                _ => execute_step(app, step, false),
+            };
+
+            if control.cancelled.load(Ordering::SeqCst) {
+                finish_run(app, runs, controls, run_id, "cancelled", None);
+                return;
+            }
+
             if outcome.is_ok() || attempts >= max_attempts {
                 break;
             }
-            thread::sleep(Duration::from_millis(500));
+
+            for _ in 0..5 {
+                if control.cancelled.load(Ordering::SeqCst) {
+                    finish_run(app, runs, controls, run_id, "cancelled", None);
+                    return;
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
         }
 
         let completed_at_ms = timestamp_ms();
@@ -983,6 +1013,41 @@ fn execute_agent_plan(
     }
 
     finish_run(app, runs, controls, run_id, "completed", None);
+}
+
+fn execute_agent_wait(
+    milliseconds: u64,
+    control: &RunControl,
+    global_paused: &Arc<AtomicBool>,
+) -> Result<String, String> {
+    if milliseconds > MAX_WAIT_MS {
+        return Err(format!(
+            "Agent waits cannot exceed {} seconds.",
+            MAX_WAIT_MS / 1000
+        ));
+    }
+
+    let mut remaining = milliseconds;
+    while remaining > 0 {
+        if control.cancelled.load(Ordering::SeqCst) {
+            return Err("Agent wait cancelled.".to_string());
+        }
+
+        while control.paused.load(Ordering::SeqCst)
+            || global_paused.load(Ordering::SeqCst)
+        {
+            if control.cancelled.load(Ordering::SeqCst) {
+                return Err("Agent wait cancelled.".to_string());
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+
+        let slice = remaining.min(100);
+        thread::sleep(Duration::from_millis(slice));
+        remaining -= slice;
+    }
+
+    Ok(format!("Waited {milliseconds} ms."))
 }
 
 fn step_is_retryable(step: &AgentStep) -> bool {
