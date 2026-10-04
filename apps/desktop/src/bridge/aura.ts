@@ -41,6 +41,9 @@ import type {
   ModelDownloadProgress,
   ModelRuntimeStatus,
   ManagedRuntimeStatus,
+  ImageRuntimeStatus,
+  ImageGenerationRequest,
+  ImageGenerationResult,
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
@@ -517,6 +520,17 @@ export async function setVoicePreferences(
 
 export async function stopTtsSpeaking(): Promise<TtsRuntimeStatus> {
   return invoke<TtsRuntimeStatus>("stop_tts_speaking");
+}
+
+
+export async function getCreateImageRuntimeStatus(): Promise<ImageRuntimeStatus> {
+  return invoke<ImageRuntimeStatus>("get_create_image_runtime_status");
+}
+
+export async function generateCreateImage(
+  request: ImageGenerationRequest,
+): Promise<ImageGenerationResult> {
+  return invoke<ImageGenerationResult>("generate_create_image", { request });
 }
 
 
