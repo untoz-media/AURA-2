@@ -214,9 +214,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn beta_defaults_disable_all_network_telemetry() {
+    fn beta_defaults_require_first_run_onboarding() {
         let preferences = BetaPreferences::default();
-        assert!(!preferences.onboarding_complete);
         assert!(!preferences.onboarding_complete);
     }
 
