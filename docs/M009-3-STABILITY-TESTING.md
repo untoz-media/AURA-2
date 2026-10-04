@@ -68,6 +68,14 @@ npm run beta:quality
 
 `beta:quality` combines release metadata checks, source guards and the frontend production build.
 
+## In-app Beta Diagnostics
+
+The Public Beta candidate now includes **Settings → Diagnostics**.
+
+It gives testers a privacy-safe readiness snapshot for runtime, assistant model, Voice, Vision, OBS, permissions, Agents and Automations, plus a sanitized report that can be copied into bug reports.
+
+No prompts, memories, screenshots, audio, file paths or credentials are included in the copied report.
+
 ## Release gate
 
 M009.3 should only be marked complete after the independent Beta Quality workflow passes. A successful Windows build is still required before the Public Beta in M009.6.
