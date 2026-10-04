@@ -83,11 +83,13 @@ From the drop tray you can:
 
 - **Inspect** one accepted file.
 - **Inspect all** files in the temporary batch.
-- **Analyze with AURA** to pass bounded temporary file context to the selected local model.
+- **Attach to Chat** for one file or **Attach all to Chat** for the current batch.
+- Write your own question in Chat and send it with those temporary attachments.
+- **Analyze with AURA** for a one-click analysis shortcut.
 - **Reveal** an accepted file in File Explorer.
 - **Use in Vision** for supported raster images.
 
-Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Analyze with AURA uses a smaller turn-only model-context budget capped at 6,000 characters total. It does not expose filesystem paths or persist attachment content in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
+Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Chat attachments are one-turn and use a smaller model-context budget capped at 6,000 characters total. The composer shows removable filename chips; after an accepted message, the files are detached from the next turn automatically. Sending attached files with no typed question uses "Analyze the attached local files." as the visible request. Filesystem paths and attachment contents are not persisted in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
 
 Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
 
