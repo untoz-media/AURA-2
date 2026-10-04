@@ -14,14 +14,12 @@ const SESSION_FILE: &str = "beta-session.json";
 #[serde(default, rename_all = "camelCase")]
 pub struct BetaPreferences {
     pub onboarding_complete: bool,
-    pub diagnostics_history_enabled: bool,
 }
 
 impl Default for BetaPreferences {
     fn default() -> Self {
         Self {
             onboarding_complete: false,
-            diagnostics_history_enabled: false,
         }
     }
 }
@@ -45,7 +43,6 @@ pub struct BetaStatus {
     pub channel: String,
     pub onboarding_complete: bool,
     pub previous_session_unclean: bool,
-    pub diagnostics_history_enabled: bool,
     pub telemetry_enabled: bool,
     pub automatic_crash_uploads: bool,
     pub local_diagnostics_only: bool,
@@ -56,7 +53,6 @@ pub struct BetaStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SetBetaPreferencesRequest {
     pub onboarding_complete: bool,
-    pub diagnostics_history_enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -131,7 +127,6 @@ pub fn status(
         previous_session_unclean: runtime
             .previous_session_unclean
             .load(Ordering::Relaxed),
-        diagnostics_history_enabled: preferences.diagnostics_history_enabled,
         telemetry_enabled: false,
         automatic_crash_uploads: false,
         local_diagnostics_only: true,
@@ -146,7 +141,6 @@ pub fn save_preferences(
 ) -> Result<BetaStatus, String> {
     let preferences = BetaPreferences {
         onboarding_complete: request.onboarding_complete,
-        diagnostics_history_enabled: request.diagnostics_history_enabled,
     };
     write_json(&preferences_path(app)?, &preferences)?;
     status(app, runtime)
@@ -223,7 +217,7 @@ mod tests {
     fn beta_defaults_disable_all_network_telemetry() {
         let preferences = BetaPreferences::default();
         assert!(!preferences.onboarding_complete);
-        assert!(!preferences.diagnostics_history_enabled);
+        assert!(!preferences.onboarding_complete);
     }
 
     #[test]
