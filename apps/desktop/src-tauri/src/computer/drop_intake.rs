@@ -198,6 +198,25 @@ impl DropIntakeState {
             return Err("The dropped file no longer exists at its original location.".to_string());
         }
 
+        let metadata = fs::metadata(&record.path)
+            .map_err(|error| format!("Could not re-check the dropped file: {error}"))?;
+        let current_modified_at_ms = metadata
+            .modified()
+            .ok()
+            .map(system_time_ms)
+            .unwrap_or(0);
+
+        if metadata.len() != record.item.size_bytes
+            || (record.item.modified_at_ms > 0
+                && current_modified_at_ms > 0
+                && current_modified_at_ms != record.item.modified_at_ms)
+        {
+            return Err(
+                "The dropped file changed after it was added to AURA. Drop it again before using it."
+                    .to_string(),
+            );
+        }
+
         Ok(record.path.clone())
     }
 
@@ -667,6 +686,30 @@ mod tests {
         let preview = preview.expect("utf8 preview");
         assert!(truncated);
         assert!(preview.chars().count() <= MAX_TEXT_PREVIEW_CHARS);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn changed_file_invalidates_the_drop_id() {
+        let path = std::env::temp_dir().join(format!("aura-drop-changed-{}.txt", timestamp_ms()));
+        let mut file = File::create(&path).expect("create changed fixture");
+        file.write_all(b"before").expect("write initial fixture");
+        drop(file);
+
+        let state = DropIntakeState::default();
+        let snapshot = state.ingest(vec![path.to_string_lossy().to_string()]);
+        let id = snapshot.items.first().expect("accepted fixture").id.clone();
+
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("reopen fixture");
+        file.write_all(b"-after").expect("change fixture");
+        drop(file);
+
+        let error = state.path_for(&id).expect_err("changed file must be rejected");
+        assert!(error.contains("changed after it was added"));
 
         let _ = fs::remove_file(path);
     }
