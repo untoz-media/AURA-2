@@ -634,6 +634,9 @@ export default function Settings({
     `Agent runs: ${agentRuns.runs.length} total / ${activeAgentRuns} active / ${failedAgentRuns} failed-or-interrupted`,
     `Automations: ${automations.length} total / ${enabledAutomations} enabled`,
     `Core self-test: ${betaSelfTest ? `${betaSelfTest.passed} pass / ${betaSelfTest.warnings} warning / ${betaSelfTest.failed} fail` : "not run"}`,
+    ...(betaSelfTest
+      ? betaSelfTest.checks.map((check) => `Self-test ${check.id}: ${check.status}`)
+      : []),
     `Permissions: read=${permissionPolicy.read}, act=${permissionPolicy.act}, modify=${permissionPolicy.modify}, sensitive=${permissionPolicy.sensitive}, destructive=${permissionPolicy.destructive}`,
     "Telemetry: automatic product telemetry off",
   ].join("\n");
