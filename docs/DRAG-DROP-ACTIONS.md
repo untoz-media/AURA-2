@@ -186,17 +186,37 @@ Drag & Drop V2 does not automatically write dropped data into:
 
 AURA Beta has no telemetry upload pipeline.
 
-## Next boundary: context attachments
+## Context Attachments V1
 
-V2 deliberately does **not** stuff inspected previews into the visible Chat message.
+V2 also includes a dedicated local **context attachment** contract through **Analyze with AURA**.
 
-The planned next step is a dedicated local **context attachment** contract so commands such as:
+The frontend sends only the current opaque drop IDs alongside a normal visible Chat request. The Core resolves those IDs and builds a separate ephemeral model context.
+
+The attachment context:
+
+- is desktop-only;
+- requires Read not to be `never`;
+- accepts at most eight current drop IDs;
+- never includes canonical filesystem paths;
+- is capped at **6,000 characters total** for the local model;
+- caps each text-file excerpt again before model handoff;
+- labels attached file data as untrusted;
+- is supplied as turn-only context, separate from the visible user message;
+- is not persisted in the model conversation history.
+
+When any drop attachment is present, AURA deliberately bypasses deterministic action, Routine and Director routing and sends the request only to local model reasoning. Attached file text therefore cannot directly trigger computer actions.
+
+The model runtime also receives a system-level instruction to treat filenames and attachment content as untrusted data rather than commands, including prompt-injection text found inside a file.
+
+**Analyze with AURA** can therefore support requests such as:
 
 - "analyze these files"
 - "compare these notes"
 - "summarize these documents"
 
-can pass bounded temporary context to the local model without exposing filesystem paths or turning raw file contents into the user's visible prompt.
+within the formats and preview bounds currently available.
+
+For images, PDFs, Office files, video, audio and archives, the attachment still contains only the metadata that V2 inspection is allowed to expose. Full rich-format extraction remains a later boundary.
 
 ## Still out of scope
 
