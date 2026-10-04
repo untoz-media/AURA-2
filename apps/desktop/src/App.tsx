@@ -583,6 +583,16 @@ function App() {
                           <span>
                             {message.role === "assistant" ? "AURA" : "You"}
                           </span>
+                          {message.attachmentNames && message.attachmentNames.length > 0 && (
+                            <div className="chat-message-attachments">
+                              {message.attachmentNames.map((name) => (
+                                <span key={name} title={name}>
+                                  <span aria-hidden="true">▤</span>
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <p>{message.content}</p>
                         </div>
                       </article>
