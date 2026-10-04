@@ -26,6 +26,7 @@ import type {
   AudioInputSnapshot,
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
+  TtsRuntimeStatus,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -108,6 +109,10 @@ type Props = {
   audioInput: AudioInputSnapshot;
   voiceCapture: VoiceCaptureEvent | null;
   speechRuntime: SpeechRuntimeStatus;
+  ttsRuntime: TtsRuntimeStatus;
+  onTtsRuntimeRefresh: () => Promise<TtsRuntimeStatus>;
+  onTtsRuntimePrepare: () => Promise<TtsRuntimeStatus>;
+  onTtsVoiceTest: (text?: string) => Promise<TtsRuntimeStatus>;
   onVoiceModelOperation: (
     operation: "download" | "pause" | "resume" | "cancel" | "remove",
     modelId: string,
@@ -272,6 +277,10 @@ export default function Settings({
   audioInput,
   voiceCapture,
   speechRuntime,
+  ttsRuntime,
+  onTtsRuntimeRefresh,
+  onTtsRuntimePrepare,
+  onTtsVoiceTest,
   onVoiceModelOperation,
   onAudioRefresh,
   onAudioSelect,
@@ -293,8 +302,12 @@ export default function Settings({
   const [lastRecordingOutput, setLastRecordingOutput] = useState<string | null>(null);
   const [obsStreamClockMs, setObsStreamClockMs] = useState(0);
   const [voiceModelBusy, setVoiceModelBusy] = useState<string | null>(null);
+  const [ttsBusy, setTtsBusy] = useState<string | null>(null);
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
+  );
+  const ttsModel = modelCatalog.models.find(
+    (model) => model.id === "voice-piper-ptpt",
   );
 
   async function runVoiceModel(
@@ -313,6 +326,44 @@ export default function Settings({
       await onVoiceModelOperation(operation, voiceModel.id);
     } finally {
       setVoiceModelBusy(null);
+    }
+  }
+
+  async function runTtsModel(
+    operation: "download" | "pause" | "resume" | "cancel" | "remove",
+  ) {
+    if (!ttsModel) return;
+    if (
+      operation === "remove" &&
+      !window.confirm("Remove the Portuguese AURA Voice TTS model?")
+    ) {
+      return;
+    }
+
+    setTtsBusy(operation);
+    try {
+      await onVoiceModelOperation(operation, ttsModel.id);
+      await onTtsRuntimeRefresh();
+    } finally {
+      setTtsBusy(null);
+    }
+  }
+
+  async function prepareLocalTts() {
+    setTtsBusy("runtime");
+    try {
+      await onTtsRuntimePrepare();
+    } finally {
+      setTtsBusy(null);
+    }
+  }
+
+  async function testLocalTts() {
+    setTtsBusy("test");
+    try {
+      await onTtsVoiceTest();
+    } finally {
+      setTtsBusy(null);
     }
   }
 
