@@ -56,6 +56,11 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Restore a known application by name.
 - [ ] Confirm the Computer workspace exposes contextual window controls only for a known app identity.
 - [ ] Confirm an unknown app name is rejected instead of guessed.
+- [ ] Run New tab / Next tab / Previous tab / Reload / Focus address bar / Reopen closed tab in Brave.
+- [ ] Repeat at least New tab and Reload in Google Chrome.
+- [ ] Confirm Browser Skills are classified as Act.
+- [ ] Confirm Browser Skills reject non-browser targets such as Notepad.
+- [ ] Force a foreground-focus mismatch during a disposable test and confirm AURA refuses to inject the shortcut.
 - [ ] Search for a known file by exact name in a personal folder.
 - [ ] Search with a partial/multi-word filename and confirm ranking is sensible.
 - [ ] Confirm searches stay inside Desktop/Documents/Downloads/Pictures/Videos/Music.
