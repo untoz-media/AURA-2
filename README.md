@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M009.4 Telemetry Policy complete · AURA-2 0.8.0-alpha.1 · Beta hardening
+> **Current stage:** M009.5 Beta Documentation complete · AURA-2 0.8.0-alpha.1 · Beta hardening
 
 ---
 
@@ -140,10 +140,22 @@ Explicit Windows screenshot/region capture, active-window understanding, local m
 Local multi-step planning, deterministic Agent execution, reusable AURA Actions, event triggers, schedules, background status and failure recovery.
 
 ### M009 — AURA-2 Beta 🚧
-Beta hardening is underway. M009.1 provides the Windows installer path, M009.2 rebuilds Privacy and Permissions into a Safety Center, M009.3 adds independent quality/regression gates, and M009.4 fixes the Beta policy at zero automatic product telemetry by default.
+Beta hardening is underway. M009.1 provides the Windows installer path, M009.2 rebuilds Privacy and Permissions into a Safety Center, M009.3 adds independent quality/regression gates, M009.4 fixes automatic product telemetry to Off by default, and M009.5 adds the full Beta tester documentation set.
 
 ### M010 — AURA-2
 Stable next-generation release.
+
+---
+
+## Beta documentation
+
+- [Beta hub](docs/BETA.md)
+- [Beta guide](docs/BETA-GUIDE.md)
+- [Beta test checklist](docs/BETA-TEST-CHECKLIST.md)
+- [Known issues](docs/BETA-KNOWN-ISSUES.md)
+- [Telemetry policy](docs/TELEMETRY-POLICY.md)
+
+The Public Beta remains gated on a successful Beta Quality run and Windows installer build.
 
 ---
 
@@ -161,7 +173,7 @@ https://github.com/untoz-media/AURA-1
 
 AURA-2 has entered **M009 — AURA-2 Beta** hardening on top of **0.8.0-alpha.1**. M009.1 adds the Beta installer/release packaging path: explicit per-user NSIS setup, downgrade protection, an embedded WebView2 bootstrapper, synchronized release metadata checks and SHA-256 installer artifacts.
 
-The next Beta work focuses on completing the external stability gate, Beta documentation and the Public Beta release.
+The remaining Beta work is the external stability/build gate and the Public Beta release.
 
 ---
 
