@@ -76,6 +76,156 @@ impl PersonalFolderSkill {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalSkillAction {
+    NewTab,
+    NextTab,
+    PreviousTab,
+    CommandPalette,
+    Find,
+    OpenTabDropdown,
+}
+
+impl TerminalSkillAction {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::NewTab => "new-tab",
+            Self::NextTab => "next-tab",
+            Self::PreviousTab => "previous-tab",
+            Self::CommandPalette => "command-palette",
+            Self::Find => "find",
+            Self::OpenTabDropdown => "tab-dropdown",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::NewTab => "New tab",
+            Self::NextTab => "Next tab",
+            Self::PreviousTab => "Previous tab",
+            Self::CommandPalette => "Command palette",
+            Self::Find => "Find",
+            Self::OpenTabDropdown => "Tab dropdown",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::NewTab => "Open a new Windows Terminal tab using its configured default profile.",
+            Self::NextTab => "Move to the next Windows Terminal tab.",
+            Self::PreviousTab => "Move to the previous Windows Terminal tab.",
+            Self::CommandPalette => "Open Windows Terminal's built-in command palette.",
+            Self::Find => "Open Windows Terminal's scrollback search.",
+            Self::OpenTabDropdown => "Open Windows Terminal's new-tab/profile dropdown.",
+        }
+    }
+
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::NewTab => "New tab in Windows Terminal",
+            Self::NextTab => "Next tab in Windows Terminal",
+            Self::PreviousTab => "Previous tab in Windows Terminal",
+            Self::CommandPalette => "Command palette in Windows Terminal",
+            Self::Find => "Find in Windows Terminal",
+            Self::OpenTabDropdown => "Open tab dropdown in Windows Terminal",
+        }
+    }
+
+    fn shortcut(self) -> &'static str {
+        match self {
+            Self::NewTab => "Ctrl+Shift+T",
+            Self::NextTab => "Ctrl+Tab",
+            Self::PreviousTab => "Ctrl+Shift+Tab",
+            Self::CommandPalette => "Ctrl+Shift+P",
+            Self::Find => "Ctrl+Shift+F",
+            Self::OpenTabDropdown => "Ctrl+Shift+Space",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalSkill {
+    pub action: TerminalSkillAction,
+}
+
+impl TerminalSkill {
+    pub fn summary(self) -> String {
+        format!("{} in Windows Terminal", self.action.display_name())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalculatorSkillAction {
+    StandardMode,
+    ScientificMode,
+    ProgrammerMode,
+    DateCalculationMode,
+    GraphingMode,
+}
+
+impl CalculatorSkillAction {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::StandardMode => "standard-mode",
+            Self::ScientificMode => "scientific-mode",
+            Self::ProgrammerMode => "programmer-mode",
+            Self::DateCalculationMode => "date-calculation-mode",
+            Self::GraphingMode => "graphing-mode",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::StandardMode => "Standard mode",
+            Self::ScientificMode => "Scientific mode",
+            Self::ProgrammerMode => "Programmer mode",
+            Self::DateCalculationMode => "Date calculation",
+            Self::GraphingMode => "Graphing mode",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::StandardMode => "Switch Windows Calculator to Standard mode.",
+            Self::ScientificMode => "Switch Windows Calculator to Scientific mode.",
+            Self::ProgrammerMode => "Switch Windows Calculator to Programmer mode.",
+            Self::DateCalculationMode => "Switch Windows Calculator to Date Calculation mode.",
+            Self::GraphingMode => "Switch Windows Calculator to Graphing mode.",
+        }
+    }
+
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::StandardMode => "Standard mode in Calculator",
+            Self::ScientificMode => "Scientific mode in Calculator",
+            Self::ProgrammerMode => "Programmer mode in Calculator",
+            Self::DateCalculationMode => "Date calculation in Calculator",
+            Self::GraphingMode => "Graphing mode in Calculator",
+        }
+    }
+
+    fn shortcut(self) -> &'static str {
+        match self {
+            Self::StandardMode => "Alt+1",
+            Self::ScientificMode => "Alt+2",
+            Self::ProgrammerMode => "Alt+3",
+            Self::DateCalculationMode => "Alt+4",
+            Self::GraphingMode => "Alt+5",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CalculatorSkill {
+    pub action: CalculatorSkillAction,
+}
+
+impl CalculatorSkill {
+    pub fn summary(self) -> String {
+        format!("{} in Calculator", self.action.display_name())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotepadSkillAction {
     NewNote,
     Find,
@@ -332,6 +482,47 @@ pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
         });
     }
 
+    for action in [
+        TerminalSkillAction::NewTab,
+        TerminalSkillAction::NextTab,
+        TerminalSkillAction::PreviousTab,
+        TerminalSkillAction::CommandPalette,
+        TerminalSkillAction::Find,
+        TerminalSkillAction::OpenTabDropdown,
+    ] {
+        skills.push(AppSkillDescriptor {
+            id: format!("terminal.{}", action.id()),
+            group: "Windows Terminal".to_string(),
+            app_name: "Windows Terminal".to_string(),
+            name: action.display_name().to_string(),
+            description: action.description().to_string(),
+            command: action.command().to_string(),
+            permission: PermissionClass::Act,
+            available: context == Some(AppTarget::WindowsTerminal),
+            contextual: true,
+        });
+    }
+
+    for action in [
+        CalculatorSkillAction::StandardMode,
+        CalculatorSkillAction::ScientificMode,
+        CalculatorSkillAction::ProgrammerMode,
+        CalculatorSkillAction::DateCalculationMode,
+        CalculatorSkillAction::GraphingMode,
+    ] {
+        skills.push(AppSkillDescriptor {
+            id: format!("calculator.{}", action.id()),
+            group: "Calculator".to_string(),
+            app_name: "Calculator".to_string(),
+            name: action.display_name().to_string(),
+            description: action.description().to_string(),
+            command: action.command().to_string(),
+            permission: PermissionClass::Act,
+            available: context == Some(AppTarget::Calculator),
+            contextual: true,
+        });
+    }
+
     AppSkillCatalog {
         skills,
         context_app_name: context.map(AppTarget::display_name).map(str::to_string),
@@ -404,6 +595,22 @@ pub fn execute_notepad_skill(skill: NotepadSkill) -> Result<String, String> {
     )
 }
 
+pub fn execute_terminal_skill(skill: TerminalSkill) -> Result<String, String> {
+    execute_focus_verified_shortcut(
+        AppTarget::WindowsTerminal,
+        skill.action.display_name(),
+        skill.action.shortcut(),
+    )
+}
+
+pub fn execute_calculator_skill(skill: CalculatorSkill) -> Result<String, String> {
+    execute_focus_verified_shortcut(
+        AppTarget::Calculator,
+        skill.action.display_name(),
+        skill.action.shortcut(),
+    )
+}
+
 pub fn execute_personal_folder_skill(
     app: &AppHandle,
     skill: PersonalFolderSkill,
@@ -451,7 +658,7 @@ mod tests {
     #[test]
     fn skill_catalog_has_stable_browser_and_explorer_entries() {
         let catalog = app_skill_catalog(Some(AppTarget::Brave));
-        assert_eq!(catalog.skills.len(), 23);
+        assert_eq!(catalog.skills.len(), 34);
         assert_eq!(catalog.context_app_name.as_deref(), Some("Brave"));
 
         let brave = catalog
@@ -488,6 +695,22 @@ mod tests {
         assert!(notepad
             .iter()
             .any(|skill| skill.name == "Undo" && skill.permission == PermissionClass::Modify));
+
+        let terminal = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "Windows Terminal")
+            .collect::<Vec<_>>();
+        assert_eq!(terminal.len(), 6);
+        assert!(terminal.iter().all(|skill| !skill.available));
+
+        let calculator = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "Calculator")
+            .collect::<Vec<_>>();
+        assert_eq!(calculator.len(), 5);
+        assert!(calculator.iter().all(|skill| !skill.available));
     }
 
     #[test]
@@ -508,6 +731,23 @@ mod tests {
         assert_eq!(PersonalFolderSkill::Desktop.display_name(), "Desktop");
         assert_eq!(PersonalFolderSkill::Downloads.display_name(), "Downloads");
         assert_eq!(PersonalFolderSkill::Music.display_name(), "Music");
+    }
+
+    #[test]
+    fn terminal_skill_shortcuts_match_windows_terminal_defaults() {
+        assert_eq!(TerminalSkillAction::NewTab.shortcut(), "Ctrl+Shift+T");
+        assert_eq!(TerminalSkillAction::CommandPalette.shortcut(), "Ctrl+Shift+P");
+        assert_eq!(TerminalSkillAction::Find.shortcut(), "Ctrl+Shift+F");
+        assert_eq!(TerminalSkillAction::OpenTabDropdown.shortcut(), "Ctrl+Shift+Space");
+    }
+
+    #[test]
+    fn calculator_mode_shortcuts_match_official_hotkeys() {
+        assert_eq!(CalculatorSkillAction::StandardMode.shortcut(), "Alt+1");
+        assert_eq!(CalculatorSkillAction::ScientificMode.shortcut(), "Alt+2");
+        assert_eq!(CalculatorSkillAction::ProgrammerMode.shortcut(), "Alt+3");
+        assert_eq!(CalculatorSkillAction::DateCalculationMode.shortcut(), "Alt+4");
+        assert_eq!(CalculatorSkillAction::GraphingMode.shortcut(), "Alt+5");
     }
 
     #[test]
