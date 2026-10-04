@@ -6,7 +6,7 @@ use crate::{
     integrations::{
         director::{
             preset_requires_sensitive_permission, resolve_director_preset_command,
-            run_director_preset,
+            resolve_director_preset_command_checked, run_director_preset,
         },
         obs::ObsController,
     },
@@ -200,6 +200,17 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
 
     for step in &request.steps {
         validate_step(step)?;
+        if let RoutineStep::DirectorPreset { preset } = step {
+            let resolved = resolve_director_preset_command_checked(app, preset)?
+                .ok_or_else(|| {
+                    format!(
+                        "Director preset “{preset}” does not exist. Fix the Routine before saving it."
+                    )
+                })?;
+            if resolved.id.trim().is_empty() {
+                return Err("Resolved Director preset has an invalid empty id.".to_string());
+            }
+        }
     }
 
     let mut aliases = Vec::new();
@@ -387,8 +398,8 @@ pub async fn run_routine(
                 })
             }
             RoutineStep::DirectorPreset { preset } => {
-                match resolve_director_preset_command(app, preset) {
-                    Some(resolved) => {
+                match resolve_director_preset_command_checked(app, preset) {
+                    Ok(Some(resolved)) => {
                         let run = run_director_preset(obs, &resolved).await;
                         if run.success {
                             Ok(format!(
@@ -401,7 +412,10 @@ pub async fn run_routine(
                                 .unwrap_or_else(|| "Director preset failed.".to_string()))
                         }
                     }
-                    None => Err(format!("Director preset “{preset}” was not found.")),
+                    Ok(None) => Err(format!("Director preset “{preset}” was not found.")),
+                    Err(error) => Err(format!(
+                        "Director presets could not be loaded while running the Routine: {error}"
+                    )),
                 }
             }
             RoutineStep::Wait { milliseconds } => {
