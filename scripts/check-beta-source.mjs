@@ -87,6 +87,39 @@ if (!settingsSource.includes('tone={!betaSelfTest.ready ? "critical"')) {
   failures.push("apps/desktop/src/Settings.tsx: non-ready Beta self-test must render as critical");
 }
 
+const atomicStores = [
+  "apps/desktop/src-tauri/src/memory.rs",
+  "apps/desktop/src-tauri/src/project_memory.rs",
+  "apps/desktop/src-tauri/src/routines.rs",
+  "apps/desktop/src-tauri/src/agents.rs",
+  "apps/desktop/src-tauri/src/integrations/director.rs",
+  "apps/desktop/src-tauri/src/model_manager.rs",
+  "apps/desktop/src-tauri/src/vision_history.rs",
+];
+for (const file of atomicStores) {
+  const source = fs.readFileSync(file, "utf8");
+  if (!source.includes("write_json_atomic")) {
+    failures.push(`${file}: critical local state is not using atomic JSON persistence`);
+  }
+}
+
+const desktopPersistence = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
+for (const required of [
+  "storage::write_json_atomic(&path, policy)",
+  "storage::write_json_atomic(&path, preferences)",
+]) {
+  if (!desktopPersistence.includes(required)) {
+    failures.push(`apps/desktop/src-tauri/src/lib.rs: desktop state persistence guard missing: ${required}`);
+  }
+}
+
+const storageSource = fs.readFileSync("apps/desktop/src-tauri/src/storage.rs", "utf8");
+for (const required of ["file.sync_all()", "fs::rename(&temporary, path)"]) {
+  if (!storageSource.includes(required)) {
+    failures.push(`apps/desktop/src-tauri/src/storage.rs: atomic write invariant missing: ${required}`);
+  }
+}
+
 requireFragments("apps/desktop/src/Settings.tsx", [
   "export type SettingsSection =",
   '| "diagnostics";',
