@@ -63,6 +63,9 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Confirm file contents are never read during filename search.
 - [ ] Confirm a bounded search reports when the 8,000-entry safety cap is reached.
 - [ ] Confirm Read = Never blocks File Intelligence.
+- [ ] Reveal a returned file in File Explorer and confirm the file is selected but not executed.
+- [ ] Attempt to reveal an existing path outside the allowed personal roots and confirm AURA rejects it.
+- [ ] Confirm a symlink cannot escape an allowed root during reveal validation.
 - [ ] Read clipboard text and confirm Sensitive permission is requested.
 - [ ] Copy text to the clipboard and confirm Modify permission is requested.
 - [ ] Clear the clipboard and confirm Destructive permission is requested.
