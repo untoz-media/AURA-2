@@ -71,7 +71,22 @@ requireFragments("apps/desktop/src/Settings.tsx", [
   '| "diagnostics";',
   "AURA-2 Beta Diagnostics",
   "Copy privacy-safe diagnostics",
+  "Run self-test",
+  "runBetaSelfTest",
   "Telemetry: automatic product telemetry off",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "struct BetaSelfTestReport",
+  "fn run_beta_self_test(",
+  "run_beta_self_test,",
+  "Permission policy passes Core sanitization.",
+  "Saved Actions store loaded successfully",
+  "Automations store loaded successfully",
+]);
+
+requireFragments("apps/desktop/src/bridge/aura.ts", [
+  'invoke<BetaSelfTestReport>("run_beta_self_test")',
 ]);
 
 requireFragments("apps/desktop/src/App.tsx", [
