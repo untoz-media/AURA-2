@@ -107,6 +107,8 @@ The dedicated AURA-2 model checkpoint is not defined in this candidate yet. The 
 - shared tested Beta self-test finalization logic
 - fail-closed Diagnostics readiness for unexpected states
 - privacy-safe Diagnostics report for bug reports
+- atomic crash-resistant JSON persistence for critical local state
+- integrity checks for user stores and desktop configuration
 ### Beta safety & privacy
 
 - redesigned Privacy and Safety & Permissions UI
