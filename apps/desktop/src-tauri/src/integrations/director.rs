@@ -253,39 +253,33 @@ fn write_presets(app: &AppHandle, presets: &[DirectorPreset]) -> Result<(), Stri
     crate::storage::write_json_atomic(&path, presets)
 }
 
-pub fn validate_director_store(app: &AppHandle) -> Result<usize, String> {
+fn read_director_presets(app: &AppHandle) -> Result<Vec<DirectorPreset>, String> {
     let path = presets_path(app)?;
     if !path.exists() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
 
     let content = fs::read_to_string(&path)
         .map_err(|error| format!("Could not read Director presets: {error}"))?;
-    let presets = serde_json::from_str::<Vec<DirectorPreset>>(&content)
-        .map_err(|error| format!("Director presets file is invalid: {error}"))?;
+    let mut presets = serde_json::from_str::<Vec<DirectorPreset>>(&content)
+        .map_err(|error| format!("Director presets file is invalid and was left unchanged: {error}"))?;
+    presets.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(presets)
+}
 
-    Ok(presets.len())
+pub fn validate_director_store(app: &AppHandle) -> Result<usize, String> {
+    read_director_presets(app).map(|presets| presets.len())
 }
 
 pub fn load_director_presets(app: &AppHandle) -> Vec<DirectorPreset> {
-    let Ok(path) = presets_path(app) else {
-        return Vec::new();
-    };
-
-    let Ok(content) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
-
-    let mut presets = serde_json::from_str::<Vec<DirectorPreset>>(&content).unwrap_or_default();
-    presets.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
-    presets
+    read_director_presets(app).unwrap_or_default()
 }
 
 pub fn save_director_preset(
     app: &AppHandle,
     request: SaveDirectorPresetRequest,
 ) -> Result<DirectorPreset, String> {
-    let mut presets = load_director_presets(app);
+    let mut presets = read_director_presets(app)?;
 
     if request.id.is_none() && presets.len() >= MAX_PRESETS {
         return Err(format!(
@@ -344,7 +338,7 @@ pub fn save_director_preset(
 }
 
 pub fn delete_director_preset(app: &AppHandle, preset_id: &str) -> Result<(), String> {
-    let mut presets = load_director_presets(app);
+    let mut presets = read_director_presets(app)?;
     let original_len = presets.len();
     presets.retain(|preset| preset.id != preset_id);
 
