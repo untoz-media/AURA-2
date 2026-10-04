@@ -613,8 +613,11 @@ export async function deleteAuraAction(actionId: string): Promise<void> {
   return invoke<void>("delete_aura_action", { actionId });
 }
 
-export async function runAuraAction(actionId: string): Promise<string> {
-  return invoke<string>("run_aura_action", { actionId });
+export async function runAuraAction(
+  actionId: string,
+  approved: boolean,
+): Promise<string> {
+  return invoke<string>("run_aura_action", { actionId, approved });
 }
 
 export async function getAuraAutomations(): Promise<AuraAutomation[]> {
