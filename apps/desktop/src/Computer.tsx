@@ -151,47 +151,88 @@ export default function Computer({
         <div className="feature-section-heading">
           <div>
             <span className="feature-kicker">APP SKILLS</span>
-            <strong>
-              {browserSkillTarget
-                ? `Browser Skills · ${browserSkillTarget}`
-                : "Contextual skills for supported applications."}
-            </strong>
+            <strong>Deterministic capabilities for supported Windows apps.</strong>
           </div>
-          <span className="feature-badge">
-            {browserSkillTarget ? "Browser V1" : "Context aware"}
-          </span>
+          <span className="feature-badge">V1</span>
         </div>
 
-        {browserSkillTarget ? (
-          <>
-            <div className="app-skill-grid">
-              {browserSkills.map((skill) => (
-                <button
-                  key={skill.command}
-                  type="button"
-                  className="quick-action-card"
-                  disabled={runtimeState.paused}
-                  onClick={() => void onCommand(skill.command)}
-                >
-                  <strong>{skill.label}</strong>
-                  <span>{skill.command}</span>
-                </button>
-              ))}
+        <div className="app-skill-subsection">
+          <div className="app-skill-subheading">
+            <div>
+              <span>File Explorer Skills</span>
+              <small>Known personal folders only</small>
             </div>
-            <div className="feature-note">
-              <strong>Focus-safe shortcuts</strong>
-              <span>
-                AURA brings {browserSkillTarget} to the foreground, verifies the
-                foreground process and only then sends the bounded browser shortcut.
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="feature-empty">
-            Bring Brave or Google Chrome into context to expose Browser Skills V1.
-            OBS continues to use its deeper Director Mode integration.
+            <span className="feature-badge">Always available</span>
           </div>
-        )}
+          <div className="app-skill-grid">
+            {[
+              ["Desktop", "Open Desktop"],
+              ["Documents", "Open Documents"],
+              ["Downloads", "Open Downloads"],
+              ["Pictures", "Open Pictures"],
+              ["Videos", "Open Videos"],
+              ["Music", "Open Music"],
+            ].map(([label, command]) => (
+              <button
+                key={command}
+                type="button"
+                className="quick-action-card"
+                disabled={runtimeState.paused}
+                onClick={() => void onCommand(command)}
+              >
+                <strong>{label}</strong>
+                <span>{command}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="app-skill-subsection">
+          <div className="app-skill-subheading">
+            <div>
+              <span>
+                {browserSkillTarget
+                  ? `Browser Skills · ${browserSkillTarget}`
+                  : "Browser Skills"}
+              </span>
+              <small>Brave + Google Chrome</small>
+            </div>
+            <span className="feature-badge">
+              {browserSkillTarget ? "Context ready" : "Needs browser context"}
+            </span>
+          </div>
+
+          {browserSkillTarget ? (
+            <>
+              <div className="app-skill-grid">
+                {browserSkills.map((skill) => (
+                  <button
+                    key={skill.command}
+                    type="button"
+                    className="quick-action-card"
+                    disabled={runtimeState.paused}
+                    onClick={() => void onCommand(skill.command)}
+                  >
+                    <strong>{skill.label}</strong>
+                    <span>{skill.command}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="feature-note">
+                <strong>Focus-safe shortcuts</strong>
+                <span>
+                  AURA brings {browserSkillTarget} to the foreground, verifies the
+                  foreground process and only then sends the bounded browser shortcut.
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="feature-empty">
+              Bring Brave or Google Chrome into context to expose Browser Skills.
+              OBS continues to use its deeper Director Mode integration.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="feature-section file-intelligence-section">
