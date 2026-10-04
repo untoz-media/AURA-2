@@ -8,7 +8,7 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M009.3 Stability Testing · AURA-2 0.8.0-alpha.1 · Beta hardening
+> **Current stage:** M009.4 Telemetry Policy complete · AURA-2 0.8.0-alpha.1 · Beta hardening
 
 ---
 
@@ -140,7 +140,7 @@ Explicit Windows screenshot/region capture, active-window understanding, local m
 Local multi-step planning, deterministic Agent execution, reusable AURA Actions, event triggers, schedules, background status and failure recovery.
 
 ### M009 — AURA-2 Beta 🚧
-Beta hardening is underway. M009.1 provides the Windows installer path, M009.2 rebuilds Privacy and Permissions into a Safety Center, and M009.3 adds independent Beta quality gates plus regression checks for critical Agent/Automation safety invariants.
+Beta hardening is underway. M009.1 provides the Windows installer path, M009.2 rebuilds Privacy and Permissions into a Safety Center, M009.3 adds independent quality/regression gates, and M009.4 fixes the Beta policy at zero automatic product telemetry by default.
 
 ### M010 — AURA-2
 Stable next-generation release.
@@ -161,7 +161,7 @@ https://github.com/untoz-media/AURA-1
 
 AURA-2 has entered **M009 — AURA-2 Beta** hardening on top of **0.8.0-alpha.1**. M009.1 adds the Beta installer/release packaging path: explicit per-user NSIS setup, downgrade protection, an embedded WebView2 bootstrapper, synchronized release metadata checks and SHA-256 installer artifacts.
 
-The next Beta work focuses on stability testing, telemetry policy, Beta documentation and the Public Beta release.
+The next Beta work focuses on completing the external stability gate, Beta documentation and the Public Beta release.
 
 ---
 
