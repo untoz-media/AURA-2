@@ -39,6 +39,8 @@ with new Beta-readiness work.
 - Windows Terminal navigation/UI skills with no arbitrary shell execution
 - Windows Calculator Standard/Scientific/Programmer/Date/Graphing mode skills
 - File Explorer Skills for safe Desktop/Documents/Downloads/Pictures/Videos/Music access
+- native Drag & Drop intake with an in-memory opaque-id registry
+- safe dropped-image handoff to Vision through normalized cache copies
 - bounded File Intelligence across personal Windows folders without content scanning
 - recent-file/category queries for videos, images, audio, documents, archives and Downloads
 - canonical-path-safe reveal in File Explorer without executing files
