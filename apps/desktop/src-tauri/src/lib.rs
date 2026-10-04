@@ -208,6 +208,28 @@ fn local_reference_matches(
             .any(|alias| reference.eq_ignore_ascii_case(alias))
 }
 
+fn local_identity_keys(name: &str, aliases: &[String]) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    keys.insert(name.trim().to_lowercase());
+    keys.extend(
+        aliases
+            .iter()
+            .map(|alias| alias.trim().to_lowercase())
+            .filter(|alias| !alias.is_empty()),
+    );
+    keys
+}
+
+fn local_identity_changed(
+    current_name: &str,
+    current_aliases: &[String],
+    next_name: &str,
+    next_aliases: &[String],
+) -> bool {
+    local_identity_keys(current_name, current_aliases)
+        != local_identity_keys(next_name, next_aliases)
+}
+
 fn validate_workflow_references(app: &tauri::AppHandle) -> Result<String, String> {
     let routines = list_routines(app)
         .map_err(|error| format!("Could not load Routines: {error}"))?;
@@ -5977,6 +5999,43 @@ fn save_user_routine(
     app: AppHandle,
     request: SaveRoutineRequest,
 ) -> Result<UserRoutine, String> {
+    if let Some(routine_id) = request.id.as_deref() {
+        let routines = list_routines(&app)?;
+        let existing = routines
+            .iter()
+            .find(|routine| routine.id == routine_id)
+            .ok_or_else(|| "Routine no longer exists.".to_string())?;
+
+        if local_identity_changed(
+            &existing.name,
+            &existing.aliases,
+            &request.name,
+            &request.aliases,
+        ) {
+            let legacy_reference = list_saved_actions(&app)?.iter().any(|action| {
+                match &action.step {
+                    AgentStep::RunRoutine { routine: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                }
+            });
+
+            if legacy_reference {
+                return Err(
+                    "This Routine still has a legacy Saved Action reference by name or alias. Re-save that Action so it stores the stable Routine ID before renaming the Routine."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
     save_routine(&app, request)
 }
 
@@ -6072,6 +6131,55 @@ fn save_director_preset_command(
     app: AppHandle,
     request: SaveDirectorPresetRequest,
 ) -> Result<DirectorPreset, String> {
+    if let Some(preset_id) = request.id.as_deref() {
+        validate_director_store(&app)?;
+        let existing = find_director_preset_by_id(&app, preset_id)
+            .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+
+        if local_identity_changed(
+            &existing.name,
+            &existing.aliases,
+            &request.name,
+            &request.aliases,
+        ) {
+            let routine_legacy_reference = list_routines(&app)?.iter().any(|routine| {
+                routine.steps.iter().any(|step| match step {
+                    RoutineStep::DirectorPreset { preset: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                })
+            });
+            let action_legacy_reference = list_saved_actions(&app)?.iter().any(|action| {
+                match &action.step {
+                    AgentStep::DirectorPreset { preset: reference } => {
+                        reference != &existing.id
+                            && local_reference_matches(
+                                reference,
+                                &existing.id,
+                                &existing.name,
+                                &existing.aliases,
+                            )
+                    }
+                    _ => false,
+                }
+            });
+
+            if routine_legacy_reference || action_legacy_reference {
+                return Err(
+                    "This Director preset still has legacy references by name or alias. Re-save the dependent Routines/Actions so they store the stable preset ID before renaming it."
+                        .to_string(),
+                );
+            }
+        }
+    }
+
     save_director_preset(&app, request)
 }
 
