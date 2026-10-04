@@ -33,7 +33,15 @@ On Windows, the full local installer fallback is:
 npm run beta:build:windows
 ```
 
-That command validates the source, runs the Rust regression suite, builds the Tauri/NSIS installer, copies the candidate into `artifacts/beta/<version>/`, creates `AURA-2-Windows-x64.sha256`, and reports the Authenticode signature state.
+That command validates the source, runs the Rust regression suite, builds the Tauri/NSIS installer, copies the candidate into `artifacts/beta/<version>/`, creates `AURA-2-Windows-x64.sha256`, reports the Authenticode signature state and writes `AURA-2-Beta-Build.json` with the version, source commit, installer size, SHA-256 and build timestamp.
+
+The finished artifact can then be independently re-checked with:
+
+```powershell
+npm run beta:verify:artifact
+```
+
+The manual end-to-end validation matrix lives in `docs/M009-3-WINDOWS-SMOKE-CHECKLIST.md`.
 
 ## GitHub-hosted runner incident — 2026-10-04
 
@@ -77,7 +85,7 @@ Session recovery is conservative:
 - a corrupt/unreadable existing session marker is treated as an unclean prior exit rather than silently reported as clean;
 - marking a session clean now fails explicitly if the current marker is corrupt instead of masking the problem.
 
-Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary.
+Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary. Settings → Beta & Diagnostics also computes an in-app integrity self-check covering the privacy invariants, diagnostics identity/schema and internal Agent/Automation counter consistency.
 
 ## Existing recovery systems
 
