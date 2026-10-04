@@ -188,17 +188,40 @@ struct RunControl {
     cancelled: Arc<AtomicBool>,
 }
 
-#[derive(Default)]
 pub struct AgentEngine {
     runs: Arc<Mutex<HashMap<String, AgentRun>>>,
     controls: Arc<Mutex<HashMap<String, RunControl>>>,
+    global_paused: Arc<AtomicBool>,
 }
 
-#[derive(Default)]
+impl Default for AgentEngine {
+    fn default() -> Self {
+        Self {
+            runs: Arc::new(Mutex::new(HashMap::new())),
+            controls: Arc::new(Mutex::new(HashMap::new())),
+            global_paused: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
 pub struct AutomationScheduler {
     generation: AtomicU64,
+    paused: AtomicBool,
+    permission_policy: Mutex<PermissionPolicy>,
     startup_fired: Mutex<HashSet<String>>,
     last_external_process: Mutex<Option<String>>,
+}
+
+impl Default for AutomationScheduler {
+    fn default() -> Self {
+        Self {
+            generation: AtomicU64::new(0),
+            paused: AtomicBool::new(false),
+            permission_policy: Mutex::new(PermissionPolicy::default()),
+            startup_fired: Mutex::new(HashSet::new()),
+            last_external_process: Mutex::new(None),
+        }
+    }
 }
 
 pub fn plan_goal(
@@ -361,10 +384,19 @@ impl AgentEngine {
 
         let runs = Arc::clone(&self.runs);
         let controls = Arc::clone(&self.controls);
+        let global_paused = Arc::clone(&self.global_paused);
         let run_id = run.id.clone();
 
         thread::spawn(move || {
-            execute_agent_plan(&app, &runs, &controls, &run_id, &plan, &control);
+            execute_agent_plan(
+                &app,
+                &runs,
+                &controls,
+                &global_paused,
+                &run_id,
+                &plan,
+                &control,
+            );
         });
 
         Ok(run)
@@ -415,9 +447,68 @@ impl AgentEngine {
             .cloned()
             .ok_or_else(|| "Agent run was not found.".to_string())
     }
+
+    pub fn set_global_paused(&self, app: &AppHandle, paused: bool) {
+        self.global_paused.store(paused, Ordering::SeqCst);
+
+        let controls = self
+            .controls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+
+        let snapshots = {
+            let mut runs = self
+                .runs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut changed = Vec::new();
+
+            for run in runs.values_mut() {
+                if matches!(run.state.as_str(), "completed" | "failed" | "cancelled") {
+                    continue;
+                }
+
+                let individually_paused = controls
+                    .get(&run.id)
+                    .is_some_and(|control| control.paused.load(Ordering::SeqCst));
+
+                run.state = if paused || individually_paused {
+                    "paused".to_string()
+                } else {
+                    "running".to_string()
+                };
+                changed.push(run.clone());
+            }
+            changed
+        };
+
+        for run in snapshots {
+            emit_agent_event(
+                app,
+                &run,
+                if paused {
+                    "Agent paused because AURA is paused."
+                } else {
+                    "Agent resumed with AURA."
+                },
+            );
+        }
+    }
 }
 
 impl AutomationScheduler {
+    pub fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::SeqCst);
+    }
+
+    pub fn set_permission_policy(&self, policy: PermissionPolicy) {
+        *self
+            .permission_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy;
+    }
+
     pub fn start(&self, app: AppHandle) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         self.startup_fired
@@ -514,14 +605,19 @@ impl AutomationScheduler {
                 continue;
             }
 
-            let result = if crate::automation_runtime_paused(app) {
+            let result = if self.paused.load(Ordering::SeqCst) {
                 Err("AURA is paused; background automation was skipped.".to_string())
             } else {
                 let permission = saved_action_permission(app, &automation.action_id);
+                let policy = self
+                    .permission_policy
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone();
+
                 match permission {
                     Ok(permission)
-                        if crate::background_permission_decision(app, permission)
-                            == PermissionDecision::Allow =>
+                        if policy.decision_for(permission) == PermissionDecision::Allow =>
                     {
                         execute_saved_action(app, &automation.action_id, true)
                     }
@@ -791,6 +887,7 @@ fn execute_agent_plan(
     app: &AppHandle,
     runs: &Arc<Mutex<HashMap<String, AgentRun>>>,
     controls: &Arc<Mutex<HashMap<String, RunControl>>>,
+    global_paused: &Arc<AtomicBool>,
     run_id: &str,
     plan: &AgentPlan,
     control: &RunControl,
@@ -800,7 +897,9 @@ fn execute_agent_plan(
     }, "Agent started.");
 
     for (index, step) in plan.steps.iter().enumerate() {
-        while control.paused.load(Ordering::SeqCst) {
+        while control.paused.load(Ordering::SeqCst)
+            || global_paused.load(Ordering::SeqCst)
+        {
             if control.cancelled.load(Ordering::SeqCst) {
                 break;
             }
