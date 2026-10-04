@@ -43,6 +43,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm install
 
+      - name: Verify release version metadata
+        run: node scripts/verify-versions.mjs
+
       - name: Check desktop TypeScript and Vite build
         run: npm --workspace @untoz/aura-desktop run build
 
