@@ -21,6 +21,16 @@ M009.3 repairs both annotations and expands pure regression coverage for:
 - invalid non-JSON planner output
 - case-insensitive Action alias collisions
 
+## Additional hardening findings
+
+Continued Beta audit found and fixed additional issues:
+
+- Action Router parsing no longer relies on runtime `unreachable!` / `expect()` assumptions; unexpected internal parser shapes now fail safely instead of panicking.
+- The Beta self-test finalization helper accidentally called itself recursively. The runtime command had duplicated inline finalization, so the UI path did not invoke that recursion, but Rust tests using the helper could stack-overflow once CI actually executed.
+- Runtime and tests now share one `finish_beta_self_test` implementation, so the tested logic is the production logic.
+- Unknown required self-test statuses now fail closed and count as failures.
+- Diagnostics renders every non-ready self-test as critical instead of allowing a visually green `Attention` state.
+- Stale Alpha fallback copy (`Desktop Foundation`, `0.2.0`, planned Model Router) was removed from Settings.
 ## Beta source safety checks
 
 `npm run beta:source-check` performs fast source-level release guards.
