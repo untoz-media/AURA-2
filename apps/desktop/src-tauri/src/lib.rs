@@ -564,7 +564,15 @@ fn set_voice_preferences(
         .voice_preferences
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = preferences.clone();
-    state.wake_monitor_generation.fetch_add(1, Ordering::Relaxed);
+    let generation = state
+        .wake_monitor_generation
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+
+    if preferences.wake_word_enabled {
+        spawn_wake_monitor(app.clone(), generation);
+    }
+
     Ok(preferences)
 }
 
@@ -1113,8 +1121,15 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
-            if preferences.auto_speak {
-                let _ = tts.speak(&app_for_tts, &manager, &text, preferences.tts_speed);
+            let spoken = if preferences.auto_speak {
+                tts.speak(&app_for_tts, &manager, &text, preferences.tts_speed)
+                    .is_ok()
+            } else {
+                true
+            };
+
+            if spoken && preferences.conversation_mode {
+                start_conversation_follow_up(app_for_tts.clone());
             }
         });
     }
@@ -4608,6 +4623,7 @@ pub fn run() {
         )
         .setup(|app| {
             let preferences = load_preferences(app.handle());
+            let voice_preferences = load_voice_preferences(app.handle());
             let permission_policy = load_permission_policy(app.handle());
             {
                 let runtime = app.state::<RuntimeState>();
@@ -4629,6 +4645,20 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *current_policy = permission_policy;
+
+                *runtime
+                    .voice_preferences
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                    voice_preferences.clone();
+            }
+
+            if voice_preferences.wake_word_enabled {
+                let generation = app
+                    .state::<RuntimeState>()
+                    .wake_monitor_generation
+                    .load(Ordering::Relaxed);
+                spawn_wake_monitor(app.handle().clone(), generation);
             }
 
             let launched_in_background = std::env::args().any(|arg| arg == "--background");
