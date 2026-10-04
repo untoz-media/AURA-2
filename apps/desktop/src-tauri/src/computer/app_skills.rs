@@ -76,6 +76,85 @@ impl PersonalFolderSkill {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotepadSkillAction {
+    NewNote,
+    Find,
+    SelectAll,
+    Undo,
+    Redo,
+}
+
+impl NotepadSkillAction {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::NewNote => "new-note",
+            Self::Find => "find",
+            Self::SelectAll => "select-all",
+            Self::Undo => "undo",
+            Self::Redo => "redo",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::NewNote => "New note",
+            Self::Find => "Find",
+            Self::SelectAll => "Select all",
+            Self::Undo => "Undo",
+            Self::Redo => "Redo",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::NewNote => "Create a new Notepad document.",
+            Self::Find => "Open Notepad's Find interface.",
+            Self::SelectAll => "Select all text in the active Notepad document.",
+            Self::Undo => "Undo the most recent Notepad edit.",
+            Self::Redo => "Redo the most recently undone Notepad edit.",
+        }
+    }
+
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::NewNote => "New note in Notepad",
+            Self::Find => "Find in Notepad",
+            Self::SelectAll => "Select all in Notepad",
+            Self::Undo => "Undo in Notepad",
+            Self::Redo => "Redo in Notepad",
+        }
+    }
+
+    pub fn permission(self) -> PermissionClass {
+        match self {
+            Self::Undo | Self::Redo => PermissionClass::Modify,
+            Self::NewNote | Self::Find | Self::SelectAll => PermissionClass::Act,
+        }
+    }
+
+    fn shortcut(self) -> &'static str {
+        match self {
+            Self::NewNote => "Ctrl+N",
+            Self::Find => "Ctrl+F",
+            Self::SelectAll => "Ctrl+A",
+            Self::Undo => "Ctrl+Z",
+            Self::Redo => "Ctrl+Y",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NotepadSkill {
+    pub action: NotepadSkillAction,
+}
+
+impl NotepadSkill {
+    pub fn summary(self) -> String {
+        format!("{} in Notepad", self.action.display_name())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrowserSkillAction {
     NewTab,
     NextTab,
@@ -233,6 +312,26 @@ pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
         }
     }
 
+    for action in [
+        NotepadSkillAction::NewNote,
+        NotepadSkillAction::Find,
+        NotepadSkillAction::SelectAll,
+        NotepadSkillAction::Undo,
+        NotepadSkillAction::Redo,
+    ] {
+        skills.push(AppSkillDescriptor {
+            id: format!("notepad.{}", action.id()),
+            group: "Notepad".to_string(),
+            app_name: "Notepad".to_string(),
+            name: action.display_name().to_string(),
+            description: action.description().to_string(),
+            command: action.command().to_string(),
+            permission: action.permission(),
+            available: context == Some(AppTarget::Notepad),
+            contextual: true,
+        });
+    }
+
     AppSkillCatalog {
         skills,
         context_app_name: context.map(AppTarget::display_name).map(str::to_string),
@@ -247,43 +346,62 @@ fn timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
-pub fn execute_browser_skill(skill: BrowserSkill) -> Result<String, String> {
-    let window = switch_to_app(skill.target).map_err(|error| error.to_string())?;
+fn execute_focus_verified_shortcut(
+    target: AppTarget,
+    label: &str,
+    shortcut_value: &str,
+) -> Result<String, String> {
+    let window = switch_to_app(target).map_err(|error| error.to_string())?;
 
     // Give Windows a short moment to complete the explicit foreground transition
-    // before injecting the bounded browser shortcut.
+    // before injecting the bounded application shortcut.
     thread::sleep(Duration::from_millis(80));
 
     let foreground = current_app().map_err(|error| {
         format!(
             "Could not verify {} focus before sending the shortcut: {error}",
-            skill.target.display_name()
+            target.display_name()
         )
     })?;
 
-    let target_is_foreground = skill
-        .target
+    let target_is_foreground = target
         .process_images()
         .iter()
         .any(|image| foreground.process_name.eq_ignore_ascii_case(image));
 
     if !target_is_foreground {
         return Err(format!(
-            "{} did not remain in the foreground. The browser shortcut was not sent.",
-            skill.target.display_name()
+            "{} did not remain in the foreground. The App Skill shortcut was not sent.",
+            target.display_name()
         ));
     }
 
-    let shortcut = KeyboardShortcut::parse(skill.action.shortcut())
+    let shortcut = KeyboardShortcut::parse(shortcut_value)
         .map_err(|error| error.to_string())?;
     press_shortcut(&shortcut).map_err(|error| error.to_string())?;
 
     Ok(format!(
         "{} executed in {} — {}.",
-        skill.action.display_name(),
-        skill.target.display_name(),
+        label,
+        target.display_name(),
         window.title
     ))
+}
+
+pub fn execute_browser_skill(skill: BrowserSkill) -> Result<String, String> {
+    execute_focus_verified_shortcut(
+        skill.target,
+        skill.action.display_name(),
+        skill.action.shortcut(),
+    )
+}
+
+pub fn execute_notepad_skill(skill: NotepadSkill) -> Result<String, String> {
+    execute_focus_verified_shortcut(
+        AppTarget::Notepad,
+        skill.action.display_name(),
+        skill.action.shortcut(),
+    )
 }
 
 pub fn execute_personal_folder_skill(
@@ -333,7 +451,7 @@ mod tests {
     #[test]
     fn skill_catalog_has_stable_browser_and_explorer_entries() {
         let catalog = app_skill_catalog(Some(AppTarget::Brave));
-        assert_eq!(catalog.skills.len(), 18);
+        assert_eq!(catalog.skills.len(), 23);
         assert_eq!(catalog.context_app_name.as_deref(), Some("Brave"));
 
         let brave = catalog
@@ -359,6 +477,17 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(explorer.len(), 6);
         assert!(explorer.iter().all(|skill| skill.available && !skill.contextual));
+
+        let notepad = catalog
+            .skills
+            .iter()
+            .filter(|skill| skill.app_name == "Notepad")
+            .collect::<Vec<_>>();
+        assert_eq!(notepad.len(), 5);
+        assert!(notepad.iter().all(|skill| !skill.available));
+        assert!(notepad
+            .iter()
+            .any(|skill| skill.name == "Undo" && skill.permission == PermissionClass::Modify));
     }
 
     #[test]
@@ -379,6 +508,21 @@ mod tests {
         assert_eq!(PersonalFolderSkill::Desktop.display_name(), "Desktop");
         assert_eq!(PersonalFolderSkill::Downloads.display_name(), "Downloads");
         assert_eq!(PersonalFolderSkill::Music.display_name(), "Music");
+    }
+
+    #[test]
+    fn notepad_skill_permissions_keep_edits_guarded() {
+        assert_eq!(NotepadSkillAction::NewNote.permission(), PermissionClass::Act);
+        assert_eq!(NotepadSkillAction::Find.permission(), PermissionClass::Act);
+        assert_eq!(NotepadSkillAction::Undo.permission(), PermissionClass::Modify);
+        assert_eq!(NotepadSkillAction::Redo.permission(), PermissionClass::Modify);
+    }
+
+    #[test]
+    fn notepad_shortcuts_are_stable() {
+        assert_eq!(NotepadSkillAction::NewNote.shortcut(), "Ctrl+N");
+        assert_eq!(NotepadSkillAction::Find.shortcut(), "Ctrl+F");
+        assert_eq!(NotepadSkillAction::Undo.shortcut(), "Ctrl+Z");
     }
 
     #[test]
