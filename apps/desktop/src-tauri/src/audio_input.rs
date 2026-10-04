@@ -634,9 +634,7 @@ impl AudioInputManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take()
     }
-    }
 }
-
 
 #[cfg(test)]
 mod tests {
