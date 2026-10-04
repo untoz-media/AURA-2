@@ -31,7 +31,9 @@ import type {
   VisionRuntimeStatus,
   AgentSnapshot,
   AuraAutomation,
+  BetaSelfTestReport,
 } from "./bridge/types";
+import { runBetaSelfTest } from "./bridge/aura";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
 import { auraThemes, type AuraTheme } from "./theme";
@@ -325,6 +327,9 @@ export default function Settings({
   const [ttsBusy, setTtsBusy] = useState<string | null>(null);
   const [voicePrefsBusy, setVoicePrefsBusy] = useState(false);
   const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+  const [betaSelfTest, setBetaSelfTest] = useState<BetaSelfTestReport | null>(null);
+  const [betaSelfTestBusy, setBetaSelfTestBusy] = useState(false);
+  const [betaSelfTestError, setBetaSelfTestError] = useState<string | null>(null);
   const [wakePhraseDraft, setWakePhraseDraft] = useState(
     voicePreferences.wakePhrase,
   );
@@ -628,6 +633,7 @@ export default function Settings({
     `OBS: ${obsConnection.connected ? "connected" : "disconnected"}`,
     `Agent runs: ${agentRuns.runs.length} total / ${activeAgentRuns} active / ${failedAgentRuns} failed-or-interrupted`,
     `Automations: ${automations.length} total / ${enabledAutomations} enabled`,
+    `Core self-test: ${betaSelfTest ? `${betaSelfTest.passed} pass / ${betaSelfTest.warnings} warning / ${betaSelfTest.failed} fail` : "not run"}`,
     `Permissions: read=${permissionPolicy.read}, act=${permissionPolicy.act}, modify=${permissionPolicy.modify}, sensitive=${permissionPolicy.sensitive}, destructive=${permissionPolicy.destructive}`,
     "Telemetry: automatic product telemetry off",
   ].join("\n");
@@ -639,6 +645,21 @@ export default function Settings({
       window.setTimeout(() => setDiagnosticsCopied(false), 1800);
     } catch {
       setDiagnosticsCopied(false);
+    }
+  }
+
+  async function executeBetaSelfTest() {
+    setBetaSelfTestBusy(true);
+    setBetaSelfTestError(null);
+    try {
+      const report = await runBetaSelfTest();
+      setBetaSelfTest(report);
+    } catch (error) {
+      setBetaSelfTestError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setBetaSelfTestBusy(false);
     }
   }
 
@@ -1830,6 +1851,80 @@ export default function Settings({
                 description="The Public Beta candidate sends no automatic product telemetry to Untoz."
                 trailing={<Badge tone="ready">Off</Badge>}
               />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  betaSelfTest ? (
+                    <Badge tone={betaSelfTest.failed > 0 ? "critical" : betaSelfTest.warnings > 0 ? "warning" : "ready"}>
+                      {betaSelfTest.ready ? "Core passed" : "Attention"}
+                    </Badge>
+                  ) : (
+                    <Badge tone="planned">Not run</Badge>
+                  )
+                }
+              >
+                Core self-test
+              </SectionLabel>
+
+              <div className="diagnostics-self-test-heading">
+                <div>
+                  <strong>Validate local AURA Core state</strong>
+                  <p>
+                    Checks local storage readability, permission sanitization, persisted
+                    Actions/Automations, Agent history, model catalog and runtime health.
+                    It does not run computer actions or send data anywhere.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="settings-action-button"
+                  disabled={betaSelfTestBusy}
+                  onClick={() => void executeBetaSelfTest()}
+                >
+                  {betaSelfTestBusy ? "Running…" : betaSelfTest ? "Run again" : "Run self-test"}
+                </button>
+              </div>
+
+              {betaSelfTest && (
+                <>
+                  <div className="diagnostics-self-test-summary">
+                    <span><strong>{betaSelfTest.passed}</strong> passed</span>
+                    <span><strong>{betaSelfTest.warnings}</strong> warnings</span>
+                    <span><strong>{betaSelfTest.failed}</strong> failed</span>
+                  </div>
+                  <div className="diagnostics-self-test-list">
+                    {betaSelfTest.checks.map((check) => (
+                      <div className="diagnostics-check" key={check.id}>
+                        <div>
+                          <strong>{check.label}</strong>
+                          <span>{check.message}</span>
+                        </div>
+                        <Badge
+                          tone={
+                            check.status === "fail"
+                              ? "critical"
+                              : check.status === "warning"
+                                ? "warning"
+                                : "ready"
+                          }
+                        >
+                          {check.status === "pass"
+                            ? "Pass"
+                            : check.status === "warning"
+                              ? "Warning"
+                              : "Fail"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {betaSelfTestError && (
+                <p className="diagnostics-self-test-error">{betaSelfTestError}</p>
+              )}
             </Surface>
 
             <Surface className="settings-card">
