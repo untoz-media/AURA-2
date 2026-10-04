@@ -1,0 +1,150 @@
+import type { DropIntakeSnapshot } from "./bridge/types";
+import "./drop.css";
+
+type Props = {
+  snapshot: DropIntakeSnapshot;
+  hovering: boolean;
+  paused: boolean;
+  onClear: () => Promise<DropIntakeSnapshot>;
+  onReveal: (dropId: string) => Promise<string>;
+  onUseVision: (dropId: string) => Promise<unknown>;
+};
+
+function formatBytes(bytes: number) {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+function kindGlyph(kind: string) {
+  switch (kind) {
+    case "image":
+      return "▣";
+    case "video":
+      return "▶";
+    case "audio":
+      return "♪";
+    case "document":
+      return "▤";
+    case "archive":
+      return "◇";
+    default:
+      return "□";
+  }
+}
+
+export default function DropTray({
+  snapshot,
+  hovering,
+  paused,
+  onClear,
+  onReveal,
+  onUseVision,
+}: Props) {
+  const visible = hovering || snapshot.items.length > 0;
+  if (!visible) return null;
+
+  return (
+    <>
+      {hovering && (
+        <div className="drop-target-overlay" aria-hidden="true">
+          <div className="drop-target-card">
+            <span className="drop-target-icon">↓</span>
+            <strong>Drop files into AURA</strong>
+            <span>
+              Metadata only. Nothing is opened, executed or analyzed automatically.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {snapshot.items.length > 0 && !hovering && (
+        <aside className="drop-tray" aria-live="polite">
+          <div className="drop-tray-heading">
+            <div>
+              <span className="feature-kicker">DRAG & DROP</span>
+              <strong>
+                {snapshot.items.length} local file
+                {snapshot.items.length === 1 ? "" : "s"} ready
+              </strong>
+            </div>
+            <button
+              type="button"
+              className="drop-tray-close"
+              aria-label="Dismiss dropped files"
+              onClick={() => void onClear()}
+            >
+              ×
+            </button>
+          </div>
+
+          {(snapshot.rejectedCount > 0 || snapshot.truncated) && (
+            <div className="drop-tray-warning">
+              {snapshot.rejectedCount > 0
+                ? `${snapshot.rejectedCount} item${snapshot.rejectedCount === 1 ? "" : "s"} could not be accepted. `
+                : ""}
+              {snapshot.truncated
+                ? "AURA accepts at most 8 files in one drop."
+                : ""}
+            </div>
+          )}
+
+          <div className="drop-tray-items">
+            {snapshot.items.map((item) => (
+              <article className="drop-file-card" key={item.id}>
+                <div className="drop-file-icon" aria-hidden="true">
+                  {kindGlyph(item.kind)}
+                </div>
+                <div className="drop-file-copy">
+                  <strong title={item.name}>{item.name}</strong>
+                  <span>
+                    {item.kind}
+                    {item.extension ? ` · .${item.extension}` : ""}
+                    {" · "}
+                    {formatBytes(item.sizeBytes)}
+                  </span>
+                  {item.modifiedAtMs > 0 && (
+                    <small>
+                      Modified {new Date(item.modifiedAtMs).toLocaleString()}
+                    </small>
+                  )}
+                </div>
+                <div className="drop-file-actions">
+                  {item.canUseVision && (
+                    <button
+                      type="button"
+                      className="feature-primary-button"
+                      disabled={paused}
+                      onClick={() => void onUseVision(item.id)}
+                    >
+                      Use in Vision
+                    </button>
+                  )}
+                  {item.canReveal && (
+                    <button
+                      type="button"
+                      className="feature-secondary-button"
+                      disabled={paused}
+                      onClick={() => void onReveal(item.id)}
+                    >
+                      Reveal
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="drop-tray-privacy">
+            <strong>Temporary session context</strong>
+            <span>
+              File paths remain inside AURA Core memory. Dropped items are not added
+              to Memory, diagnostics or Vision unless you explicitly choose an action.
+            </span>
+          </div>
+        </aside>
+      )}
+    </>
+  );
+}
