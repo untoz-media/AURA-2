@@ -126,13 +126,21 @@ OBS testing may be marked N/A only for a Beta validation machine where OBS is in
 
 ## L. Beta self-check and diagnostics
 
+- [ ] Launch AURA and confirm the startup health report runs without blocking normal startup.
 - [ ] Open Settings → Beta & Diagnostics.
-- [ ] Generate a diagnostics snapshot.
-- [ ] Confirm Beta self-check reports Healthy.
+- [ ] Confirm diagnostics schema version 2 is displayed through a valid snapshot.
+- [ ] Confirm configuration storage and Local Data write probes pass.
+- [ ] Confirm Session marker and Beta preferences checks pass.
+- [ ] Confirm Permission safety floor passes.
+- [ ] Confirm Model catalog, Agent run store, Saved Actions store and Automation store checks pass.
+- [ ] Confirm Managed runtime state, Privacy boundary and Runtime counters checks pass.
+- [ ] Confirm Beta self-check reports Healthy when every subsystem check passes.
 - [ ] Confirm telemetry is Off.
 - [ ] Confirm automatic crash uploads are Off.
 - [ ] Export diagnostics JSON.
 - [ ] Inspect the JSON and confirm it contains no chat messages, prompts, responses, transcripts, screenshots, passwords, Memory contents or arbitrary file contents.
+- [ ] Corrupt a disposable test store in a controlled test profile and confirm the report becomes Degraded without making the entire diagnostics command unavailable.
+- [ ] Confirm a degraded startup health report is surfaced in Chat with a link to the local report.
 
 ## M. Installer lifecycle
 
