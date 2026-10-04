@@ -62,6 +62,28 @@ This prevents Startup Automations from firing during launch when the user had ex
 Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
 
 If an existing desktop-preferences file is unreadable or invalid, AURA now fails closed with `paused=true` so Agents and Automations cannot silently resume from corrupted local state.
+## Global Pause closes direct-control bypasses
+
+The audit found that some direct UI commands bypassed the global paused state even though Chat, Agents, Automations and global shortcuts already respected it.
+
+Pause now blocks new execution through:
+
+- direct Vision capture and analysis
+- manual Routine execution
+- manual Director Mode preset execution
+- OBS Program/Preview scene changes
+- OBS source visibility and audio mutations
+- starting or resuming recording
+- starting streaming
+
+Safety exits remain available while paused:
+
+- stop streaming
+- stop recording
+- pause recording
+- disconnect OBS
+
+This lets the user stop an ongoing production action without first re-enabling AURA.
 ## Permission corruption fails closed
 
 The persisted permission policy previously fell back to normal defaults when its JSON could not be read or parsed. Because normal defaults allow Read and Act, a corrupted file could unintentionally become less restrictive than the user's previous policy.
