@@ -6,7 +6,7 @@ use crate::{
     integrations::{
         director::{
             find_director_preset_by_id, load_director_presets, preset_requires_sensitive_permission,
-            run_director_preset,
+            run_director_preset, validate_director_store,
         },
         obs::ObsController,
     },
@@ -1121,12 +1121,14 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
                 .map_err(|error| error.to_string())
         }
         AgentStep::RunRoutine { routine } => {
-            let resolved = find_routine_by_id(app, routine)
-                .or_else(|| {
-                    list_routines(app).ok()?.into_iter().find(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == *routine
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
 
@@ -1146,6 +1148,8 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
@@ -1242,12 +1246,14 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
         AgentStep::LaunchApp { .. } | AgentStep::SwitchToApp { .. } => PermissionClass::Act,
         AgentStep::Wait { .. } => PermissionClass::Read,
         AgentStep::RunRoutine { routine } => {
-            let resolved = find_routine_by_id(app, routine)
-                .or_else(|| {
-                    list_routines(app).ok()?.into_iter().find(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == *routine
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
             if routine_requires_sensitive_permission(app, &resolved) {
@@ -1257,6 +1263,8 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let resolved = find_director_preset_by_id(app, preset)
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
@@ -1323,13 +1331,13 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             resolve_app(target).map(|_| ())
         }
         AgentStep::RunRoutine { routine } => {
-            let exists = find_routine_by_id(app, routine).is_some()
-                || list_routines(app).ok().is_some_and(|items| {
-                    items.iter().any(|item| {
-                        item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
-                    })
-                });
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let exists = routines.iter().any(|item| {
+                item.id == *routine
+                    || item.name.eq_ignore_ascii_case(routine)
+                    || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+            });
             if exists {
                 Ok(())
             } else {
@@ -1337,6 +1345,8 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             }
         }
         AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
             let exists = find_director_preset_by_id(app, preset).is_some()
                 || load_director_presets(app).iter().any(|item| {
                     item.name.eq_ignore_ascii_case(preset)
