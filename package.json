@@ -1,6 +1,6 @@
 {
   "name": "aura-2",
-  "version": "0.8.0-alpha.1",
+  "version": "0.9.0-beta.1",
   "private": true,
   "workspaces": [
     "apps/desktop"
@@ -14,6 +14,7 @@
     "release:check": "node scripts/check-release.mjs",
     "beta:source-check": "node scripts/check-beta-source.mjs",
     "beta:quality": "npm run release:check && npm run telemetry:check && npm run beta:source-check && npm run frontend:build",
-    "telemetry:check": "node scripts/check-telemetry-policy.mjs"
+    "telemetry:check": "node scripts/check-telemetry-policy.mjs",
+    "beta:release-check": "node scripts/check-beta-release.mjs"
   }
 }
