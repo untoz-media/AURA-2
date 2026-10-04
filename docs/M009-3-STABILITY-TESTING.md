@@ -62,6 +62,9 @@ This prevents Startup Automations from firing during launch when the user had ex
 Legacy desktop-preference files without the new `paused` field remain compatible and default to `false`.
 
 If an existing desktop-preferences file is unreadable or invalid, AURA now fails closed with `paused=true` so Agents and Automations cannot silently resume from corrupted local state.
+## Startup recovery failures are visible
+
+`recover_interrupted_runs` is no longer ignored during application setup. If Agent history cannot be read or updated, AURA emits an `agents.recovery_failed` lifecycle warning so the user can open Diagnostics and investigate the local store.
 ## Global Pause closes direct-control bypasses
 
 The audit found that some direct UI commands bypassed the global paused state even though Chat, Agents, Automations and global shortcuts already respected it.
