@@ -3765,6 +3765,32 @@ fn process_user_command(
                             }
                         }
                         ActionIntent::UserRoutine(routine_id) => {
+                            if let Err(error) = validate_director_store(&worker_app) {
+                                let message = format!(
+                                    "Routine execution is blocked because Director presets could not be validated: {error}"
+                                );
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "routine.director_store_invalid",
+                                        message,
+                                    },
+                                );
+                                return;
+                            }
+
                             let routine = find_routine_by_id(&worker_app, &routine_id);
                             match routine {
                                 Some(routine) => {
@@ -5768,6 +5794,8 @@ fn run_user_routine(
     routine_id: String,
 ) -> Result<RoutineRunResult, String> {
     ensure_runtime_active(&state, "running a Routine")?;
+    validate_director_store(&app)
+        .map_err(|error| format!("Routine execution is blocked because Director presets could not be validated: {error}"))?;
     let routine = find_routine_by_id(&app, &routine_id)
         .ok_or_else(|| "Routine no longer exists.".to_string())?;
 
@@ -5838,6 +5866,7 @@ async fn run_director_preset_command(
     obs: State<'_, ObsController>,
 ) -> Result<DirectorPresetRunResult, String> {
     ensure_runtime_active(&state, "running a Director Mode preset")?;
+    validate_director_store(&app)?;
     let preset = find_director_preset_by_id(&app, &preset_id)
         .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
 
