@@ -2,6 +2,8 @@
 
 ## Release blockers
 
+Current trackers: **#55** CI startup failure · **#56** dependency lockfile · **#57** private vulnerability reporting.
+
 ### GitHub Actions jobs currently fail before step 1
 
 Recent Windows Build runs and the independent Beta Quality run have failed with zero recorded steps. Checkout and project commands never started.
