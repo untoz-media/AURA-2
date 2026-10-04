@@ -52,6 +52,7 @@ Examples:
 - restore Brave
 - new tab in Brave
 - focus address bar in Brave
+- open Downloads
 - find file Artemis
 - read clipboard
 - what app am I using?
