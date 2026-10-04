@@ -1051,12 +1051,15 @@ export default function Settings({
                 </div>
 
                 {(voiceCapture?.phase === "transcribing" ||
-                  voiceCapture?.phase === "transcribed") && (
+                  voiceCapture?.phase === "transcribed" ||
+                  voiceCapture?.phase === "submitted") && (
                   <div className="voice-transcript-card">
                     <span>
                       {voiceCapture.phase === "transcribing"
                         ? "TRANSCRIBING"
-                        : "LAST TRANSCRIPTION"}
+                        : voiceCapture.phase === "submitted"
+                          ? "SENT TO AURA CORE"
+                          : "LAST TRANSCRIPTION"}
                     </span>
                     <strong>
                       {voiceCapture.phase === "transcribing"
