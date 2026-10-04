@@ -21,7 +21,7 @@ use agents::{
     delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
     recover_interrupted_runs,
     run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
-    AgentPlan, AgentRun, AgentSnapshot, AuraAutomation, AutomationScheduler,
+    AgentPlan, AgentRun, AgentSnapshot, AgentStep, AuraAutomation, AutomationScheduler,
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
@@ -63,7 +63,7 @@ use project_memory::{
 };
 use routines::{
     delete_routine, find_routine_by_id, list_routines, resolve_routine_command_checked, routine_requires_sensitive_permission, run_routine,
-    save_routine, RoutineRunResult,
+    save_routine, RoutineRunResult, RoutineStep,
     SaveRoutineRequest, UserRoutine,
 };
 use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
