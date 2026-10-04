@@ -65,6 +65,21 @@ const WHISPER_BASE_FILES: &[&str] = &[
     "vocab.json",
 ];
 
+const CREATE_TINY_SD_FILES: &[&str] = &[
+    "model_index.json",
+    "scheduler/scheduler_config.json",
+    "text_encoder/config.json",
+    "text_encoder/model.safetensors",
+    "tokenizer/merges.txt",
+    "tokenizer/special_tokens_map.json",
+    "tokenizer/tokenizer_config.json",
+    "tokenizer/vocab.json",
+    "unet/config.json",
+    "unet/diffusion_pytorch_model.safetensors",
+    "vae/config.json",
+    "vae/diffusion_pytorch_model.safetensors",
+];
+
 const AURA_1_FILES: &[&str] = &[
     "LICENSE",
     "README.md",
@@ -189,6 +204,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             license: Some("Apache-2.0"),
             estimated_size_bytes: Some(2_040_000_000),
             files: SMOLVLM2_500M_FILES,
+            availability_message: None,
+        },
+        ModelDefinition {
+            id: "create-tiny-sd",
+            name: "AURA Create · Image",
+            subtitle: "Tiny-SD · Local · Text-to-Image",
+            description: "Lightweight local image generation for AURA Create, backed by a pinned SafeTensors revision of Segmind Tiny-SD.",
+            generation: "Create",
+            role: "imageGeneration",
+            selectable: false,
+            source_repo: Some("segmind/tiny-sd"),
+            source_revision: Some("66c1a55ae6659210a4de881223ac9626df59f04c"),
+            license: Some("CreativeML Open RAIL-M"),
+            estimated_size_bytes: Some(1_061_000_000),
+            files: CREATE_TINY_SD_FILES,
             availability_message: None,
         },
     ]
