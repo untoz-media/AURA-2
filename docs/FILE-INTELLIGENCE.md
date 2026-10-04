@@ -1,4 +1,4 @@
-# File Intelligence V1
+# File Intelligence V2
 
 AURA-2 File Intelligence provides bounded local file discovery by name and metadata.
 
@@ -6,7 +6,9 @@ AURA-2 File Intelligence provides bounded local file discovery by name and metad
 
 Help the user find files quickly without turning AURA into an unrestricted disk crawler.
 
-V1 deliberately does **not** index or read document contents.
+V2 deliberately does **not** index or read document contents.
+
+In addition to filename search, V2 can answer bounded “latest/recent” requests using filesystem modification timestamps.
 
 ## Search roots
 
@@ -60,6 +62,46 @@ For matches AURA may return:
 - modified timestamp
 
 No file contents are opened.
+
+
+
+## Recent-file queries
+
+AURA can deterministically find the most recently modified matching files without an LLM.
+
+Supported categories:
+
+- any file
+- video
+- image
+- audio
+- document
+- archive
+
+Supported scopes currently include:
+
+- all allowed personal folders
+- Downloads
+
+Examples:
+
+- `Latest video`
+- `Latest video I exported`
+- `Recent videos`
+- `Latest image`
+- `Imagens recentes`
+- `Latest audio`
+- `Latest document`
+- `Recent documents`
+- `Latest archive`
+- `Último download`
+- `Recent downloads`
+
+“Latest” returns one item. “Recent” returns up to ten items.
+
+Results are sorted by filesystem `modified` timestamp. For wording such as “the latest video I exported”, AURA does **not** infer the creating application or prove that the file was exported. It reports the most recently modified matching video within the bounded personal-folder scan.
+
+V2 recognizes common extensions for each category. This is metadata classification only; the file body is never opened to determine type.
 
 ## Reveal in File Explorer
 
