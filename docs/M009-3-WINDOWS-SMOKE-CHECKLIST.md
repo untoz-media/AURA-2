@@ -56,6 +56,13 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Restore a known application by name.
 - [ ] Confirm the Computer workspace exposes contextual window controls only for a known app identity.
 - [ ] Confirm an unknown app name is rejected instead of guessed.
+- [ ] Search for a known file by exact name in a personal folder.
+- [ ] Search with a partial/multi-word filename and confirm ranking is sensible.
+- [ ] Confirm searches stay inside Desktop/Documents/Downloads/Pictures/Videos/Music.
+- [ ] Confirm symlinked directories are not traversed.
+- [ ] Confirm file contents are never read during filename search.
+- [ ] Confirm a bounded search reports when the 8,000-entry safety cap is reached.
+- [ ] Confirm Read = Never blocks File Intelligence.
 - [ ] Read clipboard text and confirm Sensitive permission is requested.
 - [ ] Copy text to the clipboard and confirm Modify permission is requested.
 - [ ] Clear the clipboard and confirm Destructive permission is requested.
