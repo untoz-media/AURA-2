@@ -3,6 +3,7 @@ pub mod app_skills;
 pub mod app_lifecycle;
 pub mod audio;
 pub mod clipboard;
+pub mod drop_intake;
 pub mod file_intelligence;
 pub mod keyboard;
 pub mod mouse;
