@@ -1,12 +1,12 @@
-use windows::{
-    core::Owned,
-    Win32::{
+use windows::Win32::{
         Foundation::{HANDLE, HGLOBAL},
         System::{
             DataExchange::{
                 CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
             },
-            Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE},
+            Memory::{
+                GlobalAlloc, GlobalFree, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
+            },
             Ole::CF_UNICODETEXT,
         },
     },
@@ -28,6 +28,38 @@ impl ClipboardGuard {
 impl Drop for ClipboardGuard {
     fn drop(&mut self) {
         let _ = unsafe { CloseClipboard() };
+    }
+}
+
+struct GlobalMemoryGuard {
+    handle: Option<HGLOBAL>,
+}
+
+impl GlobalMemoryGuard {
+    fn allocate(bytes: usize) -> Result<Self, String> {
+        let handle = unsafe { GlobalAlloc(GMEM_MOVEABLE, bytes) }
+            .map_err(|error| format!("Windows could not allocate clipboard memory: {error}"))?;
+        Ok(Self {
+            handle: Some(handle),
+        })
+    }
+
+    fn handle(&self) -> HGLOBAL {
+        self.handle.expect("global memory handle should exist")
+    }
+
+    fn transfer_to_windows(mut self) {
+        self.handle.take();
+    }
+}
+
+impl Drop for GlobalMemoryGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            unsafe {
+                let _ = GlobalFree(handle);
+            }
+        }
     }
 }
 
@@ -107,27 +139,24 @@ pub fn write_text(text: &str) -> Result<usize, String> {
         .map_err(|error| format!("Windows could not clear the clipboard before writing: {error}"))?;
 
     unsafe {
-        let global = Owned::new(
-            GlobalAlloc(
-                GMEM_MOVEABLE,
-                wide.len() * std::mem::size_of::<u16>(),
-            )
-            .map_err(|error| format!("Windows could not allocate clipboard memory: {error}"))?,
-        );
+        let global = GlobalMemoryGuard::allocate(
+            wide.len() * std::mem::size_of::<u16>(),
+        )?;
+        let handle = global.handle();
 
-        let ptr = GlobalLock(*global);
+        let ptr = GlobalLock(handle);
         if ptr.is_null() {
             return Err("Windows could not lock clipboard memory for writing.".to_string());
         }
 
         std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr as *mut u16, wide.len());
-        let _ = GlobalUnlock(*global);
+        let _ = GlobalUnlock(handle);
 
-        SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(global.0)))
+        SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(handle.0)))
             .map_err(|error| format!("Windows could not write clipboard text: {error}"))?;
 
-        // SetClipboardData transfers ownership of the allocation to Windows.
-        std::mem::forget(global);
+        // Windows owns the HGLOBAL after a successful SetClipboardData call.
+        global.transfer_to_windows();
     }
 
     Ok(character_count)
