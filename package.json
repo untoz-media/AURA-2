@@ -11,6 +11,8 @@
     "frontend:dev": "npm --workspace @untoz/aura-desktop run dev",
     "frontend:build": "npm --workspace @untoz/aura-desktop run build",
     "icons": "npm --workspace @untoz/aura-desktop run icons",
-    "release:check": "node scripts/check-release.mjs"
+    "release:check": "node scripts/check-release.mjs",
+    "beta:source-check": "node scripts/check-beta-source.mjs",
+    "beta:quality": "npm run release:check && npm run beta:source-check && npm run frontend:build"
   }
 }
