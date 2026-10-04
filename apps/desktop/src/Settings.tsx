@@ -28,6 +28,9 @@ import type {
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
   VoicePreferences,
+  BetaStatus,
+  DiagnosticsSnapshot,
+  SetBetaPreferencesRequest,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -42,6 +45,7 @@ type SettingsSection =
   | "voice"
   | "overlay"
   | "shortcuts"
+  | "beta"
   | "integrations";
 
 type Props = {
@@ -127,6 +131,14 @@ type Props = {
   onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
   onAudioTestStart: () => Promise<AudioInputSnapshot>;
   onAudioTestStop: () => Promise<AudioInputSnapshot>;
+  betaStatus: BetaStatus;
+  betaDiagnostics: DiagnosticsSnapshot | null;
+  onBetaRefresh: () => Promise<BetaStatus>;
+  onBetaPreferencesChange: (
+    request: SetBetaPreferencesRequest,
+  ) => Promise<BetaStatus>;
+  onBetaDiagnosticsRefresh: () => Promise<DiagnosticsSnapshot>;
+  onBetaDiagnosticsExport: () => Promise<string>;
 };
 
 const sections: Array<{
@@ -142,6 +154,7 @@ const sections: Array<{
   { id: "voice", label: "Voice", icon: "∿" },
   { id: "overlay", label: "Overlay", icon: "▱" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
+  { id: "beta", label: "Beta & Diagnostics", icon: "β" },
   { id: "integrations", label: "Integrations", icon: "⌁" },
 ];
 
@@ -295,6 +308,12 @@ export default function Settings({
   onAudioSelect,
   onAudioTestStart,
   onAudioTestStop,
+  betaStatus,
+  betaDiagnostics,
+  onBetaRefresh,
+  onBetaPreferencesChange,
+  onBetaDiagnosticsRefresh,
+  onBetaDiagnosticsExport,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -316,6 +335,8 @@ export default function Settings({
   const [wakePhraseDraft, setWakePhraseDraft] = useState(
     voicePreferences.wakePhrase,
   );
+  const [betaBusy, setBetaBusy] = useState<string | null>(null);
+  const [betaExportPath, setBetaExportPath] = useState<string | null>(null);
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -709,8 +730,18 @@ export default function Settings({
               />
               <SettingRow
                 title="Screen access"
-                description="Vision access will remain permission-based."
-                trailing={<Badge tone="planned">M007</Badge>}
+                description="Vision capture is permission-based and explicit. Read = Never blocks every Vision capture path."
+                trailing={<Badge tone="ready">Permission-gated</Badge>}
+              />
+              <SettingRow
+                title="Usage telemetry"
+                description="AURA-2 Beta does not upload product analytics or usage telemetry."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+              <SettingRow
+                title="Crash uploads"
+                description="Unexpected exits are detected locally. Crash reports are not uploaded automatically."
+                trailing={<Badge tone="ready">Off</Badge>}
               />
             </Surface>
           </>
