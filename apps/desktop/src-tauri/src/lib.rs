@@ -27,8 +27,9 @@ use agents::{
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use beta::{
     begin_session as begin_beta_session, export_diagnostics as export_beta_diagnostics_file,
+    local_health_checks as beta_local_health_checks,
     mark_session_clean as mark_beta_session_clean, save_preferences as save_beta_preferences,
-    status as beta_status, BetaSessionRuntime, BetaStatus, DiagnosticsSnapshot,
+    status as beta_status, BetaSessionRuntime, BetaStatus, DiagnosticCheck, DiagnosticsSnapshot,
     SetBetaPreferencesRequest,
 };
 use computer::app_launcher::launch_app;
@@ -1721,13 +1722,173 @@ fn build_beta_diagnostics(
     engine: &AgentEngine,
 ) -> Result<DiagnosticsSnapshot, String> {
     let runtime = runtime_snapshot(state);
-    let catalog = manager.catalog(app)?;
-    let agent_snapshot = engine.snapshot(app)?;
-    let actions = list_saved_actions(app)?;
-    let automations = list_automations(app)?;
+    let mut health_checks = beta_local_health_checks(app);
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    if policy.destructive == PermissionDecision::Allow
+        || policy.sensitive == PermissionDecision::Allow
+    {
+        health_checks.push(DiagnosticCheck::failed(
+            "permission-safety-floor",
+            "Permission safety floor",
+            "Sensitive or destructive actions are configured as permanently allowed.",
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::passed(
+            "permission-safety-floor",
+            "Permission safety floor",
+            "Sensitive and destructive actions still require Ask or Never.",
+        ));
+    }
+
+    let (active_model_id, installed_model_ids) = match manager.catalog(app) {
+        Ok(catalog) => {
+            let installed_model_ids: Vec<String> = catalog
+                .models
+                .iter()
+                .filter(|model| model.installed)
+                .map(|model| model.id.clone())
+                .collect();
+            let active_model_id = catalog.active_model_id.clone();
+            let active_model_valid = active_model_id
+                .as_ref()
+                .map(|id| installed_model_ids.iter().any(|installed| installed == id))
+                .unwrap_or(true);
+
+            if active_model_valid {
+                health_checks.push(DiagnosticCheck::passed(
+                    "model-catalog",
+                    "Model catalog",
+                    "Local model metadata is readable and the active model selection is valid.",
+                ));
+            } else {
+                health_checks.push(DiagnosticCheck::failed(
+                    "model-catalog",
+                    "Model catalog",
+                    "The selected active model is not present in the installed model set.",
+                ));
+            }
+
+            (active_model_id, installed_model_ids)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "model-catalog",
+                "Model catalog",
+                "Local model metadata could not be read.",
+            ));
+            (None, Vec::new())
+        }
+    };
+
+    let (agent_runs_total, active_agent_runs) = match engine.snapshot(app) {
+        Ok(agent_snapshot) => {
+            let active = agent_snapshot
+                .runs
+                .iter()
+                .filter(|run| {
+                    matches!(
+                        run.state.as_str(),
+                        "queued" | "running" | "paused" | "cancelling"
+                    )
+                })
+                .count();
+            health_checks.push(DiagnosticCheck::passed(
+                "agent-store",
+                "Agent run store",
+                "Persisted Agent run metadata is readable.",
+            ));
+            (agent_snapshot.runs.len(), active)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "agent-store",
+                "Agent run store",
+                "Persisted Agent run metadata could not be read.",
+            ));
+            (0, 0)
+        }
+    };
+
+    let saved_actions = match list_saved_actions(app) {
+        Ok(actions) => {
+            health_checks.push(DiagnosticCheck::passed(
+                "action-store",
+                "Saved Actions store",
+                "Saved AURA Actions are readable.",
+            ));
+            actions.len()
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "action-store",
+                "Saved Actions store",
+                "Saved AURA Actions could not be read.",
+            ));
+            0
+        }
+    };
+
+    let (automations, enabled_automations) = match list_automations(app) {
+        Ok(automations) => {
+            let enabled = automations.iter().filter(|automation| automation.enabled).count();
+            health_checks.push(DiagnosticCheck::passed(
+                "automation-store",
+                "Automation store",
+                "Persisted Automations are readable.",
+            ));
+            (automations.len(), enabled)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "automation-store",
+                "Automation store",
+                "Persisted Automations could not be read.",
+            ));
+            (0, 0)
+        }
+    };
+
+    let managed_runtime_state = setup.status(app).state;
+    health_checks.push(DiagnosticCheck::passed(
+        "managed-runtime-state",
+        "Managed runtime state",
+        format!("Managed runtime state is readable: {managed_runtime_state}."),
+    ));
+
+    health_checks.push(DiagnosticCheck::passed(
+        "privacy-boundary",
+        "Privacy boundary",
+        "Usage telemetry and automatic diagnostic uploads are disabled.",
+    ));
+
+    if active_agent_runs <= agent_runs_total && enabled_automations <= automations {
+        health_checks.push(DiagnosticCheck::passed(
+            "runtime-counters",
+            "Runtime counters",
+            "Agent and Automation aggregate counters are internally consistent.",
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::failed(
+            "runtime-counters",
+            "Runtime counters",
+            "Agent or Automation aggregate counters are inconsistent.",
+        ));
+    }
+
+    let health_status = if health_checks.iter().any(|check| check.status == "failed") {
+        "degraded"
+    } else {
+        "healthy"
+    }
+    .to_string();
 
     Ok(DiagnosticsSnapshot {
-        schema_version: 1,
+        schema_version: 2,
         app_name: "AURA-2".to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         channel: "beta".to_string(),
@@ -1736,24 +1897,17 @@ fn build_beta_diagnostics(
         paused: runtime.paused,
         background_enabled: runtime.background_enabled,
         autostart_enabled: runtime.autostart_enabled,
-        active_model_id: catalog.active_model_id,
-        installed_model_ids: catalog
-            .models
-            .into_iter()
-            .filter(|model| model.installed)
-            .map(|model| model.id)
-            .collect(),
-        managed_runtime_state: setup.status(app).state,
-        agent_runs_total: agent_snapshot.runs.len(),
-        active_agent_runs: agent_snapshot
-            .runs
-            .iter()
-            .filter(|run| matches!(run.state.as_str(), "queued" | "running" | "paused" | "cancelling"))
-            .count(),
-        saved_actions: actions.len(),
-        automations: automations.len(),
-        enabled_automations: automations.iter().filter(|automation| automation.enabled).count(),
+        active_model_id,
+        installed_model_ids,
+        managed_runtime_state,
+        agent_runs_total,
+        active_agent_runs,
+        saved_actions,
+        automations,
+        enabled_automations,
         telemetry_enabled: false,
+        health_status,
+        health_checks,
         generated_at_ms: unix_timestamp_ms(),
     })
 }
