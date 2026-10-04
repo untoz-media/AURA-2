@@ -8,7 +8,9 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M008 Agents & Automations complete · AURA-2 0.8.0-alpha.1 · pre-Beta
+The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, local diagnostics export, session recovery detection and a hardened per-user Windows installer pipeline.
+
+> **Current stage:** M009 Beta Candidate · AURA-2 0.9.0-beta.1 · Windows installer validation pending
 
 ---
 
