@@ -51,6 +51,7 @@ import type {
   VoiceCaptureEvent,
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
+  VoicePreferences,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -479,4 +480,19 @@ export async function testTtsVoice(text?: string): Promise<TtsRuntimeStatus> {
   return invoke<TtsRuntimeStatus>("test_tts_voice", {
     text: text ?? null,
   });
+}
+
+
+export async function getVoicePreferences(): Promise<VoicePreferences> {
+  return invoke<VoicePreferences>("get_voice_preferences");
+}
+
+export async function setVoicePreferences(
+  preferences: VoicePreferences,
+): Promise<VoicePreferences> {
+  return invoke<VoicePreferences>("set_voice_preferences", { preferences });
+}
+
+export async function stopTtsSpeaking(): Promise<TtsRuntimeStatus> {
+  return invoke<TtsRuntimeStatus>("stop_tts_speaking");
 }
