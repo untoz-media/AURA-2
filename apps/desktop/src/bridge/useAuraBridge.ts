@@ -1065,9 +1065,20 @@ export function useAuraBridge() {
   }, []);
 
   const exportBetaDiagnosticsControl = useCallback(async () => {
-    const path = await exportBetaDiagnostics();
-    setActivity(`Diagnostics exported locally: ${path}`);
-    return path;
+    try {
+      setBridgeError(null);
+      const path = await exportBetaDiagnostics();
+      setActivity(`Diagnostics exported locally: ${path}`);
+      return path;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.diagnostics_export_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
   }, []);
 
   const refreshObsRuntime = useCallback(async () => {
