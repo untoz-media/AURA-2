@@ -101,6 +101,14 @@ impl Default for TtsRuntime {
 }
 
 impl TtsRuntime {
+    pub fn is_speaking(&self) -> bool {
+        self.status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .state
+            == "speaking"
+    }
+
     pub fn status(&self, app: &AppHandle, manager: &ModelManager) -> TtsRuntimeStatus {
         let mut current = self
             .status
