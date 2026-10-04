@@ -3,6 +3,7 @@ import type {
   ManagedRuntimeStatus,
   ModelCatalog,
   ModelStatus,
+  PermissionDecision,
   VisionAnalysisPayload,
   VisionCapture,
   VisionEvent,
@@ -30,6 +31,7 @@ type Props = {
   history: VisionHistorySnapshot;
   capture: VisionCapture | null;
   event: VisionEvent | null;
+  readPermission: PermissionDecision;
   onModelOperation: (
     operation: ModelOperation,
     modelId: string,
@@ -83,6 +85,7 @@ export default function Vision({
   history,
   capture,
   event,
+  readPermission,
   onModelOperation,
   onCaptureScreen,
   onCaptureActiveWindow,
@@ -119,6 +122,8 @@ export default function Vision({
   useEffect(() => {
     if (runtime.lastAnalysis) setAnalysis(runtime.lastAnalysis);
   }, [runtime.lastAnalysis]);
+
+  const visionBlocked = readPermission === "never";
 
   const visionBusy =
     busy !== null ||
@@ -218,11 +223,25 @@ export default function Vision({
             history.
           </p>
         </div>
-        <div className={`vision-access-indicator ${screenAccessActive ? "active" : ""}`}>
+        <div
+          className={`vision-access-indicator ${screenAccessActive ? "active" : ""} ${visionBlocked ? "blocked" : ""}`}
+        >
           <span />
           <div>
-            <strong>{screenAccessActive ? "SCREEN ACCESS ACTIVE" : "SCREEN ACCESS IDLE"}</strong>
-            <small>{screenAccessActive ? event?.message : "Explicit capture only"}</small>
+            <strong>
+              {visionBlocked
+                ? "SCREEN ACCESS BLOCKED"
+                : screenAccessActive
+                  ? "SCREEN ACCESS ACTIVE"
+                  : "SCREEN ACCESS IDLE"}
+            </strong>
+            <small>
+              {visionBlocked
+                ? "Read permission is set to Never"
+                : screenAccessActive
+                  ? event?.message
+                  : `Read permission: ${readPermission}`}
+            </small>
           </div>
         </div>
       </header>
@@ -267,7 +286,7 @@ export default function Vision({
             <button
               className="feature-primary-button"
               type="button"
-              disabled={visionBusy}
+              disabled={visionBusy || visionBlocked}
               onClick={() => void runModel("download")}
             >
               Install Vision model
@@ -304,7 +323,7 @@ export default function Vision({
             <button
               className="feature-secondary-button"
               type="button"
-              disabled={visionBusy}
+              disabled={visionBusy || visionBlocked}
               onClick={() => void runModel("remove")}
             >
               Remove model
@@ -313,7 +332,7 @@ export default function Vision({
           <button
             className="feature-secondary-button"
             type="button"
-            disabled={visionBusy}
+            disabled={visionBusy || visionBlocked}
             onClick={() => void onRuntimeRefresh()}
           >
             Refresh
@@ -353,7 +372,7 @@ export default function Vision({
             <button
               type="button"
               className="feature-primary-button"
-              disabled={visionBusy}
+              disabled={visionBusy || visionBlocked}
               onClick={() => void captureNow("activeWindow")}
             >
               Capture active window
@@ -361,7 +380,7 @@ export default function Vision({
             <button
               type="button"
               className="feature-secondary-button"
-              disabled={visionBusy}
+              disabled={visionBusy || visionBlocked}
               onClick={() => void captureNow("screen")}
             >
               Capture full screen
@@ -405,7 +424,7 @@ export default function Vision({
             <button
               type="button"
               className="feature-secondary-button"
-              disabled={visionBusy}
+              disabled={visionBusy || visionBlocked}
               onClick={() => void captureNow("region")}
             >
               Capture coordinates
@@ -457,6 +476,7 @@ export default function Vision({
             className="feature-primary-button vision-analyze-button"
             disabled={
               visionBusy ||
+              visionBlocked ||
               !capture ||
               !prompt.trim() ||
               model?.state !== "installed" ||
