@@ -20,7 +20,8 @@ mod vision_runtime;
 use agents::{
     delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
     recover_interrupted_runs,
-    run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
+    run_saved_action, save_action, save_automation, saved_action_permission,
+    set_automation_enabled, AgentEngine,
     AgentPlan, AgentRun, AgentSnapshot, AgentStep, AuraAutomation, AutomationScheduler,
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
@@ -192,6 +193,130 @@ fn beta_self_test_check(
         required,
         message: message.into(),
     }
+}
+
+fn local_reference_matches(
+    reference: &str,
+    id: &str,
+    name: &str,
+    aliases: &[String],
+) -> bool {
+    reference == id
+        || reference.eq_ignore_ascii_case(name)
+        || aliases
+            .iter()
+            .any(|alias| reference.eq_ignore_ascii_case(alias))
+}
+
+fn validate_workflow_references(app: &tauri::AppHandle) -> Result<String, String> {
+    let routines = list_routines(app)
+        .map_err(|error| format!("Could not load Routines: {error}"))?;
+    validate_director_store(app)
+        .map_err(|error| format!("Could not load Director presets: {error}"))?;
+    let presets = load_director_presets(app);
+    let actions = list_saved_actions(app)
+        .map_err(|error| format!("Could not load Saved Actions: {error}"))?;
+    let automations = list_automations(app)
+        .map_err(|error| format!("Could not load Automations: {error}"))?;
+
+    for routine in &routines {
+        for step in &routine.steps {
+            if let RoutineStep::DirectorPreset { preset: reference } = step {
+                let exists = presets.iter().any(|preset| {
+                    local_reference_matches(
+                        reference,
+                        &preset.id,
+                        &preset.name,
+                        &preset.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Routine “{}” references missing Director preset “{}”.",
+                        routine.name, reference
+                    ));
+                }
+            }
+        }
+    }
+
+    for action in &actions {
+        match &action.step {
+            AgentStep::RunRoutine { routine: reference } => {
+                let exists = routines.iter().any(|routine| {
+                    local_reference_matches(
+                        reference,
+                        &routine.id,
+                        &routine.name,
+                        &routine.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Saved Action “{}” references missing Routine “{}”.",
+                        action.name, reference
+                    ));
+                }
+            }
+            AgentStep::DirectorPreset { preset: reference } => {
+                let exists = presets.iter().any(|preset| {
+                    local_reference_matches(
+                        reference,
+                        &preset.id,
+                        &preset.name,
+                        &preset.aliases,
+                    )
+                });
+                if !exists {
+                    return Err(format!(
+                        "Saved Action “{}” references missing Director preset “{}”.",
+                        action.name, reference
+                    ));
+                }
+            }
+            AgentStep::SavedAction { .. } => {
+                return Err(format!(
+                    "Saved Action “{}” recursively references another Saved Action.",
+                    action.name
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    for automation in &automations {
+        if !actions
+            .iter()
+            .any(|action| action.id == automation.action_id)
+        {
+            return Err(format!(
+                "Automation “{}” references missing Saved Action “{}”.",
+                automation.name, automation.action_id
+            ));
+        }
+
+        let permission = saved_action_permission(app, &automation.action_id)
+            .map_err(|error| {
+                format!(
+                    "Automation “{}” could not validate its Saved Action: {error}",
+                    automation.name
+                )
+            })?;
+        if !matches!(permission, PermissionClass::Read | PermissionClass::Act) {
+            return Err(format!(
+                "Automation “{}” references an Action that is no longer background-safe ({permission:?}).",
+                automation.name
+            ));
+        }
+    }
+
+    Ok(format!(
+        "Workflow references are valid ({} routines, {} presets, {} actions, {} automations).",
+        routines.len(),
+        presets.len(),
+        actions.len(),
+        automations.len()
+    ))
 }
 
 fn finish_beta_self_test(checks: Vec<BetaSelfTestCheck>) -> BetaSelfTestReport {
@@ -2196,6 +2321,23 @@ fn run_beta_self_test(
         Err(error) => beta_self_test_check(
             "directorPresetsStore",
             "Director presets store",
+            "fail",
+            true,
+            error,
+        ),
+    });
+
+    checks.push(match validate_workflow_references(&app) {
+        Ok(message) => beta_self_test_check(
+            "workflowReferences",
+            "Workflow references",
+            "pass",
+            true,
+            message,
+        ),
+        Err(error) => beta_self_test_check(
+            "workflowReferences",
+            "Workflow references",
             "fail",
             true,
             error,
