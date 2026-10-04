@@ -933,7 +933,7 @@ fn process_voice_capture(
     });
 }
 
-fn start_conversation_follow_up(app: tauri::AppHandle) {
+fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     thread::spawn(move || {
         let preferences = app
             .state::<RuntimeState>()
@@ -942,7 +942,7 @@ fn start_conversation_follow_up(app: tauri::AppHandle) {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
 
-        if !preferences.conversation_mode {
+        if !force && !preferences.conversation_mode {
             return;
         }
 
@@ -1069,6 +1069,17 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
 
+            let voice_busy = !state
+                .voice_command_ids
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_empty();
+
+            if voice_busy {
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
             if !preferences.wake_word_enabled || runtime_snapshot(&state).paused {
                 thread::sleep(Duration::from_millis(750));
                 continue;
@@ -1141,7 +1152,7 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
             );
 
             if command.is_empty() {
-                start_conversation_follow_up(app.clone());
+                start_conversation_follow_up(app.clone(), true);
             } else {
                 let state = app.state::<RuntimeState>();
                 let _ = process_user_command(
@@ -1201,7 +1212,7 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
             }
 
             if preferences.conversation_mode {
-                start_conversation_follow_up(app_for_tts.clone());
+                start_conversation_follow_up(app_for_tts.clone(), false);
             }
         });
     }
