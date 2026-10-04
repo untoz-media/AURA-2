@@ -30,6 +30,11 @@ Use this checklist on a clean or representative Windows x64 machine before the P
 - [ ] optional Start with Windows setting persists
 - [ ] Global Pause blocks new actions
 - [ ] Global Pause remains enabled after quitting and reopening AURA
+- [ ] While paused, Vision capture/analysis is rejected
+- [ ] While paused, Routine and Director preset execution is rejected
+- [ ] While paused, OBS scene/source/audio changes are rejected
+- [ ] While paused, Start Streaming / Start Recording / Resume Recording are rejected
+- [ ] While paused, Stop Streaming / Stop Recording / Pause Recording remain available
 - [ ] Startup Automations do not fire while persisted Global Pause is enabled
 - [ ] resuming AURA restores normal execution
 
