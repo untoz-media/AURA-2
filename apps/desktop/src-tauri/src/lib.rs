@@ -35,6 +35,7 @@ use beta::{
 };
 use computer::app_launcher::launch_app;
 use computer::app_lifecycle::close_app;
+use computer::app_skills::execute_browser_skill;
 use computer::audio::{execute_media_action, MediaAction};
 use computer::clipboard::{
     clear as clear_clipboard, read_text as read_clipboard_text,
@@ -42,12 +43,13 @@ use computer::clipboard::{
 };
 use computer::file_intelligence::{
     recent_personal_files, reveal_personal_path, search_personal_files,
-    summarize_file_search, summarize_recent_files,
+    summarize_file_search, summarize_recent_files as summarize_recent_file_search,
 };
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::recent_files::{
-    default_recent_files_snapshot, recent_files_snapshot, summarize_recent_files, RecentFilesSnapshot,
+    default_recent_files_snapshot, recent_files_snapshot,
+    summarize_recent_files as summarize_windows_recent_files, RecentFilesSnapshot,
 };
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{
@@ -3447,7 +3449,7 @@ fn process_user_command(
                             }
                         }
                         ActionIntent::RecentFiles => {
-                            match summarize_recent_files(8) {
+                            match summarize_windows_recent_files(8) {
                                 Ok(summary) => {
                                     emit_core_event(
                                         &worker_app,
@@ -3482,6 +3484,55 @@ fn process_user_command(
                                         CoreError {
                                             id: Some(worker_id),
                                             code: "context.recent_files_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::BrowserSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_browser_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Browser skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.browser_skill_failed",
                                             message,
                                         },
                                     );
@@ -3561,7 +3612,7 @@ fn process_user_command(
                                         id: worker_id,
                                         kind: "command.completed",
                                         status: AuraRuntimeStatus::Idle,
-                                        message: summarize_recent_files(&snapshot, &request),
+                                        message: summarize_recent_file_search(&snapshot, &request),
                                         command: Some(worker_text),
                                         timestamp_ms: unix_timestamp_ms(),
                                     },
@@ -3646,19 +3697,6 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::RevealPersonalPath(_) => {
-                        "Showing a personal file or folder in File Explorer requires confirmation under the current Act policy."
-                            .to_string()
-                    }
-                    ActionIntent::FindRecentPersonalFiles(request) => format!(
-                        "Reading filesystem metadata to find recent {} in {} requires confirmation under the current Read policy.",
-                        request.category.display_name(),
-                        request.root.display_name()
-                    ),
-                    ActionIntent::FindPersonalFiles(query) => format!(
-                        "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
-                        query
-                    ),
                     ActionIntent::ClipboardRead => {
                             emit_core_event(
                                 &worker_app,
@@ -4768,6 +4806,23 @@ fn process_user_command(
                         "Reading Windows Recent Items requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::RevealPersonalPath(_) => {
+                        "Showing a personal file or folder in File Explorer requires confirmation under the current Act policy."
+                            .to_string()
+                    }
+                    ActionIntent::FindRecentPersonalFiles(request) => format!(
+                        "Reading filesystem metadata to find recent {} in {} requires confirmation under the current Read policy.",
+                        request.category.display_name(),
+                        request.root.display_name()
+                    ),
+                    ActionIntent::FindPersonalFiles(query) => format!(
+                        "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
+                        query
+                    ),
+                    ActionIntent::BrowserSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
+                    ),
                     ActionIntent::ClipboardRead => {
                         "The clipboard can contain passwords, tokens or private text. Confirm before AURA reads it."
                             .to_string()
@@ -4954,6 +5009,19 @@ fn process_user_command(
                 );
             }
             }
+        }
+        RouteResult::InvalidAppSkill(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!("App Skill rejected: {}", message),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
         }
         RouteResult::InvalidKeyboard(message) => {
             emit_core_event(
