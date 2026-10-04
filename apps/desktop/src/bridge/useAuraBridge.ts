@@ -200,6 +200,7 @@ const DEFAULT_VOICE_PREFERENCES: VoicePreferences = {
   conversationTimeoutSeconds: 8,
   wakeWordEnabled: false,
   wakePhrase: "AURA",
+  ttsVoiceId: "voice-piper-ptpt",
 };
 
 const DEFAULT_MODEL_CATALOG: ModelCatalog = {
