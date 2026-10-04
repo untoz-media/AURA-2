@@ -118,6 +118,21 @@ requireFragments("apps/desktop/src-tauri/src/routines.rs", [
   "resolve_routine_command_checked",
   "resolve_director_preset_command_checked",
   "does not exist. Fix the Routine before saving it.",
+  "preset: resolved.id",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/agents.rs", [
+  "routine: resolved.id",
+  "preset: resolved.id",
+  "This AURA Action is used by an Automation",
+  "Automation cannot be enabled because its Saved Action is no longer background-safe",
+]);
+
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  '"workflowReferences"',
+  "validate_workflow_references(&app)",
+  "This Routine is still referenced by a Saved AURA Action",
+  "This Director Mode preset is still referenced by a Routine",
 ]);
 
 requireFragments("apps/desktop/src-tauri/src/lib.rs", [
