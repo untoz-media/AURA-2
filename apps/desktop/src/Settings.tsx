@@ -733,8 +733,8 @@ export default function Settings({
               <SectionLabel>About</SectionLabel>
               <SettingRow
                 title={appStatus?.name ?? "AURA-2"}
-                description={appStatus?.stage ?? "Desktop Foundation"}
-                trailing={<Badge>{appStatus?.version ?? "0.2.0"}</Badge>}
+                description={appStatus?.stage ?? "M009 Public Beta candidate"}
+                trailing={<Badge>{appStatus?.version ?? "0.9.0-beta.1"}</Badge>}
               />
               <SettingRow
                 title="Execution model"
@@ -1138,8 +1138,8 @@ export default function Settings({
               />
               <SettingRow
                 title="Model Router"
-                description="Deterministic computer actions stay direct; AI reasoning will only be used when it is actually needed."
-                trailing={<Badge tone="planned">Planned</Badge>}
+                description="Deterministic commands stay direct; free-form requests fall back to the selected verified local assistant model."
+                trailing={<Badge tone="ready">Active</Badge>}
               />
             </Surface>
           </>
