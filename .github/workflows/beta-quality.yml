@@ -1,0 +1,45 @@
+name: Beta Quality
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/src/**"
+      - "apps/desktop/src-tauri/src/**"
+      - "apps/desktop/package.json"
+      - "package.json"
+      - "scripts/**"
+      - ".github/workflows/beta-quality.yml"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "aura-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Source and frontend quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Beta quality gates
+        run: npm run beta:quality
