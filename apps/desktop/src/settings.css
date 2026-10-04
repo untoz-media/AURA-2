@@ -1550,3 +1550,117 @@
     grid-template-columns: 1fr;
   }
 }
+
+.diagnostics-self-test-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 0 13px;
+}
+
+.diagnostics-self-test-heading > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnostics-self-test-heading strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+}
+
+.diagnostics-self-test-heading p {
+  max-width: 690px;
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.diagnostics-self-test-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.diagnostics-self-test-summary span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 9px;
+  color: var(--aura-text-4);
+  background: var(--aura-surface-1);
+  font-size: var(--text-2xs);
+}
+
+.diagnostics-self-test-summary strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+}
+
+.diagnostics-self-test-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  overflow: hidden;
+}
+
+.diagnostics-check {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--aura-border-1);
+  background: var(--aura-surface-1);
+}
+
+.diagnostics-check:last-child {
+  border-bottom: 0;
+}
+
+.diagnostics-check > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.diagnostics-check strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.diagnostics-check span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.diagnostics-self-test-error {
+  margin: 10px 0 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 112, 112, 0.24);
+  border-radius: 9px;
+  color: #ff9f9f;
+  background: rgba(255, 112, 112, 0.07);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 760px) {
+  .diagnostics-self-test-heading {
+    flex-direction: column;
+  }
+
+  .diagnostics-check {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
