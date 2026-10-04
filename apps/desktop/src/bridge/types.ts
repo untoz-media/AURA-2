@@ -816,3 +816,40 @@ export type AutomationEvent = {
   message: string;
   timestampMs: number;
 };
+
+
+export type BetaStatus = {
+  channel: "beta" | string;
+  onboardingComplete: boolean;
+  previousSessionUnclean: boolean;
+  telemetryEnabled: boolean;
+  automaticCrashUploads: boolean;
+  localDiagnosticsOnly: boolean;
+  refreshedAtMs: number;
+};
+
+export type SetBetaPreferencesRequest = {
+  onboardingComplete: boolean;
+};
+
+export type DiagnosticsSnapshot = {
+  schemaVersion: number;
+  appName: string;
+  appVersion: string;
+  channel: string;
+  platform: string;
+  architecture: string;
+  paused: boolean;
+  backgroundEnabled: boolean;
+  autostartEnabled: boolean;
+  activeModelId?: string | null;
+  installedModelIds: string[];
+  managedRuntimeState: string;
+  agentRunsTotal: number;
+  activeAgentRuns: number;
+  savedActions: number;
+  automations: number;
+  enabledAutomations: number;
+  telemetryEnabled: boolean;
+  generatedAtMs: number;
+};
