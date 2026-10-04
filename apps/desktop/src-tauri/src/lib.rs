@@ -334,15 +334,17 @@ impl VoicePreferences {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct DesktopPreferences {
     background_enabled: bool,
+    paused: bool,
 }
 
 impl Default for DesktopPreferences {
     fn default() -> Self {
         Self {
             background_enabled: true,
+            paused: false,
         }
     }
 }
@@ -935,6 +937,18 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     app.state::<AgentEngine>().set_global_paused(app, paused);
     app.state::<AutomationScheduler>().set_paused(paused);
 
+    let background_enabled = *state
+        .background_enabled
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _ = save_preferences(
+        app,
+        &DesktopPreferences {
+            background_enabled,
+            paused,
+        },
+    );
+
     emit_runtime_state(app)
 }
 
@@ -946,6 +960,11 @@ fn set_background_state(
         app,
         &DesktopPreferences {
             background_enabled,
+            paused: *app
+                .state::<RuntimeState>()
+                .paused
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
         },
     )?;
 
@@ -6208,6 +6227,11 @@ pub fn run() {
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 *background_enabled = preferences.background_enabled;
 
+                *runtime
+                    .paused
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = preferences.paused;
+
                 let registered = app.autolaunch().is_enabled().unwrap_or(false);
                 let mut autostart_enabled = runtime
                     .autostart_enabled
@@ -6229,9 +6253,12 @@ pub fn run() {
             }
 
             let _ = recover_interrupted_runs(app.handle());
+            app.state::<AgentEngine>()
+                .set_global_paused(app.handle(), preferences.paused);
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
-            app.state::<AutomationScheduler>().set_paused(false);
+            app.state::<AutomationScheduler>()
+                .set_paused(preferences.paused);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
 
@@ -6266,7 +6293,14 @@ pub fn run() {
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
-                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, false, None::<&str>)?;
+                CheckMenuItem::with_id(
+                    app,
+                    "pause",
+                    "Pause AURA",
+                    true,
+                    preferences.paused,
+                    None::<&str>,
+                )?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item =
