@@ -61,8 +61,16 @@ Open Agents, describe a bounded goal, review the proposed steps and approve only
 
 ## 10. Diagnostics
 
-If something goes wrong:
+AURA runs a lightweight local health report on startup. You can inspect it at:
+
+Settings → Beta & Diagnostics
+
+A healthy Beta should show the local subsystem checks as Passed. If Chat shows a degraded-health warning, open the report before relying on the affected subsystem.
+
+For a support snapshot:
 
 Settings → Beta & Diagnostics → Refresh → Export JSON
 
 Nothing is uploaded automatically.
+
+If AURA detects that the previous session ended unexpectedly, it starts paused in Recovery Safe Mode. Review the recovery/health state and explicitly choose Resume AURA when you are ready.
