@@ -3927,6 +3927,24 @@ pub fn run() {
                                                 match speech.transcribe(&app_for_speech, &manager, capture) {
                                                     Ok(result) => {
                                                         let transcript = result.text.trim().to_string();
+
+                                                        if result.duration_ms < 250 || result.input_rms < 0.003 {
+                                                            emit_voice_capture_event(
+                                                                &app_for_speech,
+                                                                VoiceCaptureEvent {
+                                                                    phase: "error",
+                                                                    shortcut: "Ctrl+Shift+F8",
+                                                                    sample_count: result.input_samples_16khz,
+                                                                    duration_ms: result.duration_ms,
+                                                                    sample_rate: Some(16_000),
+                                                                    channels: Some(1),
+                                                                    message: "Voice capture was too short or too quiet to execute safely.".to_string(),
+                                                                    text: Some(transcript),
+                                                                    timestamp_ms: unix_timestamp_ms(),
+                                                                },
+                                                            );
+                                                            return;
+                                                        }
                                                         emit_voice_capture_event(
                                                             &app_for_speech,
                                                             VoiceCaptureEvent {
