@@ -429,6 +429,29 @@ function App() {
             </div>
           )}
 
+        {betaDiagnostics?.healthStatus === "degraded" && view === "chat" && (
+          <div className="beta-recovery-banner beta-health-alert" role="alert">
+            <div className="beta-recovery-copy">
+              <span className="beta-recovery-kicker">BETA HEALTH CHECK</span>
+              <strong>A local AURA subsystem needs attention</strong>
+              <span>
+                The automatic startup health check found at least one failed
+                local check. Nothing was uploaded and unaffected features can
+                continue to work.
+              </span>
+            </div>
+            <div className="beta-recovery-actions">
+              <button
+                type="button"
+                className="feature-primary-button"
+                onClick={() => openSettings("beta")}
+              >
+                Review health report
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className={`workspace-content ${view === "chat" ? "chat-workspace" : ""}`}>
           {view === "chat" && (
             <section className="chat-view">
