@@ -580,7 +580,15 @@ export default function Agents({
                   <button
                     type="button"
                     className="feature-secondary-button"
-                    onClick={() => void onActionRun(action.id)}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Run saved AURA Action “${action.name}” now?`,
+                        )
+                      ) {
+                        void onActionRun(action.id);
+                      }
+                    }}
                   >
                     Run
                   </button>
