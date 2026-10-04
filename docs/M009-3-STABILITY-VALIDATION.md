@@ -72,6 +72,13 @@ The latest re-check on the expanded Beta candidate reproduced the same infrastru
 
 This confirms that the newer Create, Clipboard and File Intelligence code was not executed by those failed hosted jobs.
 
+A further re-check after File Intelligence V2 and App Skills V1 produced the same signature:
+
+- Static Checks run `37238848202`: empty runner name, `steps: []`, failed in ~2 seconds
+- Windows Build run `37238848232`: empty runner name, `steps: []`, failed in ~2 seconds
+
+Those runs did not execute the new File Intelligence V2 or App Skills code either.
+
 This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
 
 Before retrying, check the Untoz organization:
