@@ -1139,14 +1139,17 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
-            let spoken = if preferences.auto_speak {
-                tts.speak(&app_for_tts, &manager, &text, preferences.tts_speed)
-                    .is_ok()
-            } else {
-                true
-            };
+            if preferences.auto_speak {
+                let _ = tts.speak(
+                    &app_for_tts,
+                    &manager,
+                    &text,
+                    preferences.tts_speed,
+                    &preferences.tts_voice_id,
+                );
+            }
 
-            if spoken && preferences.conversation_mode {
+            if preferences.conversation_mode {
                 start_conversation_follow_up(app_for_tts.clone());
             }
         });
