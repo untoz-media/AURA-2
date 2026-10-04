@@ -130,6 +130,7 @@ See `docs/BETA-KNOWN-ISSUES.md` for the current blocker list.
 This candidate must not be tagged/published until:
 
 - M009.3 stability gate is marked complete
+- `package-lock.json` is generated and committed for reproducible npm installs
 - Beta Quality executes successfully
 - Windows Rust/Core tests execute successfully
 - Windows NSIS installer is produced
