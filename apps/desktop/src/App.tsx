@@ -723,6 +723,9 @@ function App() {
               onAudioSelect={selectAudioInput}
               onAudioTestStart={startAudioTest}
               onAudioTestStop={stopAudioTest}
+              visionRuntime={visionRuntime}
+              agentRuns={agentRuns}
+              automations={automations}
             />
           )}
         </div>
