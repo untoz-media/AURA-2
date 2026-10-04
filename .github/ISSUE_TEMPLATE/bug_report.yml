@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for testing AURA-2. Please do not include passwords, private prompts, personal files, screenshots containing sensitive data, OBS credentials, access tokens or other secrets.
 
-        If possible, open **Settings → Diagnostics → Copy diagnostics** and paste that privacy-safe report below.
+        If possible, open **Settings → Diagnostics**, run **Core self-test**, then choose **Copy diagnostics** and paste that privacy-safe report below.
 
   - type: input
     id: version
