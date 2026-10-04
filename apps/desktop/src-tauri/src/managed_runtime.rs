@@ -34,6 +34,7 @@ const RUNTIME_PACKAGES: &[&str] = &[
     "accelerate>=1.0",
     "bitsandbytes>=0.45",
     "safetensors>=0.4",
+    "Pillow>=11.0",
 ];
 
 #[derive(Clone, Debug, Serialize)]
