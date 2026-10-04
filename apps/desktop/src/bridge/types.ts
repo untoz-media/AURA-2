@@ -23,6 +23,7 @@ export type CommandRequest = {
   text: string;
   source: "desktop" | "overlay" | "voice";
   approvalId?: string;
+  dropIds?: string[];
 };
 
 export type PendingConfirmation = {
