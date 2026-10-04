@@ -63,6 +63,20 @@ requireFragments("apps/desktop/src-tauri/src/agents.rs", [
   "Background automations cannot run a sensitive Director preset.",
 ]);
 
+requireFragments("apps/desktop/src/Settings.tsx", [
+  "export type SettingsSection =",
+  '| "diagnostics";',
+  "AURA-2 Beta Diagnostics",
+  "Copy privacy-safe diagnostics",
+  "Telemetry: automatic product telemetry off",
+]);
+
+requireFragments("apps/desktop/src/App.tsx", [
+  "visionRuntime={visionRuntime}",
+  "agentRuns={agentRuns}",
+  "automations={automations}",
+]);
+
 const agents = fs.readFileSync("apps/desktop/src-tauri/src/agents.rs", "utf8");
 if (/\#\[test\]\s*\n\s*\#\[test\]/.test(agents)) {
   failures.push("apps/desktop/src-tauri/src/agents.rs: duplicate #[test] attribute");
