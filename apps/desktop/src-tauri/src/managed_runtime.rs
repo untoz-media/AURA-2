@@ -35,6 +35,7 @@ const RUNTIME_PACKAGES: &[&str] = &[
     "bitsandbytes>=0.45",
     "safetensors>=0.4",
     "Pillow>=11.0",
+    "diffusers>=0.35",
 ];
 
 #[derive(Clone, Debug, Serialize)]
@@ -332,7 +333,7 @@ impl ManagedRuntimeSetup {
                 app,
                 "installingPackages",
                 76.0,
-                "Installing Transformers, Accelerate and quantization dependencies…",
+                "Installing Transformers, Diffusers, Accelerate and local AI dependencies…",
             );
 
             let mut args = vec![
@@ -355,7 +356,7 @@ impl ManagedRuntimeSetup {
 
             let verification = verify_python_runtime(&python_exe)?;
             let marker = RuntimeMarker {
-                runtime_version: 2,
+                runtime_version: 3,
                 python_version: verification.python.clone(),
                 torch_version: verification.torch.clone(),
                 transformers_version: verification.transformers.clone(),
@@ -549,14 +550,14 @@ fn inspect_runtime(app: &AppHandle) -> Result<ManagedRuntimeStatus, String> {
     let marker: RuntimeMarker = serde_json::from_str(&content)
         .map_err(|error| format!("Managed runtime marker is invalid: {error}"))?;
 
-    if marker.runtime_version != 2 {
+    if marker.runtime_version != 3 {
         return Ok(ManagedRuntimeStatus {
             state: "needsRepair".to_string(),
             progress_percent: 0.0,
-            message: "Managed runtime needs a one-time Vision dependency upgrade.".to_string(),
+            message: "Managed runtime needs a one-time AURA Create dependency upgrade.".to_string(),
             python_path: Some(python.to_string_lossy().to_string()),
             last_error: Some(
-                "Use Repair runtime to upgrade the managed environment for AURA Vision."
+                "Use Repair runtime to upgrade the managed environment with the local image-generation stack."
                     .to_string(),
             ),
             ..ManagedRuntimeStatus::default()
@@ -713,7 +714,7 @@ fn run_python(python: &Path, args: &[&str]) -> Result<String, String> {
 
 #[cfg(windows)]
 fn verify_python_runtime(python: &Path) -> Result<VerificationPayload, String> {
-    let script = r#"import json, sys, torch, transformers, accelerate, bitsandbytes, PIL
+    let script = r#"import json, sys, torch, transformers, diffusers, accelerate, bitsandbytes, PIL
 payload = {
     "python": sys.version.split()[0],
     "torch": torch.__version__,
@@ -903,6 +904,9 @@ mod tests {
         assert!(RUNTIME_PACKAGES
             .iter()
             .any(|value| value.starts_with("Pillow")));
+        assert!(RUNTIME_PACKAGES
+            .iter()
+            .any(|value| value.starts_with("diffusers")));
     }
 
     #[test]
