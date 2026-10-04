@@ -1425,3 +1425,128 @@
     width: 100%;
   }
 }
+
+.diagnostics-hero-card {
+  overflow: hidden;
+}
+
+.diagnostics-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px 0 14px;
+}
+
+.diagnostics-hero > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diagnostics-hero strong {
+  color: var(--aura-text-1);
+  font-size: 1.05rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.diagnostics-hero p {
+  max-width: 690px;
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.diagnostics-item {
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 11px;
+  background: var(--aura-surface-1);
+}
+
+.diagnostics-item > span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.diagnostics-item > strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+}
+
+.diagnostics-item > small {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.diagnostics-report-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 0 13px;
+}
+
+.diagnostics-report-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnostics-report-card strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-sm);
+}
+
+.diagnostics-report-card p {
+  max-width: 650px;
+  margin: 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.diagnostics-preview {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  color: var(--aura-text-3);
+  background: var(--aura-bg-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-2xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .diagnostics-hero,
+  .diagnostics-report-card {
+    flex-direction: column;
+  }
+
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+}
