@@ -762,6 +762,40 @@ pub fn save_action(
     }
     validate_action_step(app, &request.step)?;
 
+    let normalized_step = match &request.step {
+        AgentStep::RunRoutine { routine } => {
+            let routines = list_routines(app)
+                .map_err(|error| format!("Could not load Routines: {error}"))?;
+            let resolved = routines
+                .into_iter()
+                .find(|item| {
+                    item.id == routine.as_str()
+                        || item.name.eq_ignore_ascii_case(routine)
+                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+                })
+                .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
+            AgentStep::RunRoutine {
+                routine: resolved.id,
+            }
+        }
+        AgentStep::DirectorPreset { preset } => {
+            validate_director_store(app)
+                .map_err(|error| format!("Could not load Director presets: {error}"))?;
+            let resolved = find_director_preset_by_id(app, preset)
+                .or_else(|| {
+                    load_director_presets(app).into_iter().find(|item| {
+                        item.name.eq_ignore_ascii_case(preset)
+                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
+                    })
+                })
+                .ok_or_else(|| format!("Director preset “{preset}” was not found."))?;
+            AgentStep::DirectorPreset {
+                preset: resolved.id,
+            }
+        }
+        other => other.clone(),
+    };
+
     let aliases = sanitize_aliases(&request.aliases, &name, 12)?;
     let requested_id = request.id.as_deref();
 
@@ -792,7 +826,7 @@ pub fn save_action(
         name,
         description,
         aliases,
-        step: request.step,
+        step: normalized_step,
         updated_at_ms: timestamp_ms(),
     };
 
