@@ -36,6 +36,21 @@ const PIPER_PTPT_FILES: &[&str] = &[
     "pt/pt_PT/tugão/medium/MODEL_CARD",
 ];
 
+const SMOLVLM2_500M_FILES: &[&str] = &[
+    "added_tokens.json",
+    "chat_template.json",
+    "config.json",
+    "generation_config.json",
+    "merges.txt",
+    "model.safetensors",
+    "preprocessor_config.json",
+    "processor_config.json",
+    "special_tokens_map.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+];
+
 const WHISPER_BASE_FILES: &[&str] = &[
     "added_tokens.json",
     "config.json",
@@ -159,6 +174,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             license: Some("MIT voice model · Piper runtime GPL-3.0"),
             estimated_size_bytes: Some(63_300_000),
             files: PIPER_ENGB_FILES,
+            availability_message: None,
+        },
+        ModelDefinition {
+            id: "vision-smolvlm2-500m",
+            name: "AURA Vision",
+            subtitle: "SmolVLM2 500M · Local · Image Understanding",
+            description: "Local screenshot and UI understanding backed by HuggingFaceTB/SmolVLM2-500M-Video-Instruct.",
+            generation: "Vision",
+            role: "vision",
+            selectable: false,
+            source_repo: Some("HuggingFaceTB/SmolVLM2-500M-Video-Instruct"),
+            source_revision: Some("main"),
+            license: Some("Apache-2.0"),
+            estimated_size_bytes: Some(2_040_000_000),
+            files: SMOLVLM2_500M_FILES,
             availability_message: None,
         },
     ]
