@@ -564,6 +564,7 @@ function App() {
               history={visionHistory}
               capture={visionCapture}
               event={visionEvent}
+              readPermission={permissionPolicy.read}
               onModelOperation={runModelOperation}
               onCaptureScreen={captureVisionScreenControl}
               onCaptureActiveWindow={captureVisionActiveWindowControl}
