@@ -62,6 +62,10 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Confirm symlinked directories are not traversed.
 - [ ] Confirm file contents are never read during filename search.
 - [ ] Confirm a bounded search reports when the 8,000-entry safety cap is reached.
+- [ ] Ask for the latest video and confirm results are sorted by filesystem modified time.
+- [ ] Ask for recent images/documents and confirm extension filtering is correct.
+- [ ] Ask for the latest download and confirm the search is scoped to Downloads.
+- [ ] Ask for “latest video I exported” and confirm AURA describes it as most recently modified rather than claiming the source application.
 - [ ] Confirm Read = Never blocks File Intelligence.
 - [ ] Reveal a returned file in File Explorer and confirm the file is selected but not executed.
 - [ ] Attempt to reveal an existing path outside the allowed personal roots and confirm AURA rejects it.
