@@ -1040,6 +1040,16 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
             }
 
             thread::sleep(Duration::from_millis(2200));
+
+            if app
+                .state::<RuntimeState>()
+                .wake_monitor_generation
+                .load(Ordering::Relaxed)
+                != generation
+            {
+                break;
+            }
+
             let _ = audio.stop_push_to_talk();
 
             let Some(capture) = audio.take_last_capture() else {
@@ -4435,6 +4445,15 @@ pub fn run() {
 
                         match event.state() {
                             ShortcutState::Pressed => {
+                                runtime
+                                    .wake_monitor_generation
+                                    .fetch_add(1, Ordering::Relaxed);
+
+                                if audio.capture_active() {
+                                    let _ = audio.stop_push_to_talk();
+                                    let _ = audio.take_last_capture();
+                                }
+
                                 match audio.start_push_to_talk() {
                                     Ok(snapshot) => emit_voice_capture_event(
                                         app,
@@ -4632,6 +4651,18 @@ pub fn run() {
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     ),
+                                }
+
+                                let preferences = runtime
+                                    .voice_preferences
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                    .clone();
+                                if preferences.wake_word_enabled {
+                                    let generation = runtime
+                                        .wake_monitor_generation
+                                        .load(Ordering::Relaxed);
+                                    spawn_wake_monitor(app.clone(), generation);
                                 }
                             }
                         }
