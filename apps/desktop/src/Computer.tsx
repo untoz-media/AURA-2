@@ -30,6 +30,40 @@ export default function Computer({
   const [clipboardDraft, setClipboardDraft] = useState("");
   const [fileSearchDraft, setFileSearchDraft] = useState("");
 
+  const browserSkillTarget =
+    currentApp?.appName === "Brave" || currentApp?.appName === "Google Chrome"
+      ? currentApp.appName
+      : null;
+
+  const browserSkills = browserSkillTarget
+    ? [
+        {
+          label: "New tab",
+          command: `New tab in ${browserSkillTarget}`,
+        },
+        {
+          label: "Next tab",
+          command: `Next tab in ${browserSkillTarget}`,
+        },
+        {
+          label: "Previous tab",
+          command: `Previous tab in ${browserSkillTarget}`,
+        },
+        {
+          label: "Reload",
+          command: `Reload ${browserSkillTarget}`,
+        },
+        {
+          label: "Address bar",
+          command: `Focus address bar in ${browserSkillTarget}`,
+        },
+        {
+          label: "Reopen tab",
+          command: `Reopen closed tab in ${browserSkillTarget}`,
+        },
+      ]
+    : [];
+
   const contextualWindowActions = currentApp?.knownApp
     ? [
         {
@@ -111,6 +145,53 @@ export default function Computer({
                 : "Idle"}
           </em>
         </article>
+      </div>
+
+      <div className="feature-section app-skills-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">APP SKILLS</span>
+            <strong>
+              {browserSkillTarget
+                ? `Browser Skills · ${browserSkillTarget}`
+                : "Contextual skills for supported applications."}
+            </strong>
+          </div>
+          <span className="feature-badge">
+            {browserSkillTarget ? "Browser V1" : "Context aware"}
+          </span>
+        </div>
+
+        {browserSkillTarget ? (
+          <>
+            <div className="app-skill-grid">
+              {browserSkills.map((skill) => (
+                <button
+                  key={skill.command}
+                  type="button"
+                  className="quick-action-card"
+                  disabled={runtimeState.paused}
+                  onClick={() => void onCommand(skill.command)}
+                >
+                  <strong>{skill.label}</strong>
+                  <span>{skill.command}</span>
+                </button>
+              ))}
+            </div>
+            <div className="feature-note">
+              <strong>Focus-safe shortcuts</strong>
+              <span>
+                AURA brings {browserSkillTarget} to the foreground, verifies the
+                foreground process and only then sends the bounded browser shortcut.
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="feature-empty">
+            Bring Brave or Google Chrome into context to expose Browser Skills V1.
+            OBS continues to use its deeper Director Mode integration.
+          </div>
+        )}
       </div>
 
       <div className="feature-section file-intelligence-section">
