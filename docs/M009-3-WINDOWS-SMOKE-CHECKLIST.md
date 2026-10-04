@@ -51,6 +51,11 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 
 - [ ] Launch a known application.
 - [ ] Switch to an existing application window.
+- [ ] Minimize a known application by name.
+- [ ] Maximize a known application by name.
+- [ ] Restore a known application by name.
+- [ ] Confirm the Computer workspace exposes contextual window controls only for a known app identity.
+- [ ] Confirm an unknown app name is rejected instead of guessed.
 - [ ] Type controlled text into a safe test field.
 - [ ] Execute a safe keyboard shortcut.
 - [ ] Move/click/scroll with bounded mouse actions.
