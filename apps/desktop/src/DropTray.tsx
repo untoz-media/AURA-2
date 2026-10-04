@@ -1,4 +1,8 @@
-import type { DropIntakeSnapshot } from "./bridge/types";
+import { useEffect, useState } from "react";
+import type {
+  DroppedFileInspection,
+  DropIntakeSnapshot,
+} from "./bridge/types";
 import "./drop.css";
 
 type Props = {
@@ -7,6 +11,7 @@ type Props = {
   paused: boolean;
   onClear: () => Promise<DropIntakeSnapshot>;
   onReveal: (dropId: string) => Promise<string>;
+  onInspect: (dropId: string) => Promise<DroppedFileInspection>;
   onUseVision: (dropId: string) => Promise<unknown>;
 };
 
@@ -40,10 +45,53 @@ export default function DropTray({
   paused,
   onClear,
   onReveal,
+  onInspect,
   onUseVision,
 }: Props) {
+  const [inspections, setInspections] = useState<
+    Record<string, DroppedFileInspection>
+  >({});
+  const [inspectionErrors, setInspectionErrors] = useState<
+    Record<string, string>
+  >({});
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const visible = hovering || snapshot.items.length > 0;
+
+  useEffect(() => {
+    setInspections({});
+    setInspectionErrors({});
+    setBusyIds({});
+  }, [snapshot.refreshedAtMs]);
+
   if (!visible) return null;
+
+  async function inspectOne(dropId: string) {
+    setBusyIds((current) => ({ ...current, [dropId]: true }));
+    setInspectionErrors((current) => {
+      const next = { ...current };
+      delete next[dropId];
+      return next;
+    });
+
+    try {
+      const inspection = await onInspect(dropId);
+      setInspections((current) => ({
+        ...current,
+        [dropId]: inspection,
+      }));
+    } catch (error) {
+      setInspectionErrors((current) => ({
+        ...current,
+        [dropId]: String(error),
+      }));
+    } finally {
+      setBusyIds((current) => ({ ...current, [dropId]: false }));
+    }
+  }
+
+  async function inspectAll() {
+    await Promise.all(snapshot.items.map((item) => inspectOne(item.id)));
+  }
 
   return (
     <>
@@ -63,20 +111,34 @@ export default function DropTray({
         <aside className="drop-tray" aria-live="polite">
           <div className="drop-tray-heading">
             <div>
-              <span className="feature-kicker">DRAG & DROP</span>
+              <span className="feature-kicker">DRAG & DROP V2</span>
               <strong>
                 {snapshot.items.length} local file
                 {snapshot.items.length === 1 ? "" : "s"} ready
               </strong>
             </div>
-            <button
-              type="button"
-              className="drop-tray-close"
-              aria-label="Dismiss dropped files"
-              onClick={() => void onClear()}
-            >
-              ×
-            </button>
+            <div className="drop-tray-heading-actions">
+              <button
+                type="button"
+                className="feature-secondary-button"
+                disabled={paused || snapshot.items.length === 0}
+                onClick={() => void inspectAll()}
+              >
+                Inspect all
+              </button>
+              <button
+                type="button"
+                className="drop-tray-close"
+                aria-label="Dismiss dropped files"
+                onClick={() => {
+                  setInspections({});
+                  setInspectionErrors({});
+                  void onClear();
+                }}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {(snapshot.rejectedCount > 0 || snapshot.truncated) && (
@@ -91,56 +153,111 @@ export default function DropTray({
           )}
 
           <div className="drop-tray-items">
-            {snapshot.items.map((item) => (
-              <article className="drop-file-card" key={item.id}>
-                <div className="drop-file-icon" aria-hidden="true">
-                  {kindGlyph(item.kind)}
-                </div>
-                <div className="drop-file-copy">
-                  <strong title={item.name}>{item.name}</strong>
-                  <span>
-                    {item.kind}
-                    {item.extension ? ` · .${item.extension}` : ""}
-                    {" · "}
-                    {formatBytes(item.sizeBytes)}
-                  </span>
-                  {item.modifiedAtMs > 0 && (
-                    <small>
-                      Modified {new Date(item.modifiedAtMs).toLocaleString()}
-                    </small>
+            {snapshot.items.map((item) => {
+              const inspection = inspections[item.id];
+              const inspectionError = inspectionErrors[item.id];
+              const busy = Boolean(busyIds[item.id]);
+
+              return (
+                <article className="drop-file-card" key={item.id}>
+                  <div className="drop-file-icon" aria-hidden="true">
+                    {kindGlyph(item.kind)}
+                  </div>
+                  <div className="drop-file-copy">
+                    <strong title={item.name}>{item.name}</strong>
+                    <span>
+                      {item.kind}
+                      {item.extension ? ` · .${item.extension}` : ""}
+                      {" · "}
+                      {formatBytes(item.sizeBytes)}
+                    </span>
+                    {item.modifiedAtMs > 0 && (
+                      <small>
+                        Modified {new Date(item.modifiedAtMs).toLocaleString()}
+                      </small>
+                    )}
+                  </div>
+                  <div className="drop-file-actions">
+                    {item.canInspect && (
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        disabled={paused || busy}
+                        onClick={() => void inspectOne(item.id)}
+                      >
+                        {busy ? "Inspecting…" : "Inspect"}
+                      </button>
+                    )}
+                    {item.canUseVision && (
+                      <button
+                        type="button"
+                        className="feature-primary-button"
+                        disabled={paused}
+                        onClick={() => void onUseVision(item.id)}
+                      >
+                        Use in Vision
+                      </button>
+                    )}
+                    {item.canReveal && (
+                      <button
+                        type="button"
+                        className="feature-secondary-button"
+                        disabled={paused}
+                        onClick={() => void onReveal(item.id)}
+                      >
+                        Reveal
+                      </button>
+                    )}
+                  </div>
+
+                  {inspection && (
+                    <div className="drop-file-inspection">
+                      <div className="drop-file-inspection-heading">
+                        <strong>Local inspection</strong>
+                        <span>{inspection.contentMode}</span>
+                      </div>
+                      <p>{inspection.summary}</p>
+
+                      {inspection.imageWidth && inspection.imageHeight && (
+                        <span className="drop-file-inspection-meta">
+                          {inspection.imageWidth} × {inspection.imageHeight}px
+                        </span>
+                      )}
+
+                      {inspection.note && (
+                        <span className="drop-file-inspection-note">
+                          {inspection.note}
+                        </span>
+                      )}
+
+                      {inspection.textPreview && (
+                        <div className="drop-file-preview">
+                          <div>
+                            <strong>Bounded text preview</strong>
+                            {inspection.previewTruncated && <span>truncated</span>}
+                          </div>
+                          <pre>{inspection.textPreview}</pre>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </div>
-                <div className="drop-file-actions">
-                  {item.canUseVision && (
-                    <button
-                      type="button"
-                      className="feature-primary-button"
-                      disabled={paused}
-                      onClick={() => void onUseVision(item.id)}
-                    >
-                      Use in Vision
-                    </button>
+
+                  {inspectionError && (
+                    <div className="drop-file-inspection-error">
+                      {inspectionError}
+                    </div>
                   )}
-                  {item.canReveal && (
-                    <button
-                      type="button"
-                      className="feature-secondary-button"
-                      disabled={paused}
-                      onClick={() => void onReveal(item.id)}
-                    >
-                      Reveal
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
 
           <div className="drop-tray-privacy">
             <strong>Temporary session context</strong>
             <span>
-              File paths remain inside AURA Core memory. Dropped items are not added
-              to Memory, diagnostics or Vision unless you explicitly choose an action.
+              File paths remain inside AURA Core memory. Inspect reads only
+              bounded allowlisted content. Dropped items are not added to Memory,
+              diagnostics, Agents or Automations.
             </span>
           </div>
         </aside>
