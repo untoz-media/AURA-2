@@ -1291,6 +1291,39 @@
 
 
 
+
+.beta-test-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.beta-test-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-1);
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.beta-test-item input {
+  width: 15px;
+  height: 15px;
+}
+
+.beta-test-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .beta-recovery-review {
   display: flex;
   align-items: center;
