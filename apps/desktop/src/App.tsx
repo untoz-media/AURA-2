@@ -458,13 +458,22 @@ function App() {
           betaStatus.previousSessionUnclean &&
           runtimeState.paused &&
           view === "chat" && (
-            <div className="beta-recovery-banner" role="status">
+            <div className="beta-recovery-banner" role={betaStatus.crashLoopGuardActive ? "alert" : "status"}>
               <div className="beta-recovery-copy">
-                <span className="beta-recovery-kicker">RECOVERY SAFE MODE</span>
-                <strong>AURA recovered after an unclean previous session</strong>
+                <span className="beta-recovery-kicker">
+                  {betaStatus.crashLoopGuardActive
+                    ? "CRASH LOOP GUARD"
+                    : "RECOVERY SAFE MODE"}
+                </span>
+                <strong>
+                  {betaStatus.crashLoopGuardActive
+                    ? "AURA detected repeated unclean sessions"
+                    : "AURA recovered after an unclean previous session"}
+                </strong>
                 <span>
-                  Agents and Automations are paused so nothing can run
-                  unexpectedly. Review diagnostics if needed, then resume AURA.
+                  {betaStatus.crashLoopGuardActive
+                    ? "AURA is paused and background startup has been suppressed. Review Beta & Diagnostics before resuming from Settings."
+                    : "Agents and Automations are paused so nothing can run unexpectedly. Review diagnostics if needed, then resume AURA."}
                 </span>
               </div>
               <div className="beta-recovery-actions">
@@ -475,13 +484,15 @@ function App() {
                 >
                   Review diagnostics
                 </button>
-                <button
-                  type="button"
-                  className="feature-primary-button"
-                  onClick={() => void setPaused(false)}
-                >
-                  Resume AURA
-                </button>
+                {!betaStatus.crashLoopGuardActive && (
+                  <button
+                    type="button"
+                    className="feature-primary-button"
+                    onClick={() => void setPaused(false)}
+                  >
+                    Resume AURA
+                  </button>
+                )}
               </div>
             </div>
           )}
