@@ -11,6 +11,8 @@ $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
 $artifactDir = Join-Path $repoRoot "artifacts\beta\$version"
 $manifestPath = Join-Path $artifactDir "AURA-2-Beta-Build.json"
 $checksumPath = Join-Path $artifactDir "AURA-2-Windows-x64.sha256"
+$packageLockPath = Join-Path $artifactDir "package-lock.json"
+$cargoLockPath = Join-Path $artifactDir "Cargo.lock"
 
 if (-not (Test-Path $manifestPath)) {
   throw "Beta build manifest not found: $manifestPath"
@@ -18,10 +20,16 @@ if (-not (Test-Path $manifestPath)) {
 if (-not (Test-Path $checksumPath)) {
   throw "Beta checksum file not found: $checksumPath"
 }
+if (-not (Test-Path $packageLockPath)) {
+  throw "npm dependency lock not found: $packageLockPath"
+}
+if (-not (Test-Path $cargoLockPath)) {
+  throw "Cargo dependency lock not found: $cargoLockPath"
+}
 
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 
-if ($manifest.schemaVersion -ne 2) {
+if ($manifest.schemaVersion -ne 3) {
   throw "Unsupported Beta build manifest schema: $($manifest.schemaVersion)"
 }
 if ($manifest.product -ne "AURA-2") {
@@ -76,6 +84,15 @@ if ([string]$signature.Status -ne [string]$manifest.signatureStatus) {
   throw "Authenticode status changed since the build manifest was created."
 }
 
+$packageLockHash = (Get-FileHash $packageLockPath -Algorithm SHA256).Hash.ToLower()
+$cargoLockHash = (Get-FileHash $cargoLockPath -Algorithm SHA256).Hash.ToLower()
+if ($packageLockHash -ne ([string]$manifest.packageLockSha256).ToLower()) {
+  throw "package-lock.json does not match the build manifest."
+}
+if ($cargoLockHash -ne ([string]$manifest.cargoLockSha256).ToLower()) {
+  throw "Cargo.lock does not match the build manifest."
+}
+
 Write-Host ""
 Write-Host "AURA-2 Beta artifact verified."
 Write-Host "Version:    $version"
@@ -85,4 +102,6 @@ Write-Host "SHA-256:    $actualHash"
 Write-Host "Signature:  $($signature.Status)"
 Write-Host "Commit:     $($manifest.sourceCommit)"
 Write-Host "Build:      $($manifest.buildLabel) · $($manifest.buildSource)"
+Write-Host "npm lock:   $packageLockHash"
+Write-Host "Cargo lock: $cargoLockHash"
 Write-Host "Built UTC:  $($manifest.builtAtUtc)"
