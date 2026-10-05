@@ -5,6 +5,7 @@ import {
   getAppStatus,
   getBetaStatus,
   setBetaPreferences,
+  repairBetaRecoveryState,
   getBetaTestSession,
   startBetaTestSession,
   setBetaTestCheck,
@@ -1166,6 +1167,28 @@ export function useAuraBridge() {
     const snapshot = await setBetaPreferences(request);
     setBetaStatusState(snapshot);
     return snapshot;
+  }, []);
+
+  const repairBetaRecoveryStateControl = useCallback(async () => {
+    try {
+      setBridgeError(null);
+      const status = await repairBetaRecoveryState();
+      setBetaStatusState(status);
+      const diagnostics = await getBetaDiagnostics();
+      setBetaDiagnostics(diagnostics);
+      setActivity(
+        "Recovery state repaired locally. Review Beta & Diagnostics before resuming AURA.",
+      );
+      return status;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.recovery_repair_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
   }, []);
 
   const refreshBetaTestSession = useCallback(async () => {
@@ -2738,6 +2761,7 @@ export function useAuraBridge() {
     submitCommand,
     refreshBetaStatus,
     updateBetaPreferences,
+    repairBetaRecoveryStateControl,
     refreshBetaTestSession,
     startBetaTestSessionControl,
     setBetaTestCheckControl,
