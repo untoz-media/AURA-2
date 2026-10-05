@@ -152,3 +152,32 @@ If AURA detects that the previous session ended unexpectedly, it starts paused i
 If two consecutive sessions end uncleanly, **Crash Loop Guard** activates. AURA stays visible even if it was launched with `--background`, remains paused, and removes the one-click Resume action from the Chat recovery banner until you review Beta & Diagnostics. A later clean shutdown resets the recovery streak.
 
 The **Testing Preview readiness** card separates core/safety readiness, Windows x64 compatibility and build provenance from optional local-model setup. It is a preflight aid, not a replacement for the full NSIS smoke checklist.
+
+## 11. Run a Beta Test Session
+
+Open:
+
+**Settings → Beta & Diagnostics → Beta Test Session**
+
+Start a fresh session before a structured test pass. AURA provides a fixed checklist covering:
+
+- install / first run
+- desktop lifecycle
+- Recovery Safe Mode / Crash Loop Guard
+- permissions and safety
+- Computer Control
+- Managed Runtime / models
+- Drag & Drop / file context
+- AURA Create
+- Voice
+- Vision
+- Memory / context
+- Agents / Automations
+- Director Mode / OBS
+- Beta diagnostics
+- installer lifecycle
+
+The session stores only fixed area IDs, completion state and timestamps. It has no free-text notes field and does not store prompts, file paths, screenshots or user content.
+
+Use **Export report** to create a local JSON report containing the checklist plus the already privacy-validated Beta diagnostics snapshot. Nothing is uploaded automatically.
+
