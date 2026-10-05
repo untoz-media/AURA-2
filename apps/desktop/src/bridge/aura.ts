@@ -164,9 +164,9 @@ export async function hideOverlay(): Promise<void> {
 }
 
 export async function listenToOpenSettings(
-  handler: () => void,
+  handler: (section?: string) => void,
 ): Promise<UnlistenFn> {
-  return listen("aura:open-settings", () => handler());
+  return listen<string>("aura:open-settings", ({ payload }) => handler(payload));
 }
 
 export async function listenToLifecycle(
