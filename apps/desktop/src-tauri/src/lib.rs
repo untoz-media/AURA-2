@@ -5429,6 +5429,27 @@ fn process_user_command(
                 },
             );
         }
+        RouteResult::InternalError(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!(
+                        "AURA safely stopped an inconsistent internal command route: {}",
+                        message
+                    ),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_lifecycle_event(
+                &app,
+                "core.route_guard",
+                "AURA blocked an inconsistent internal command route instead of executing it.",
+            );
+        }
         RouteResult::UnsupportedApp(target) => {
             emit_core_event(
                 &app,
@@ -6689,7 +6710,7 @@ async fn stop_obs_streaming(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .manage(RuntimeState::default())
         .manage(BetaSessionRuntime::default())
         .manage(AgentEngine::default())
@@ -7318,6 +7339,9 @@ pub fn run() {
             start_obs_streaming,
             stop_obs_streaming
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AURA-2");
+        .run(tauri::generate_context!());
+
+    if let Err(error) = result {
+        eprintln!("AURA-2 runtime exited with a fatal Tauri error: {error}");
+    }
 }
