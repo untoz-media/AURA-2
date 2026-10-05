@@ -26,6 +26,10 @@ jobs:
     name: Build Windows NSIS installer
     runs-on: windows-2022
     timeout-minutes: 45
+    env:
+      AURA_BUILD_COMMIT: ${{ github.sha }}
+      AURA_BUILD_SOURCE: github-actions
+      AURA_BUILD_LABEL: beta-ci
 
     steps:
       - name: Checkout
