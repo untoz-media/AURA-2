@@ -752,6 +752,10 @@ export async function setBetaPreferences(
   return invoke<BetaStatus>("set_beta_preferences", { request });
 }
 
+export async function repairBetaRecoveryState(): Promise<BetaStatus> {
+  return invoke<BetaStatus>("repair_beta_recovery_state");
+}
+
 export async function getBetaTestSession(): Promise<BetaTestSession> {
   return invoke<BetaTestSession>("get_beta_test_session");
 }
