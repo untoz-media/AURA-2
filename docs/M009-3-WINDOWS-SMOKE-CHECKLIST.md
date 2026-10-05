@@ -36,7 +36,12 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Confirm no crash report is uploaded.
 - [ ] Confirm interrupted Agent runs are recovered as interrupted/failed rather than left running.
 - [ ] Resume AURA manually and confirm normal execution returns.
-- [ ] Relaunch after a normal exit and confirm the recovery warning clears.
+- [ ] Force a second consecutive unclean exit before completing a clean shutdown.
+- [ ] Relaunch and confirm Crash Loop Guard activates after the repeated unclean-session pattern.
+- [ ] If launched with `--background`, confirm Crash Loop Guard keeps the main window visible instead of hiding to tray.
+- [ ] Confirm the recovery banner does not offer one-click Resume while Crash Loop Guard is active.
+- [ ] Open Settings → Beta & Diagnostics and confirm the recovery streak is visible and the local health report is Degraded.
+- [ ] Complete a normal exit, relaunch and confirm the recovery streak resets and the warning clears.
 
 ## D. Permissions and safety
 
@@ -225,13 +230,16 @@ OBS testing may be marked N/A only for a Beta validation machine where OBS is in
 
 - [ ] Launch AURA and confirm the startup health report runs without blocking normal startup.
 - [ ] Open Settings → Beta & Diagnostics.
-- [ ] Confirm diagnostics schema version 2 is displayed through a valid snapshot.
+- [ ] Confirm diagnostics schema version 3 is displayed through a valid snapshot.
 - [ ] Confirm configuration storage and Local Data write probes pass.
-- [ ] Confirm Session marker and Beta preferences checks pass.
+- [ ] Confirm Session marker, Beta preferences and Recovery streak checks pass.
 - [ ] Confirm Permission safety floor passes.
 - [ ] Confirm Model catalog, Agent run store, Saved Actions store and Automation store checks pass.
 - [ ] Confirm Managed runtime state, Privacy boundary and Runtime counters checks pass.
 - [ ] Confirm Beta self-check reports Healthy when every subsystem check passes.
+- [ ] Confirm Testing Preview readiness reports Core & safety, Windows target, Build traceability and optional Local AI setup independently.
+- [ ] Confirm a local development build is shown as Development rather than falsely claiming release traceability.
+- [ ] Confirm a release-built binary with build provenance reports the source commit/build label.
 - [ ] Confirm telemetry is Off.
 - [ ] Confirm automatic crash uploads are Off.
 - [ ] Export diagnostics JSON.
