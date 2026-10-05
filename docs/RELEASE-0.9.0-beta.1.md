@@ -47,7 +47,8 @@ with new Beta-readiness work.
 - removable attachment chips before send and safe filename labels in local chat history
 - attachment-only Send falls back to an explicit "Analyze the attached local files." request
 - **Analyze with AURA** one-click drop analysis shortcut
-- 6,000-character total model attachment cap with smaller per-file excerpts
+- 6,000-character total model attachment cap with fair multi-file excerpt budgeting
+- expanded bounded text-context support for source/config/subtitle formats and allowlisted extensionless developer files
 - attachment requests bypass action/Routine/Director routing
 - attached content is explicitly treated as untrusted data for prompt-injection resistance
 - attachment context stays outside visible Chat messages and model conversation history
