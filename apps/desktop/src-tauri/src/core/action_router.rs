@@ -1616,7 +1616,11 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             ActionIntent::MemoryList => PermissionClass::Read,
             ActionIntent::MemoryRemember(_) => PermissionClass::Modify,
             ActionIntent::MemoryForget(_) => PermissionClass::Destructive,
-            _ => unreachable!(),
+            _ => {
+                return RouteResult::InternalError(
+                    "Memory parser returned a non-memory intent.".to_string(),
+                )
+            }
         };
 
         return RouteResult::Action(RoutedAction {
@@ -1646,7 +1650,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
 
     if let Some(intent) = notepad_skill_request(input) {
         let ActionIntent::NotepadSkill(skill) = &intent else {
-            unreachable!("notepad parser returns NotepadSkill intents only");
+            return RouteResult::InternalError(
+                "Notepad parser returned a non-Notepad intent.".to_string(),
+            );
         };
         let permission = skill.action.permission();
 
