@@ -94,3 +94,17 @@ New release-readiness work:
 
 Publication remains blocked until a real Windows runner executes the source validation, Rust tests, NSIS build and smoke-test gate. A hosted runner failure before step 1 is not treated as release validation.
 
+## Crash Loop Guard v1
+
+Repeated unclean launches now escalate beyond the normal one-session Recovery Safe Mode.
+
+- the session marker tracks a backward-compatible unclean-session streak
+- one unclean exit still starts AURA paused in normal Recovery Safe Mode
+- two consecutive unclean sessions activate Crash Loop Guard
+- Crash Loop Guard suppresses `--background` hiding so the recovery state is visible
+- the Chat recovery banner removes one-click Resume while the guard is active
+- local health diagnostics expose the repeated recovery condition without uploading anything
+- a subsequent clean shutdown resets the recovery streak
+
+Settings → Beta & Diagnostics also adds **Testing Preview readiness**, separating required core/safety, Windows target and traceable-build checks from optional Managed Runtime/local-model setup.
+
