@@ -1985,10 +1985,19 @@ fn build_beta_diagnostics(
     .to_string();
 
     Ok(DiagnosticsSnapshot {
-        schema_version: 2,
+        schema_version: 3,
         app_name: "AURA-2".to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         channel: "beta".to_string(),
+        build_commit: option_env!("AURA_BUILD_COMMIT")
+            .unwrap_or("unknown")
+            .to_string(),
+        build_source: option_env!("AURA_BUILD_SOURCE")
+            .unwrap_or("local")
+            .to_string(),
+        build_label: option_env!("AURA_BUILD_LABEL")
+            .unwrap_or("development")
+            .to_string(),
         platform: std::env::consts::OS.to_string(),
         architecture: std::env::consts::ARCH.to_string(),
         paused: runtime.paused,
