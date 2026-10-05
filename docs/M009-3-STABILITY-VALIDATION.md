@@ -11,6 +11,7 @@ The shared Beta validation now covers:
 - Vite frontend build
 - embedded Python worker syntax
 - Rust formatting
+- production Rust panic-surface gate (no production `unwrap()`, `expect()`, `unreachable!()`, `panic!()`, `todo!()` or `unimplemented!()`)
 
 The Windows gate additionally runs:
 
@@ -33,7 +34,7 @@ On Windows, the full local installer fallback is:
 npm run beta:build:windows
 ```
 
-That command validates the source, runs the Rust regression suite, builds the Tauri/NSIS installer, copies the candidate into `artifacts/beta/<version>/`, creates `AURA-2-Windows-x64.sha256`, reports the Authenticode signature state and writes `AURA-2-Beta-Build.json` with the version, source commit, installer size, SHA-256 and build timestamp.
+That command validates the source, runs the Rust regression suite with the resolved Cargo lock, builds the Tauri/NSIS installer, copies the candidate into `artifacts/beta/<version>/`, creates `AURA-2-Windows-x64.sha256`, reports the Authenticode signature state and writes build-manifest schema v3 with the version, source commit, build source/label, installer size, SHA-256, npm lock hash, Cargo lock hash and build timestamp.
 
 The finished artifact can then be independently re-checked with:
 
@@ -124,7 +125,7 @@ Session recovery is conservative:
 
 Regression tests cover missing markers, corrupt markers, atomic state writes and the diagnostics schema privacy boundary.
 
-Diagnostics schema v2 adds structured local health checks. The health report probes configuration/local-data writeability and validates the active session marker, Beta preferences, permission safety floor, model catalog, Agent run store, Saved Actions store, Automation store, managed-runtime state, privacy boundary and aggregate runtime counters. Each check is reported independently as Passed/Failed so one damaged subsystem no longer makes the entire diagnostic snapshot unavailable.
+Diagnostics schema v3 adds build provenance and structured local health checks. The health report probes configuration/local-data writeability and validates the active session marker, Beta preferences, permission safety floor, model catalog, Agent run store, Saved Actions store, Automation store, managed-runtime state, privacy boundary and aggregate runtime counters. Each check is reported independently as Passed/Failed so one damaged subsystem no longer makes the entire diagnostic snapshot unavailable.
 
 The desktop runs this health report automatically during startup without uploading anything. Settings → Beta & Diagnostics shows the full per-subsystem report, and Chat surfaces a local warning when the overall health state is degraded.
 
@@ -205,4 +206,38 @@ The checklist uses fixed Core-owned areas only. There is intentionally no arbitr
 The backend normalizes the persisted checklist back to the allowlisted area catalog, drops unknown test-area entries, health-checks the store, bounds exported reports to 96 KiB and combines the session only with the existing privacy-validated Diagnostics snapshot.
 
 This gives the first Windows tester a repeatable pass/fail workflow without turning the test report into another data-collection surface.
+
+## Panic-free production Rust gate
+
+The Beta source validator now runs:
+
+```bash
+npm run beta:panic-scan
+```
+
+The gate scans the production Rust source surface and rejects direct `unwrap()`, `expect()`, `unreachable!()`, `panic!()`, `todo!()` and `unimplemented!()` constructs outside the test section.
+
+The M009.3 hardening pass removed the remaining production panic points from:
+
+- Action Router parser/permission invariants
+- browser Skill Registry target assumptions
+- Windows clipboard global-memory ownership
+- the fatal Tauri run result path
+
+Action-routing inconsistencies now fail closed as controlled `RouteResult::InternalError` events instead of terminating AURA.
+
+## Recovery State repair
+
+A corrupt or permanently unclean Beta session marker can now be repaired without resetting user data.
+
+**Repair recovery state**:
+
+- preserves the existing `beta-session.json` as a timestamped local recovery backup
+- writes a fresh valid active-session marker
+- resets only the in-memory previous-session/recovery streak
+- keeps AURA paused
+- emits a local recovery-repaired lifecycle event
+- does not touch Memories, models, Project Memory, Agents, Automations or user files
+
+The normal Resume command and the tray Resume path both use the same Core recovery guard. A blocked tray Resume restores the tray checkbox, opens the main window and navigates directly to Beta & Diagnostics.
 
