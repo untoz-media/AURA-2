@@ -44,6 +44,7 @@ const checks = [
   ["preview release is a prerelease", releaseWorkflow.includes("prerelease: true")],
   ["preview release is not latest", releaseWorkflow.includes("make_latest: false")],
   ["preview workflow attaches checksum and manifest", releaseWorkflow.includes("AURA-2-Windows-x64.sha256") && releaseWorkflow.includes("AURA-2-Testing-Preview-Build.json")],
+  ["preview workflow captures both dependency locks", releaseWorkflow.includes("package-lock.json") && releaseWorkflow.includes("apps/desktop/src-tauri/Cargo.lock") && releaseWorkflow.includes("cargoLockSha256")],
 ];
 
 console.log(`AURA-2 testing preview structural gate — ${root.version}`);
