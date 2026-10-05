@@ -273,3 +273,16 @@ M009.3 can be marked complete only when:
 6. GitHub-hosted Windows CI executes real steps and passes.
 
 Any failure involving permissions, corrupt persistence, installer integrity, unexpected data upload, unrecoverable startup, or destructive-action bypass is a release blocker.
+
+## N. Beta Test Session
+
+- [ ] Open Settings → Beta & Diagnostics and confirm Beta Test Session initially reports Not started.
+- [ ] Start a session and confirm all 15 fixed areas appear.
+- [ ] Mark several areas Passed, restart/reopen AURA and confirm the completion state persists.
+- [ ] Uncheck one completed area and confirm its completion timestamp/state clears.
+- [ ] Confirm no free-text notes field is available.
+- [ ] Export the Beta test report and confirm it contains only the fixed checklist metadata plus the privacy-safe diagnostics snapshot.
+- [ ] Confirm prompts, responses, filesystem paths, screenshots, Memory contents and credentials are absent from the report.
+- [ ] Reset the session and confirm all completion state is cleared.
+- [ ] Corrupt the Beta test-session store in a disposable profile and confirm local Diagnostics reports the store as failed/degraded.
+
