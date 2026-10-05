@@ -370,8 +370,7 @@ export default function Settings({
     betaBackendHealthValid === true;
   const betaPlatformCompatible = betaDiagnostics
     ? betaDiagnostics.platform === "windows" &&
-      (betaDiagnostics.architecture === "x86_64" ||
-        betaDiagnostics.architecture === "x86")
+      betaDiagnostics.architecture === "x86_64"
     : null;
   const betaBuildTraceable = betaDiagnostics
     ? betaDiagnostics.buildCommit !== "unknown" &&
