@@ -40,9 +40,10 @@ The release pipeline must attach:
 - Windows NSIS installer
 - SHA-256 checksum
 - `AURA-2-Testing-Preview-Build.json`
-- the generated dependency lockfile used for that build
+- the generated npm `package-lock.json` used for that build
+- the generated Rust `Cargo.lock` used for that build
 
-The manifest records the product/version, source commit, build label, installer size, checksum, signature status and build timestamp.
+The manifest records the product/version, source commit, build label, installer size, checksum, signature status, npm lock hash, Cargo lock hash and build timestamp.
 
 ## Local build fallback
 
