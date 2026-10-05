@@ -432,6 +432,12 @@ pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
     for target in [AppTarget::Brave, AppTarget::Chrome] {
         let available = context == Some(target);
 
+        let target_id = match target {
+            AppTarget::Brave => "brave",
+            AppTarget::Chrome => "chrome",
+            _ => continue,
+        };
+
         for action in [
             BrowserSkillAction::NewTab,
             BrowserSkillAction::NextTab,
@@ -443,11 +449,7 @@ pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
             skills.push(AppSkillDescriptor {
                 id: format!(
                     "browser.{}.{}",
-                    match target {
-                        AppTarget::Brave => "brave",
-                        AppTarget::Chrome => "chrome",
-                        _ => unreachable!("browser registry uses browser targets only"),
-                    },
+                    target_id,
                     action.id()
                 ),
                 group: "Browser".to_string(),
