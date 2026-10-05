@@ -860,6 +860,38 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     emit_runtime_state(app)
 }
 
+
+fn set_paused_state_guarded(
+    app: &tauri::AppHandle,
+    beta: &BetaSessionRuntime,
+    paused: bool,
+    recovery_override: bool,
+) -> Result<RuntimeSnapshot, String> {
+    if !paused && !recovery_override {
+        let recovery = beta_status(app, beta)?;
+        let health_degraded = beta_local_health_checks(app)
+            .iter()
+            .any(|check| check.status == "failed");
+
+        if recovery.crash_loop_guard_active || health_degraded {
+            return Err(
+                "AURA is paused by Recovery Safe Mode. Review Beta & Diagnostics and use Review & Resume to acknowledge the degraded recovery state."
+                    .to_string(),
+            );
+        }
+    }
+
+    if !paused && recovery_override {
+        emit_lifecycle_event(
+            app,
+            "beta.recovery_override",
+            "The user explicitly reviewed the recovery state and resumed AURA from Beta & Diagnostics.",
+        );
+    }
+
+    Ok(set_paused_state(app, paused))
+}
+
 fn set_background_state(
     app: &tauri::AppHandle,
     background_enabled: bool,
@@ -2141,29 +2173,12 @@ fn set_runtime_paused(
     paused: bool,
     recovery_override: Option<bool>,
 ) -> Result<RuntimeSnapshot, String> {
-    if !paused && !recovery_override.unwrap_or(false) {
-        let recovery = beta_status(&app, &beta)?;
-        let health_degraded = beta_local_health_checks(&app)
-            .iter()
-            .any(|check| check.status == "failed");
-
-        if recovery.crash_loop_guard_active || health_degraded {
-            return Err(
-                "AURA is paused by Recovery Safe Mode. Review Beta & Diagnostics and use Review & Resume to acknowledge the degraded recovery state."
-                    .to_string(),
-            );
-        }
-    }
-
-    if !paused && recovery_override.unwrap_or(false) {
-        emit_lifecycle_event(
-            &app,
-            "beta.recovery_override",
-            "The user explicitly reviewed the recovery state and resumed AURA from Beta & Diagnostics.",
-        );
-    }
-
-    Ok(set_paused_state(&app, paused))
+    set_paused_state_guarded(
+        &app,
+        &beta,
+        paused,
+        recovery_override.unwrap_or(false),
+    )
 }
 
 #[tauri::command]
@@ -7141,8 +7156,24 @@ pub fn run() {
                     "pause" => {
                         let current = app.state::<RuntimeState>();
                         let next = !runtime_snapshot(&current).paused;
-                        let snapshot = set_paused_state(app, next);
-                        let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                        let beta = app.state::<BetaSessionRuntime>();
+
+                        match set_paused_state_guarded(app, &beta, next, false) {
+                            Ok(snapshot) => {
+                                let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                            }
+                            Err(message) => {
+                                let snapshot = runtime_snapshot(&current);
+                                let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                                show_main_window(app);
+                                let _ = app.emit("aura:open-settings", ());
+                                emit_lifecycle_event(
+                                    app,
+                                    "beta.recovery_resume_blocked",
+                                    &message,
+                                );
+                            }
+                        }
                     }
                     "settings" => {
                         show_main_window(app);
