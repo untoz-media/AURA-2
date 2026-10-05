@@ -1,0 +1,25 @@
+name: Actions Runner Smoke Probe
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - m009-beta-readiness
+    paths:
+      - ".github/workflows/actions-runner-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  runner-smoke:
+    name: GitHub-hosted runner smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prove runner execution
+        shell: bash
+        run: |
+          echo "AURA-2 runner smoke started"
+          echo "runner=$RUNNER_OS"
+          echo "sha=$GITHUB_SHA"
