@@ -1289,6 +1289,14 @@
   line-height: 1.45;
 }
 
+
+.settings-helper {
+  margin: 10px 0 0;
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+}
+
 .beta-diagnostics-path {
   margin: 10px 0 0;
   padding: 9px 10px;
