@@ -455,6 +455,39 @@ function App() {
         </header>
 
         {betaStatus.onboardingComplete &&
+          betaDiagnostics &&
+          (betaDiagnostics.buildLabel === "alpha-v1-testing-preview" ||
+            betaDiagnostics.buildLabel === "beta-local-smoke") &&
+          view === "chat" && (
+            <div className="beta-recovery-banner beta-preview-banner" role="status">
+              <div className="beta-recovery-copy">
+                <span className="beta-recovery-kicker">
+                  {betaDiagnostics.buildLabel === "alpha-v1-testing-preview"
+                    ? "AURA-2 TESTING PREVIEW"
+                    : "AURA-2 LOCAL TEST BUILD"}
+                </span>
+                <strong>
+                  {betaDiagnostics.appVersion} ·{" "}
+                  {betaDiagnostics.buildCommit.slice(0, 12)}
+                </strong>
+                <span>
+                  This is a traceable pre-release build intended for testing.
+                  Build source: {betaDiagnostics.buildSource}.
+                </span>
+              </div>
+              <div className="beta-recovery-actions">
+                <button
+                  type="button"
+                  className="feature-secondary-button"
+                  onClick={() => openSettings("beta")}
+                >
+                  Build details
+                </button>
+              </div>
+            </div>
+          )}
+
+        {betaStatus.onboardingComplete &&
           betaStatus.previousSessionUnclean &&
           runtimeState.paused &&
           view === "chat" && (
