@@ -5,8 +5,13 @@ import {
   getAppStatus,
   getBetaStatus,
   setBetaPreferences,
+  getBetaTestSession,
+  startBetaTestSession,
+  setBetaTestCheck,
+  resetBetaTestSession,
   getBetaDiagnostics,
   exportBetaDiagnostics,
+  exportBetaTestReport,
   getObsConnectionState,
   getObsRuntimeState,
   getObsScenes,
@@ -184,6 +189,7 @@ import type {
   SaveAutomationRequest,
   AutomationEvent,
   BetaStatus,
+  BetaTestSession,
   SetBetaPreferencesRequest,
   DiagnosticsSnapshot,
 } from "./types";
@@ -198,6 +204,15 @@ const DEFAULT_BETA_STATUS: BetaStatus = {
   automaticCrashUploads: false,
   localDiagnosticsOnly: true,
   refreshedAtMs: 0,
+};
+
+
+const DEFAULT_BETA_TEST_SESSION: BetaTestSession = {
+  schemaVersion: 1,
+  active: false,
+  startedAtMs: null,
+  updatedAtMs: 0,
+  checks: [],
 };
 
 const DEFAULT_ACTIVITY =
@@ -344,6 +359,8 @@ export function useAuraBridge() {
     useState<BetaStatus>(DEFAULT_BETA_STATUS);
   const [betaDiagnostics, setBetaDiagnostics] =
     useState<DiagnosticsSnapshot | null>(null);
+  const [betaTestSession, setBetaTestSessionState] =
+    useState<BetaTestSession>(DEFAULT_BETA_TEST_SESSION);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>({
     paused: false,
     backgroundEnabled: true,
@@ -507,6 +524,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Beta diagnostics are supplementary and can be refreshed manually.
+      });
+
+    getBetaTestSession()
+      .then((session) => {
+        if (!cancelled) setBetaTestSessionState(session);
+      })
+      .catch(() => {
+        // Beta test session is supplementary and starts only when requested.
       });
 
     getRecentFilesContext()
@@ -1143,10 +1168,56 @@ export function useAuraBridge() {
     return snapshot;
   }, []);
 
+  const refreshBetaTestSession = useCallback(async () => {
+    const session = await getBetaTestSession();
+    setBetaTestSessionState(session);
+    return session;
+  }, []);
+
+  const startBetaTestSessionControl = useCallback(async () => {
+    const session = await startBetaTestSession();
+    setBetaTestSessionState(session);
+    setActivity("AURA Beta test session started locally.");
+    return session;
+  }, []);
+
+  const setBetaTestCheckControl = useCallback(async (
+    checkId: string,
+    completed: boolean,
+  ) => {
+    const session = await setBetaTestCheck(checkId, completed);
+    setBetaTestSessionState(session);
+    return session;
+  }, []);
+
+  const resetBetaTestSessionControl = useCallback(async () => {
+    const session = await resetBetaTestSession();
+    setBetaTestSessionState(session);
+    setActivity("AURA Beta test session reset locally.");
+    return session;
+  }, []);
+
   const refreshBetaDiagnostics = useCallback(async () => {
     const snapshot = await getBetaDiagnostics();
     setBetaDiagnostics(snapshot);
     return snapshot;
+  }, []);
+
+  const exportBetaTestReportControl = useCallback(async () => {
+    try {
+      setBridgeError(null);
+      const path = await exportBetaTestReport();
+      setActivity(`Beta test report exported locally: ${path}`);
+      return path;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.test_report_export_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
   }, []);
 
   const exportBetaDiagnosticsControl = useCallback(async () => {
@@ -2622,6 +2693,7 @@ export function useAuraBridge() {
     appStatus,
     betaStatus,
     betaDiagnostics,
+    betaTestSession,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -2666,8 +2738,13 @@ export function useAuraBridge() {
     submitCommand,
     refreshBetaStatus,
     updateBetaPreferences,
+    refreshBetaTestSession,
+    startBetaTestSessionControl,
+    setBetaTestCheckControl,
+    resetBetaTestSessionControl,
     refreshBetaDiagnostics,
     exportBetaDiagnosticsControl,
+    exportBetaTestReportControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
