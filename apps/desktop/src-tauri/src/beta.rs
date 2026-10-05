@@ -251,6 +251,50 @@ pub fn mark_session_clean(app: &AppHandle) -> Result<(), String> {
     write_json(&path, &marker)
 }
 
+
+pub fn repair_recovery_state(
+    app: &AppHandle,
+    runtime: &BetaSessionRuntime,
+) -> Result<BetaStatus, String> {
+    let path = session_path(app)?;
+    let now = timestamp_ms();
+    let backup = if path.exists() {
+        let backup = path.with_file_name(format!(
+            "beta-session.recovery-backup-{now}.json"
+        ));
+        fs::rename(&path, &backup)
+            .map_err(|error| format!("Could not preserve the previous Beta session marker: {error}"))?;
+        Some(backup)
+    } else {
+        None
+    };
+
+    let marker = SessionMarker {
+        session_id: format!("session-repaired-{now}"),
+        started_at_ms: now,
+        clean_exit: false,
+        unclean_streak: 0,
+    };
+
+    if let Err(error) = write_json(&path, &marker) {
+        if let Some(backup) = backup.as_ref() {
+            if !path.exists() {
+                let _ = fs::rename(backup, &path);
+            }
+        }
+        return Err(format!("Could not create a repaired Beta session marker: {error}"));
+    }
+
+    runtime
+        .previous_session_unclean
+        .store(false, Ordering::Relaxed);
+    runtime
+        .consecutive_unclean_sessions
+        .store(0, Ordering::Relaxed);
+
+    status(app, runtime)
+}
+
 pub fn status(
     app: &AppHandle,
     runtime: &BetaSessionRuntime,
@@ -880,6 +924,22 @@ mod tests {
         ));
         let _ = fs::remove_file(&path);
         assert!(!previous_session_was_unclean(&path));
+    }
+
+    #[test]
+    fn repaired_session_marker_is_valid_and_resets_streak() {
+        let marker = SessionMarker {
+            session_id: "session-repaired-test".to_string(),
+            started_at_ms: 1,
+            clean_exit: false,
+            unclean_streak: 0,
+        };
+        let serialized = serde_json::to_string(&marker).expect("serialize repaired marker");
+        let restored: SessionMarker =
+            serde_json::from_str(&serialized).expect("parse repaired marker");
+
+        assert!(!restored.clean_exit);
+        assert_eq!(restored.unclean_streak, 0);
     }
 
     #[test]
