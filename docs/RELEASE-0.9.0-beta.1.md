@@ -108,3 +108,14 @@ Repeated unclean launches now escalate beyond the normal one-session Recovery Sa
 
 Settings → Beta & Diagnostics also adds **Testing Preview readiness**, separating required core/safety, Windows target and traceable-build checks from optional Managed Runtime/local-model setup.
 
+## Fail-closed recovery resume
+
+Recovery Safe Mode can no longer be bypassed by a generic resume call when Crash Loop Guard or a degraded local startup health report is active.
+
+- Core rejects normal unpause requests while the recovery gate is active
+- General Settings redirects the user to Beta & Diagnostics instead of silently unpausing
+- Beta & Diagnostics exposes **Review & Resume** only in the relevant paused/degraded state
+- the override requires an explicit confirmation
+- an acknowledged override is recorded as a local lifecycle event
+- normal one-session recovery remains lightweight when the stronger gate is not required
+
