@@ -76,6 +76,7 @@ import type {
   SaveAutomationRequest,
   AutomationEvent,
   BetaStatus,
+  BetaTestSession,
   SetBetaPreferencesRequest,
   DiagnosticsSnapshot,
 } from "./types";
@@ -751,10 +752,33 @@ export async function setBetaPreferences(
   return invoke<BetaStatus>("set_beta_preferences", { request });
 }
 
+export async function getBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("get_beta_test_session");
+}
+
+export async function startBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("start_beta_test_session");
+}
+
+export async function setBetaTestCheck(
+  checkId: string,
+  completed: boolean,
+): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("set_beta_test_check", { checkId, completed });
+}
+
+export async function resetBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("reset_beta_test_session");
+}
+
 export async function getBetaDiagnostics(): Promise<DiagnosticsSnapshot> {
   return invoke<DiagnosticsSnapshot>("get_beta_diagnostics");
 }
 
 export async function exportBetaDiagnostics(): Promise<string> {
   return invoke<string>("export_beta_diagnostics");
+}
+
+export async function exportBetaTestReport(): Promise<string> {
+  return invoke<string>("export_beta_test_report");
 }
