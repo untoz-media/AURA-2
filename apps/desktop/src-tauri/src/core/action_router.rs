@@ -87,6 +87,7 @@ pub enum RouteResult {
     InvalidAppSkill(String),
     InvalidMouse(String),
     InvalidMedia(String),
+    InternalError(String),
     NoMatch,
 }
 
@@ -1707,8 +1708,11 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     }
 
     if let Some(intent) = clipboard_request(input) {
-        let permission = permission_for_clipboard(&intent)
-            .expect("clipboard intent should have a permission class");
+        let Some(permission) = permission_for_clipboard(&intent) else {
+            return RouteResult::InternalError(
+                "Clipboard parser returned an intent without a permission class.".to_string(),
+            );
+        };
         return RouteResult::Action(RoutedAction {
             intent,
             permission,
@@ -1735,7 +1739,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("media_request should only produce media intents"),
+            Ok(_) => RouteResult::InternalError(
+                "Media parser returned a non-media intent.".to_string(),
+            ),
             Err(message) => RouteResult::InvalidMedia(message),
         };
     }
@@ -1750,7 +1756,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("mouse_request should only produce mouse intents"),
+            Ok(_) => RouteResult::InternalError(
+                "Mouse parser returned a non-mouse intent.".to_string(),
+            ),
             Err(message) => RouteResult::InvalidMouse(message),
         };
     }
@@ -1758,8 +1766,11 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     if let Some(keyboard) = keyboard_request(input) {
         return match keyboard {
             Ok(intent) => {
-                let permission = permission_for_keyboard(&intent)
-                    .expect("keyboard intent should have a permission class");
+                let Some(permission) = permission_for_keyboard(&intent) else {
+                    return RouteResult::InternalError(
+                        "Keyboard parser returned an intent without a permission class.".to_string(),
+                    );
+                };
 
                 RouteResult::Action(RoutedAction {
                     intent,
@@ -2301,6 +2312,18 @@ mod tests {
                 decision: PermissionDecision::Ask,
             })
         ));
+    }
+
+    #[test]
+    fn parser_permission_helpers_fail_closed_for_unrelated_intents() {
+        assert_eq!(
+            permission_for_clipboard(&ActionIntent::CurrentApp),
+            None
+        );
+        assert_eq!(
+            permission_for_keyboard(&ActionIntent::CurrentApp),
+            None
+        );
     }
 
     #[test]
