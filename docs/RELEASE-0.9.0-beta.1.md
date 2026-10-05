@@ -119,3 +119,16 @@ Recovery Safe Mode can no longer be bypassed by a generic resume call when Crash
 - an acknowledged override is recorded as a local lifecycle event
 - normal one-session recovery remains lightweight when the stronger gate is not required
 
+## Beta Test Session v1
+
+The Beta & Diagnostics workspace now includes a structured local test pass for the first AURA-2 testing builds.
+
+- 15 fixed validation areas cover install, lifecycle, recovery, permissions, Computer Control, models, attachments, Create, Voice, Vision, Memory, Agents/Automations, OBS, diagnostics and installer lifecycle
+- test progress persists locally between app views/restarts
+- each item stores only completion state and timestamp
+- arbitrary test-area ids are discarded by backend normalization
+- no free-text notes are stored
+- the test-session store participates in local health checks
+- **Export report** writes a size-bounded JSON bundle containing the checklist plus the existing privacy-validated diagnostics snapshot
+- nothing is uploaded automatically
+
