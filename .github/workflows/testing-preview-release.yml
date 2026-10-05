@@ -8,6 +8,11 @@ on:
     branches:
       - "release/alpha-v1"
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RELEASE_ALPHA_V1 to confirm publication
+        required: true
+        default: ""
 
 concurrency:
   group: aura-testing-preview-release
@@ -16,6 +21,7 @@ concurrency:
 jobs:
   release-windows-preview:
     name: Build and publish Windows testing preview
+    if: github.event_name == 'push' || github.event.inputs.confirmation == 'RELEASE_ALPHA_V1'
     runs-on: windows-2022
     timeout-minutes: 60
     env:
