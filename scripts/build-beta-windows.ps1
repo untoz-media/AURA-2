@@ -34,10 +34,16 @@ function Invoke-BetaStep {
   }
 }
 
-Invoke-BetaStep "Install JavaScript dependencies" { npm install }
+Invoke-BetaStep "Resolve JavaScript dependency lock" {
+  npm install --package-lock-only --ignore-scripts
+}
+Invoke-BetaStep "Install exact JavaScript dependencies" { npm ci }
+Invoke-BetaStep "Resolve Rust dependency lock" {
+  cargo generate-lockfile --manifest-path "apps/desktop/src-tauri/Cargo.toml"
+}
 Invoke-BetaStep "Validate Beta source" { npm run beta:validate }
 Invoke-BetaStep "Run Rust regression tests" {
-  cargo test --manifest-path "apps/desktop/src-tauri/Cargo.toml"
+  cargo test --locked --manifest-path "apps/desktop/src-tauri/Cargo.toml"
 }
 Invoke-BetaStep "Build Tauri + NSIS installer" { npm run build }
 
@@ -60,8 +66,18 @@ $checksumPath = Join-Path $artifactDir "AURA-2-Windows-x64.sha256"
 
 $signature = Get-AuthenticodeSignature $copiedInstaller
 
+$packageLock = Join-Path $repoRoot "package-lock.json"
+$cargoLock = Join-Path $repoRoot "apps\desktop\src-tauri\Cargo.lock"
+if (-not (Test-Path $packageLock)) { throw "package-lock.json was not produced." }
+if (-not (Test-Path $cargoLock)) { throw "Cargo.lock was not produced." }
+
+$packageLockHash = (Get-FileHash $packageLock -Algorithm SHA256).Hash.ToLower()
+$cargoLockHash = (Get-FileHash $cargoLock -Algorithm SHA256).Hash.ToLower()
+Copy-Item $packageLock (Join-Path $artifactDir "package-lock.json") -Force
+Copy-Item $cargoLock (Join-Path $artifactDir "Cargo.lock") -Force
+
 $manifest = [ordered]@{
-  schemaVersion = 2
+  schemaVersion = 3
   product = "AURA-2"
   version = $version
   channel = "beta"
@@ -72,6 +88,8 @@ $manifest = [ordered]@{
   sourceCommit = $gitSha
   buildSource = $env:AURA_BUILD_SOURCE
   buildLabel = $env:AURA_BUILD_LABEL
+  packageLockSha256 = $packageLockHash
+  cargoLockSha256 = $cargoLockHash
   builtAtUtc = [DateTime]::UtcNow.ToString("o")
 }
 
@@ -83,6 +101,8 @@ Write-Host "AURA-2 $version Windows Beta candidate built successfully."
 Write-Host "Installer: $copiedInstaller"
 Write-Host "SHA-256:   $hash"
 Write-Host "Signature: $($signature.Status)"
+Write-Host "npm lock:  $packageLockHash"
+Write-Host "Cargo lock:$cargoLockHash"
 Write-Host "Manifest:  $manifestPath"
 Write-Host ""
 Write-Host "Next gate: install this artifact on a clean/current-user Windows profile and complete the M009.3 smoke checklist."
