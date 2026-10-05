@@ -31,6 +31,7 @@ use beta::{
     export_test_report as export_beta_test_report_file,
     local_health_checks as beta_local_health_checks,
     mark_session_clean as mark_beta_session_clean,
+    repair_recovery_state as repair_beta_recovery_state_store,
     reset_test_session as reset_beta_test_session_store,
     save_preferences as save_beta_preferences,
     set_test_check as set_beta_test_check_store,
@@ -2072,6 +2073,20 @@ fn set_beta_preferences(
     request: SetBetaPreferencesRequest,
 ) -> Result<BetaStatus, String> {
     save_beta_preferences(&app, &beta, request)
+}
+
+#[tauri::command]
+fn repair_beta_recovery_state(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+) -> Result<BetaStatus, String> {
+    let status = repair_beta_recovery_state_store(&app, &beta)?;
+    emit_lifecycle_event(
+        &app,
+        "beta.recovery_state_repaired",
+        "AURA preserved the previous Beta session marker, reset the recovery streak and kept the runtime paused for review.",
+    );
+    Ok(status)
 }
 
 #[tauri::command]
@@ -7258,6 +7273,7 @@ pub fn run() {
             get_app_status,
             get_beta_status,
             set_beta_preferences,
+            repair_beta_recovery_state,
             get_beta_test_session,
             start_beta_test_session,
             set_beta_test_check,
