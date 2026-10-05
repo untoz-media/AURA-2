@@ -139,6 +139,7 @@ type Props = {
   betaDiagnostics: DiagnosticsSnapshot | null;
   betaTestSession: BetaTestSession;
   onBetaRefresh: () => Promise<BetaStatus>;
+  onBetaRecoveryRepair: () => Promise<BetaStatus>;
   onBetaTestRefresh: () => Promise<BetaTestSession>;
   onBetaTestStart: () => Promise<BetaTestSession>;
   onBetaTestCheckChange: (
@@ -325,6 +326,7 @@ export default function Settings({
   betaDiagnostics,
   betaTestSession,
   onBetaRefresh,
+  onBetaRecoveryRepair,
   onBetaTestRefresh,
   onBetaTestStart,
   onBetaTestCheckChange,
@@ -414,6 +416,16 @@ export default function Settings({
     betaTestSession.active &&
     betaTestTotal > 0 &&
     betaTestCompleted === betaTestTotal;
+  const betaRecoveryRepairNeeded =
+    betaStatus.previousSessionUnclean ||
+    betaStatus.crashLoopGuardActive ||
+    Boolean(
+      betaDiagnostics?.healthChecks.some(
+        (check) =>
+          (check.id === "session-marker" || check.id === "recovery-streak") &&
+          check.status === "failed",
+      ),
+    );
   const betaSafeResumeRequired =
     runtimeState.paused &&
     (betaStatus.crashLoopGuardActive ||
@@ -1715,6 +1727,37 @@ export default function Settings({
                   </Badge>
                 }
               />
+              {betaRecoveryRepairNeeded && (
+                <SettingRow
+                  title="Repair recovery state"
+                  description="Preserves the current Beta session marker as a local backup, rebuilds only recovery metadata and keeps AURA paused. Memories, models, projects, Agents and Automations are not changed."
+                  trailing={
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        const confirmed = window.confirm(
+                          "Repair AURA's local Recovery State? The current Beta session marker will be preserved as a local backup. This does not resume AURA or delete your Memories, models, projects, Agents or Automations.",
+                        );
+                        if (!confirmed) return;
+
+                        setBetaBusy("recovery-repair");
+                        void onBetaRecoveryRepair()
+                          .then(async () => {
+                            await onBetaRefresh();
+                            await onBetaDiagnosticsRefresh();
+                          })
+                          .finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "recovery-repair"
+                        ? "Repairing…"
+                        : "Repair"}
+                    </button>
+                  }
+                />
+              )}
               {betaSafeResumeRequired && (
                 <div className="beta-recovery-review">
                   <div>
