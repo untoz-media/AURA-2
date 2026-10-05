@@ -61,6 +61,10 @@ jobs:
         shell: pwsh
         run: npm ci
 
+      - name: Windows Build Doctor
+        shell: pwsh
+        run: npm run beta:doctor:windows
+
       - name: Testing preview structural gate
         run: npm run preview:release-check
 
