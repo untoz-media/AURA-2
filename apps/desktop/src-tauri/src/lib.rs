@@ -6921,6 +6921,9 @@ pub fn run() {
             let beta_runtime = app.state::<BetaSessionRuntime>();
             let beta_recovery_mode =
                 begin_beta_session(app.handle(), &beta_runtime).unwrap_or(true);
+            let crash_loop_guard_active = beta_status(app.handle(), &beta_runtime)
+                .map(|status| status.crash_loop_guard_active)
+                .unwrap_or(true);
 
             let preferences = load_preferences(app.handle());
             let voice_preferences = load_voice_preferences(app.handle());
@@ -6982,6 +6985,14 @@ pub fn run() {
                 );
             }
 
+            if crash_loop_guard_active {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.crash_loop_guard",
+                    "AURA detected repeated unclean sessions. Background startup is suppressed and AURA remains paused until the recovery state is reviewed.",
+                );
+            }
+
             if voice_preferences.wake_word_enabled {
                 let generation = app
                     .state::<RuntimeState>()
@@ -6990,7 +7001,8 @@ pub fn run() {
                 spawn_wake_monitor(app.handle().clone(), generation);
             }
 
-            let launched_in_background = std::env::args().any(|arg| arg == "--background");
+            let launched_in_background = std::env::args().any(|arg| arg == "--background")
+                && !crash_loop_guard_active;
 
             let shortcut = Shortcut::new(
                 Some(Modifiers::CONTROL | Modifiers::SHIFT),
