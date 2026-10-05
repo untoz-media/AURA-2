@@ -1,5 +1,24 @@
 # AURA-2 Beta Quick Start
 
+## 0. Building a local testing installer
+
+If you are building the current candidate locally on Windows, start with:
+
+```powershell
+npm run beta:doctor:windows
+```
+
+The Build Doctor checks Node, Rust/MSVC, Visual Studio C++ Build Tools, Windows SDK, Python and build disk space. `npm run beta:build:windows` runs the same doctor automatically and attempts to load the Visual Studio developer environment when the tools are installed but not exposed in the normal PowerShell PATH.
+
+Then use:
+
+```powershell
+npm run beta:build:windows
+npm run beta:verify:artifact
+```
+
+A successful local build embeds its exact Git commit and local-smoke build identity in AURA Diagnostics.
+
 ## 1. Install
 
 Run the verified AURA-2 Windows x64 NSIS installer.
@@ -129,3 +148,7 @@ Settings → Beta & Diagnostics → Refresh → Export JSON
 Nothing is uploaded automatically.
 
 If AURA detects that the previous session ended unexpectedly, it starts paused in Recovery Safe Mode. Review the recovery/health state and explicitly choose Resume AURA when you are ready.
+
+If two consecutive sessions end uncleanly, **Crash Loop Guard** activates. AURA stays visible even if it was launched with `--background`, remains paused, and removes the one-click Resume action from the Chat recovery banner until you review Beta & Diagnostics. A later clean shutdown resets the recovery streak.
+
+The **Testing Preview readiness** card separates core/safety readiness, Windows x64 compatibility and build provenance from optional local-model setup. It is a preflight aid, not a replacement for the full NSIS smoke checklist.
