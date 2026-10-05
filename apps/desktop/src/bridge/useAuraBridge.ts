@@ -2495,8 +2495,11 @@ export function useAuraBridge() {
     }
   }, [dropIntake.items]);
 
-  const setPaused = useCallback(async (paused: boolean) => {
-    const state = await setRuntimePaused(paused);
+  const setPaused = useCallback(async (
+    paused: boolean,
+    recoveryOverride = false,
+  ) => {
+    const state = await setRuntimePaused(paused, recoveryOverride);
     setRuntimeState(state);
     return state;
   }, []);
