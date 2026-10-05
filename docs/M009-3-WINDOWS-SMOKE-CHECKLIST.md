@@ -128,6 +128,11 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Attach one dropped file to Chat and confirm a removable filename chip appears above the composer.
 - [ ] Attach all dropped files and confirm all current opaque items appear as composer chips without filesystem paths.
 - [ ] Send a custom question with attachments and confirm the local model uses only bounded turn-only context.
+- [ ] Attach 8 previewable text files containing unique markers and confirm the model context includes evidence from every file instead of starving later attachments.
+- [ ] Confirm the composer summarizes the batch as text context / image metadata / metadata only.
+- [ ] Drop SRT, VTT, IPYNB, Vue/Svelte and PowerShell/shell files and confirm they are explicitly offered as bounded text context.
+- [ ] Drop `.env`, `.gitignore`, `Dockerfile`, `Makefile` and extensionless `README` and confirm only these known extensionless names receive text context.
+- [ ] Drop an arbitrary unknown extensionless file and confirm it remains metadata-only.
 - [ ] Send attachments with an empty composer and confirm the visible request becomes "Analyze the attached local files."
 - [ ] After an accepted attached message, confirm attachments are detached from the next turn while the Drop Tray session remains.
 - [ ] Confirm the sent user message shows safe attachment filenames but no paths or file contents.
