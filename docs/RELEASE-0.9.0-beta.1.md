@@ -86,7 +86,7 @@ New release-readiness work:
 - diagnostics schema v3 adds privacy-safe build provenance: source commit, build source and build label
 - Settings → Beta & Diagnostics shows the exact build identity used for bug reports
 - Windows CI artifacts include a SHA-256 checksum and traceable build manifest
-- the Testing Preview release pipeline resolves and attaches the exact npm lockfile used for the build
+- the Testing Preview release pipeline resolves and attaches the exact npm and Cargo lockfiles used for the build
 - the GitHub release is explicitly marked as a pre-release and not Latest
 - manual release dispatch requires explicit `RELEASE_ALPHA_V1` confirmation
 - security reports are routed to private GitHub Security Advisories
