@@ -2532,7 +2532,7 @@ export default function Settings({
               <SectionLabel>Available & planned</SectionLabel>
               <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
               <SettingRow title="App Skills" description="Core-owned dynamic Skill Registry. Includes Browser, Notepad, Windows Terminal, Calculator and safe File Explorer skills." trailing={<Badge tone="ready">V3 Beta</Badge>} />
-              <SettingRow title="Drag & Drop" description="V2 temporary local file intake with opaque IDs, bounded inspection, one-turn Chat attachments, safe Explorer reveal and explicit Vision handoff." trailing={<Badge tone="ready">V2 Beta</Badge>} />
+              <SettingRow title="File Context" description="V2 local file intake with opaque IDs, bounded inspection, fair multi-file Chat context, safe Explorer reveal and explicit Vision handoff." trailing={<Badge tone="ready">V2 Beta</Badge>} />
             </Surface>
           </>
         )}
