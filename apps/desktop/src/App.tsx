@@ -190,8 +190,8 @@ function App() {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
-    listenToOpenSettings(() => {
-      setSettingsSection("general");
+    listenToOpenSettings((section) => {
+      setSettingsSection(section === "beta" ? "beta" : "general");
       setView("settings");
     }).then((cleanup) => {
       if (cancelled) {
