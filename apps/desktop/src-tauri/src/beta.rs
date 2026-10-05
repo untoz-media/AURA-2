@@ -3,7 +3,7 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager};
 const BETA_STATE_FILE: &str = "beta-state.json";
 const SESSION_FILE: &str = "beta-session.json";
 const DIAGNOSTICS_MAX_BYTES: usize = 64 * 1024;
+const CRASH_LOOP_THRESHOLD: u32 = 2;
 const DIAGNOSTICS_TOP_LEVEL_FIELDS: &[&str] = &[
     "schemaVersion",
     "appName",
@@ -57,6 +58,7 @@ impl Default for BetaPreferences {
 #[derive(Default)]
 pub struct BetaSessionRuntime {
     previous_session_unclean: AtomicBool,
+    consecutive_unclean_sessions: AtomicU32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,6 +67,8 @@ struct SessionMarker {
     session_id: String,
     started_at_ms: u64,
     clean_exit: bool,
+    #[serde(default)]
+    unclean_streak: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -73,6 +77,8 @@ pub struct BetaStatus {
     pub channel: String,
     pub onboarding_complete: bool,
     pub previous_session_unclean: bool,
+    pub consecutive_unclean_sessions: u32,
+    pub crash_loop_guard_active: bool,
     pub telemetry_enabled: bool,
     pub automatic_crash_uploads: bool,
     pub local_diagnostics_only: bool,
@@ -149,16 +155,20 @@ pub fn begin_session(
     runtime: &BetaSessionRuntime,
 ) -> Result<bool, String> {
     let path = session_path(app)?;
-    let previous_unclean = previous_session_was_unclean(&path);
+    let (previous_unclean, consecutive_unclean_sessions) = session_recovery_state(&path);
 
     runtime
         .previous_session_unclean
         .store(previous_unclean, Ordering::Relaxed);
+    runtime
+        .consecutive_unclean_sessions
+        .store(consecutive_unclean_sessions, Ordering::Relaxed);
 
     let marker = SessionMarker {
         session_id: format!("session-{}", timestamp_ms()),
         started_at_ms: timestamp_ms(),
         clean_exit: false,
+        unclean_streak: consecutive_unclean_sessions,
     };
     write_json(&path, &marker)?;
     Ok(previous_unclean)
@@ -192,6 +202,13 @@ pub fn status(
         previous_session_unclean: runtime
             .previous_session_unclean
             .load(Ordering::Relaxed),
+        consecutive_unclean_sessions: runtime
+            .consecutive_unclean_sessions
+            .load(Ordering::Relaxed),
+        crash_loop_guard_active: runtime
+            .consecutive_unclean_sessions
+            .load(Ordering::Relaxed)
+            >= CRASH_LOOP_THRESHOLD,
         telemetry_enabled: false,
         automatic_crash_uploads: false,
         local_diagnostics_only: true,
@@ -229,6 +246,7 @@ pub fn local_health_checks(app: &AppHandle) -> Vec<DiagnosticCheck> {
         ),
         session_marker_health_check(app),
         beta_preferences_health_check(app),
+        recovery_streak_health_check(app),
     ]
 }
 
@@ -356,6 +374,46 @@ fn beta_preferences_health_check(app: &AppHandle) -> DiagnosticCheck {
     }
 }
 
+
+fn recovery_streak_health_check(app: &AppHandle) -> DiagnosticCheck {
+    let path = match session_path(app) {
+        Ok(path) => path,
+        Err(_) => {
+            return DiagnosticCheck::failed(
+                "recovery-streak",
+                "Recovery streak",
+                "AURA could not resolve the Beta session marker.",
+            );
+        }
+    };
+
+    let streak = fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<SessionMarker>(&content).ok())
+        .map(|marker| marker.unclean_streak)
+        .unwrap_or(0);
+
+    if streak >= CRASH_LOOP_THRESHOLD {
+        DiagnosticCheck::failed(
+            "recovery-streak",
+            "Crash loop guard",
+            format!(
+                "AURA detected {streak} consecutive unclean sessions. Background startup stays visible and AURA remains paused until the recovery state is reviewed."
+            ),
+        )
+    } else {
+        DiagnosticCheck::passed(
+            "recovery-streak",
+            "Recovery streak",
+            if streak == 0 {
+                "No repeated unclean-session pattern is active.".to_string()
+            } else {
+                "One unclean session was detected; crash-loop protection is not active.".to_string()
+            },
+        )
+    }
+}
+
 pub fn export_diagnostics(
     app: &AppHandle,
     snapshot: &DiagnosticsSnapshot,
@@ -431,14 +489,20 @@ fn load_preferences(app: &AppHandle) -> Result<BetaPreferences, String> {
         .map_err(|error| format!("Beta preferences are invalid and were left unchanged: {error}"))
 }
 
-fn previous_session_was_unclean(path: &Path) -> bool {
+fn session_recovery_state(path: &Path) -> (bool, u32) {
     match fs::read_to_string(path) {
-        Ok(content) => serde_json::from_str::<SessionMarker>(&content)
-            .map(|marker| !marker.clean_exit)
-            .unwrap_or(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-        Err(_) => true,
+        Ok(content) => match serde_json::from_str::<SessionMarker>(&content) {
+            Ok(marker) if marker.clean_exit => (false, 0),
+            Ok(marker) => (true, marker.unclean_streak.saturating_add(1)),
+            Err(_) => (true, 1),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (false, 0),
+        Err(_) => (true, 1),
     }
+}
+
+fn previous_session_was_unclean(path: &Path) -> bool {
+    session_recovery_state(path).0
 }
 
 fn write_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<(), String> {
@@ -534,6 +598,42 @@ mod tests {
         ));
         let _ = fs::remove_file(&path);
         assert!(!previous_session_was_unclean(&path));
+    }
+
+    #[test]
+    fn repeated_unclean_sessions_increment_recovery_streak() {
+        let path = std::env::temp_dir().join(format!(
+            "aura-beta-streak-{}-{}.json",
+            std::process::id(),
+            timestamp_ms()
+        ));
+        let marker = SessionMarker {
+            session_id: "test".to_string(),
+            started_at_ms: 1,
+            clean_exit: false,
+            unclean_streak: 1,
+        };
+        write_json(&path, &marker).expect("write marker");
+        assert_eq!(session_recovery_state(&path), (true, 2));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn clean_session_resets_recovery_streak() {
+        let path = std::env::temp_dir().join(format!(
+            "aura-beta-clean-streak-{}-{}.json",
+            std::process::id(),
+            timestamp_ms()
+        ));
+        let marker = SessionMarker {
+            session_id: "test".to_string(),
+            started_at_ms: 1,
+            clean_exit: true,
+            unclean_streak: 4,
+        };
+        write_json(&path, &marker).expect("write marker");
+        assert_eq!(session_recovery_state(&path), (false, 0));
+        let _ = fs::remove_file(path);
     }
 
     #[test]
