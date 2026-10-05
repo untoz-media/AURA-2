@@ -33,6 +33,8 @@ const checks = [
   ["security policy exists", fs.existsSync("SECURITY.md")],
   ["bug report form exists", fs.existsSync(".github/ISSUE_TEMPLATE/bug_report.yml")],
   ["Windows Build Doctor exists", fs.existsSync("scripts/windows-build-doctor.ps1")],
+  ["production Rust panic gate exists", fs.existsSync("scripts/check-production-rust-panics.mjs")],
+  ["Beta validation runs panic gate", fs.readFileSync("scripts/validate-beta.mjs", "utf8").includes("check-production-rust-panics.mjs")],
   ["Windows Build Doctor is wired to npm", root.scripts?.["beta:doctor:windows"]?.includes("windows-build-doctor.ps1")],
   ["local Beta build uses Build Doctor", fs.readFileSync("scripts/build-beta-windows.ps1", "utf8").includes("windows-build-doctor.ps1")],
   ["build provenance schema is v3", beta.includes("build_commit") && beta.includes("build_source") && beta.includes("build_label")],
