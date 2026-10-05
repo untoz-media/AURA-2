@@ -4,6 +4,9 @@ permissions:
   contents: read
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/actions-runner-smoke.yml"
   push:
     branches:
       - m009-beta-readiness
