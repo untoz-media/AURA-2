@@ -53,7 +53,10 @@ type Props = {
   onSectionChange: (section: SettingsSection) => void;
   appStatus: AppStatus | null;
   runtimeState: RuntimeState;
-  onPausedChange: (paused: boolean) => Promise<RuntimeState>;
+  onPausedChange: (
+    paused: boolean,
+    recoveryOverride?: boolean,
+  ) => Promise<RuntimeState>;
   onBackgroundChange: (backgroundEnabled: boolean) => Promise<RuntimeState>;
   onAutostartChange: (autostartEnabled: boolean) => Promise<RuntimeState>;
   permissionPolicy: PermissionPolicy;
@@ -386,6 +389,10 @@ export default function Settings({
     betaCoreTestingReady === true &&
     betaPlatformCompatible === true &&
     betaBuildTraceable === true;
+  const betaSafeResumeRequired =
+    runtimeState.paused &&
+    (betaStatus.crashLoopGuardActive ||
+      betaDiagnostics?.healthStatus === "degraded");
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -674,7 +681,13 @@ export default function Settings({
                 trailing={
                   <Toggle
                     checked={runtimeState.paused}
-                    onChange={(value) => void onPausedChange(value)}
+                    onChange={(value) => {
+                      if (!value && betaSafeResumeRequired) {
+                        onSectionChange("beta");
+                        return;
+                      }
+                      void onPausedChange(value);
+                    }}
                     label="Pause AURA"
                   />
                 }
@@ -1677,6 +1690,38 @@ export default function Settings({
                   </Badge>
                 }
               />
+              {betaSafeResumeRequired && (
+                <div className="beta-recovery-review">
+                  <div>
+                    <strong>Recovery acknowledgement required</strong>
+                    <span>
+                      AURA will stay paused until you explicitly acknowledge the
+                      degraded recovery state. Review the checks below before resuming.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="feature-primary-button"
+                    disabled={betaBusy === "resume"}
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        "Resume AURA despite the current recovery/degraded health state? Only continue after reviewing Beta & Diagnostics.",
+                      );
+                      if (!confirmed) return;
+
+                      setBetaBusy("resume");
+                      void onPausedChange(false, true)
+                        .then(async () => {
+                          await onBetaRefresh();
+                          await onBetaDiagnosticsRefresh();
+                        })
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "resume" ? "Resuming…" : "Review & Resume"}
+                  </button>
+                </div>
+              )}
               <SettingRow
                 title="Telemetry"
                 description="No usage analytics are uploaded by this Beta build."
