@@ -7,6 +7,16 @@ if ($env:OS -ne "Windows_NT") {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+. (Join-Path $PSScriptRoot "windows-build-doctor.ps1") -ApplyEnvironment
+
+$gitSha = (git rev-parse HEAD).Trim()
+if (-not $gitSha) {
+  throw "Could not resolve the source commit for this Beta build."
+}
+$env:AURA_BUILD_COMMIT = $gitSha
+$env:AURA_BUILD_SOURCE = "local-beta-build"
+$env:AURA_BUILD_LABEL = "beta-local-smoke"
+
 $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
 $artifactDir = Join-Path $repoRoot "artifacts\beta\$version"
 
@@ -49,15 +59,9 @@ $checksumPath = Join-Path $artifactDir "AURA-2-Windows-x64.sha256"
 "$hash  $($installer.Name)" | Set-Content $checksumPath -Encoding ascii
 
 $signature = Get-AuthenticodeSignature $copiedInstaller
-$gitSha = $null
-try {
-  $gitSha = (git rev-parse HEAD 2>$null).Trim()
-} catch {
-  $gitSha = $null
-}
 
 $manifest = [ordered]@{
-  schemaVersion = 1
+  schemaVersion = 2
   product = "AURA-2"
   version = $version
   channel = "beta"
@@ -66,6 +70,8 @@ $manifest = [ordered]@{
   sha256 = $hash
   signatureStatus = [string]$signature.Status
   sourceCommit = $gitSha
+  buildSource = $env:AURA_BUILD_SOURCE
+  buildLabel = $env:AURA_BUILD_LABEL
   builtAtUtc = [DateTime]::UtcNow.ToString("o")
 }
 
