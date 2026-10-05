@@ -41,6 +41,10 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] If launched with `--background`, confirm Crash Loop Guard keeps the main window visible instead of hiding to tray.
 - [ ] Confirm the recovery banner does not offer one-click Resume while Crash Loop Guard is active.
 - [ ] Open Settings → Beta & Diagnostics and confirm the recovery streak is visible and the local health report is Degraded.
+- [ ] Try to resume from the General pause toggle and confirm AURA redirects to Beta & Diagnostics instead of silently unpausing.
+- [ ] Confirm a generic Core resume request is rejected while Crash Loop Guard or degraded startup health is active.
+- [ ] Use **Review & Resume**, accept the explicit warning and confirm AURA resumes only after that acknowledgement.
+- [ ] Confirm the lifecycle records the explicit recovery override locally.
 - [ ] Complete a normal exit, relaunch and confirm the recovery streak resets and the warning clears.
 
 ## D. Permissions and safety
