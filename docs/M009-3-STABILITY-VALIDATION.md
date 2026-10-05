@@ -181,3 +181,15 @@ Local Beta builds now embed traceable build provenance:
 
 The local build manifest uses schema v3. Before compilation, the local build resolves an npm `package-lock.json` and Rust `Cargo.lock`, uses those locks for the validation/test pass, copies both into the artifact directory and records both SHA-256 hashes. Artifact verification rejects an untraceable source commit or a changed dependency lock.
 
+## Hosted runner isolation probe
+
+A minimal GitHub-hosted runner workflow exists at:
+
+`.github/workflows/actions-runner-smoke.yml`
+
+It deliberately uses no checkout action, no Node, no Python, no Rust and no project code. Its only job is an `ubuntu-latest` shell step that prints a few environment values.
+
+On 5 October 2026 both the push and pull-request executions of this probe failed before the first step with no logs and `steps: null`. This isolates the current hosted Actions failure from AURA-2 source/build logic: GitHub is rejecting or failing runner execution before workflow commands begin.
+
+Do not weaken the AURA build/release gates to compensate for this platform/account execution failure. Use the local Windows build path for M009.3 testing while hosted execution remains unavailable.
+
