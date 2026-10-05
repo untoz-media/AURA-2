@@ -10,7 +10,9 @@ use tauri::{AppHandle, Manager};
 
 const BETA_STATE_FILE: &str = "beta-state.json";
 const SESSION_FILE: &str = "beta-session.json";
+const TEST_SESSION_FILE: &str = "beta-test-session.json";
 const DIAGNOSTICS_MAX_BYTES: usize = 64 * 1024;
+const TEST_REPORT_MAX_BYTES: usize = 96 * 1024;
 const CRASH_LOOP_THRESHOLD: u32 = 2;
 const DIAGNOSTICS_TOP_LEVEL_FIELDS: &[&str] = &[
     "schemaVersion",
@@ -89,6 +91,65 @@ pub struct BetaStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SetBetaPreferencesRequest {
     pub onboarding_complete: bool,
+}
+
+
+const BETA_TEST_AREAS: &[(&str, &str)] = &[
+    ("install", "Install & first run"),
+    ("lifecycle", "Desktop lifecycle & tray"),
+    ("recovery", "Recovery & Crash Loop Guard"),
+    ("permissions", "Permissions & safety"),
+    ("computer", "Computer Control"),
+    ("models", "Managed Runtime & models"),
+    ("attachments", "Drag & Drop / file context"),
+    ("create", "AURA Create"),
+    ("voice", "Voice"),
+    ("vision", "Vision"),
+    ("memory", "Memory & context"),
+    ("agents", "Agents & Automations"),
+    ("obs", "Director Mode / OBS"),
+    ("diagnostics", "Beta diagnostics"),
+    ("installer", "Installer lifecycle"),
+];
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BetaTestCheck {
+    pub id: String,
+    pub label: String,
+    pub completed: bool,
+    pub completed_at_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BetaTestSession {
+    pub schema_version: u32,
+    pub active: bool,
+    pub started_at_ms: Option<u64>,
+    pub updated_at_ms: u64,
+    pub checks: Vec<BetaTestCheck>,
+}
+
+impl Default for BetaTestSession {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            active: false,
+            started_at_ms: None,
+            updated_at_ms: timestamp_ms(),
+            checks: default_beta_test_checks(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BetaTestReport {
+    schema_version: u32,
+    session: BetaTestSession,
+    diagnostics: DiagnosticsSnapshot,
+    generated_at_ms: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -226,6 +287,91 @@ pub fn save_preferences(
     };
     write_json(&preferences_path(app)?, &preferences)?;
     status(app, runtime)
+}
+
+pub fn test_session(app: &AppHandle) -> Result<BetaTestSession, String> {
+    load_test_session(app)
+}
+
+pub fn start_test_session(app: &AppHandle) -> Result<BetaTestSession, String> {
+    let now = timestamp_ms();
+    let session = BetaTestSession {
+        schema_version: 1,
+        active: true,
+        started_at_ms: Some(now),
+        updated_at_ms: now,
+        checks: default_beta_test_checks(),
+    };
+    write_json(&test_session_path(app)?, &session)?;
+    Ok(session)
+}
+
+pub fn set_test_check(
+    app: &AppHandle,
+    check_id: &str,
+    completed: bool,
+) -> Result<BetaTestSession, String> {
+    if !BETA_TEST_AREAS.iter().any(|(id, _)| *id == check_id) {
+        return Err(format!("Unknown Beta test area '{check_id}'."));
+    }
+
+    let mut session = load_test_session(app)?;
+    if !session.active {
+        return Err("Start a Beta test session before updating checklist items.".to_string());
+    }
+
+    let now = timestamp_ms();
+    let Some(check) = session.checks.iter_mut().find(|check| check.id == check_id) else {
+        return Err(format!("Beta test area '{check_id}' is unavailable."));
+    };
+
+    check.completed = completed;
+    check.completed_at_ms = if completed { Some(now) } else { None };
+    session.updated_at_ms = now;
+    write_json(&test_session_path(app)?, &session)?;
+    Ok(session)
+}
+
+pub fn reset_test_session(app: &AppHandle) -> Result<BetaTestSession, String> {
+    let session = BetaTestSession::default();
+    write_json(&test_session_path(app)?, &session)?;
+    Ok(session)
+}
+
+pub fn export_test_report(
+    app: &AppHandle,
+    session: &BetaTestSession,
+    diagnostics: &DiagnosticsSnapshot,
+) -> Result<String, String> {
+    validate_diagnostics_payload(diagnostics)?;
+
+    let report = BetaTestReport {
+        schema_version: 1,
+        session: normalize_test_session(session.clone()),
+        diagnostics: diagnostics.clone(),
+        generated_at_ms: timestamp_ms(),
+    };
+
+    let serialized = serde_json::to_vec(&report)
+        .map_err(|error| format!("Could not serialize Beta test report: {error}"))?;
+    if serialized.len() > TEST_REPORT_MAX_BYTES {
+        return Err("Beta test report exceeded the local privacy size limit.".to_string());
+    }
+
+    let directory = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_local_data_dir())
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("Could not create Beta test report directory: {error}"))?;
+
+    let path = directory.join(format!(
+        "AURA-2-Beta-Test-Report-{}.json",
+        report.generated_at_ms
+    ));
+    write_json(&path, &report)?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 pub fn local_health_checks(app: &AppHandle) -> Vec<DiagnosticCheck> {
@@ -477,6 +623,63 @@ fn validate_diagnostics_payload(snapshot: &DiagnosticsSnapshot) -> Result<(), St
     Ok(())
 }
 
+fn default_beta_test_checks() -> Vec<BetaTestCheck> {
+    BETA_TEST_AREAS
+        .iter()
+        .map(|(id, label)| BetaTestCheck {
+            id: (*id).to_string(),
+            label: (*label).to_string(),
+            completed: false,
+            completed_at_ms: None,
+        })
+        .collect()
+}
+
+fn normalize_test_session(session: BetaTestSession) -> BetaTestSession {
+    let checks = BETA_TEST_AREAS
+        .iter()
+        .map(|(id, label)| {
+            session
+                .checks
+                .iter()
+                .find(|check| check.id == *id)
+                .map(|check| BetaTestCheck {
+                    id: (*id).to_string(),
+                    label: (*label).to_string(),
+                    completed: check.completed,
+                    completed_at_ms: check.completed_at_ms,
+                })
+                .unwrap_or_else(|| BetaTestCheck {
+                    id: (*id).to_string(),
+                    label: (*label).to_string(),
+                    completed: false,
+                    completed_at_ms: None,
+                })
+        })
+        .collect();
+
+    BetaTestSession {
+        schema_version: 1,
+        active: session.active,
+        started_at_ms: session.started_at_ms,
+        updated_at_ms: session.updated_at_ms,
+        checks,
+    }
+}
+
+fn load_test_session(app: &AppHandle) -> Result<BetaTestSession, String> {
+    let path = test_session_path(app)?;
+    if !path.exists() {
+        return Ok(BetaTestSession::default());
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Could not read Beta test session: {error}"))?;
+    let session = serde_json::from_str::<BetaTestSession>(&content)
+        .map_err(|error| format!("Beta test session is invalid: {error}"))?;
+    Ok(normalize_test_session(session))
+}
+
 fn load_preferences(app: &AppHandle) -> Result<BetaPreferences, String> {
     let path = preferences_path(app)?;
     if !path.exists() {
@@ -564,6 +767,14 @@ fn preferences_path(app: &AppHandle) -> Result<PathBuf, String> {
         .join(BETA_STATE_FILE))
 }
 
+fn test_session_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?
+        .join(TEST_SESSION_FILE))
+}
+
 fn session_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
@@ -587,6 +798,36 @@ mod tests {
     fn beta_defaults_require_first_run_onboarding() {
         let preferences = BetaPreferences::default();
         assert!(!preferences.onboarding_complete);
+    }
+
+    #[test]
+    fn beta_test_session_has_fixed_privacy_safe_areas() {
+        let session = BetaTestSession::default();
+        assert_eq!(session.schema_version, 1);
+        assert!(!session.active);
+        assert_eq!(session.checks.len(), BETA_TEST_AREAS.len());
+        assert!(session
+            .checks
+            .iter()
+            .all(|check| !check.completed && check.completed_at_ms.is_none()));
+    }
+
+    #[test]
+    fn beta_test_session_normalization_drops_unknown_areas() {
+        let mut session = BetaTestSession::default();
+        session.checks.push(BetaTestCheck {
+            id: "unexpected-free-text-area".to_string(),
+            label: "Unexpected".to_string(),
+            completed: true,
+            completed_at_ms: Some(1),
+        });
+
+        let normalized = normalize_test_session(session);
+        assert_eq!(normalized.checks.len(), BETA_TEST_AREAS.len());
+        assert!(!normalized
+            .checks
+            .iter()
+            .any(|check| check.id == "unexpected-free-text-area"));
     }
 
     #[test]
