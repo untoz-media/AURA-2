@@ -53,6 +53,7 @@ function App() {
     appStatus,
     betaStatus,
     betaDiagnostics,
+    betaTestSession,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -97,8 +98,13 @@ function App() {
     submitCommand,
     refreshBetaStatus,
     updateBetaPreferences,
+    refreshBetaTestSession,
+    startBetaTestSessionControl,
+    setBetaTestCheckControl,
+    resetBetaTestSessionControl,
     refreshBetaDiagnostics,
     exportBetaDiagnosticsControl,
+    exportBetaTestReportControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
@@ -979,7 +985,13 @@ function App() {
               onAudioTestStop={stopAudioTest}
               betaStatus={betaStatus}
               betaDiagnostics={betaDiagnostics}
+              betaTestSession={betaTestSession}
               onBetaRefresh={refreshBetaStatus}
+              onBetaTestRefresh={refreshBetaTestSession}
+              onBetaTestStart={startBetaTestSessionControl}
+              onBetaTestCheckChange={setBetaTestCheckControl}
+              onBetaTestReset={resetBetaTestSessionControl}
+              onBetaTestReportExport={exportBetaTestReportControl}
               onBetaPreferencesChange={updateBetaPreferences}
               onBetaDiagnosticsRefresh={refreshBetaDiagnostics}
               onBetaDiagnosticsExport={exportBetaDiagnosticsControl}
