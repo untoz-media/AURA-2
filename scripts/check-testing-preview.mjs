@@ -15,6 +15,7 @@ const beta = fs.readFileSync("apps/desktop/src-tauri/src/beta.rs", "utf8");
 const lib = fs.readFileSync("apps/desktop/src-tauri/src/lib.rs", "utf8");
 const types = fs.readFileSync("apps/desktop/src/bridge/types.ts", "utf8");
 const settings = fs.readFileSync("apps/desktop/src/Settings.tsx", "utf8");
+const app = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
 const releaseWorkflow = fs.readFileSync(".github/workflows/testing-preview-release.yml", "utf8");
 
 const cargoVersion = cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
@@ -43,6 +44,7 @@ const checks = [
   ["Testing Preview readiness UI exists", settings.includes("Testing Preview readiness") && settings.includes("betaBuildTraceable") && settings.includes("betaPlatformCompatible")],
   ["Recovery resume is fail-closed", lib.includes("recovery_override") && lib.includes("Review Beta & Diagnostics")],
   ["Recovery override is explicit in desktop UI", settings.includes("Review & Resume") && settings.includes("onPausedChange(false, true)")],
+  ["Testing Preview builds identify themselves", app.includes("AURA-2 TESTING PREVIEW") && app.includes("beta-local-smoke") && app.includes("buildCommit.slice(0, 12)")],
   ["preview release is a prerelease", releaseWorkflow.includes("prerelease: true")],
   ["preview release is not latest", releaseWorkflow.includes("make_latest: false")],
   ["preview workflow attaches checksum and manifest", releaseWorkflow.includes("AURA-2-Windows-x64.sha256") && releaseWorkflow.includes("AURA-2-Testing-Preview-Build.json")],
