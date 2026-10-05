@@ -342,10 +342,13 @@ export default function Settings({
     !betaStatus.automaticCrashUploads &&
     betaStatus.localDiagnosticsOnly;
   const betaSnapshotIdentityValid = betaDiagnostics
-    ? betaDiagnostics.schemaVersion === 2 &&
+    ? betaDiagnostics.schemaVersion === 3 &&
       betaDiagnostics.appName === (appStatus?.name ?? "AURA-2") &&
       betaDiagnostics.appVersion === (appStatus?.version ?? betaDiagnostics.appVersion) &&
       betaDiagnostics.channel === "beta" &&
+      betaDiagnostics.buildCommit.length > 0 &&
+      betaDiagnostics.buildSource.length > 0 &&
+      betaDiagnostics.buildLabel.length > 0 &&
       !betaDiagnostics.telemetryEnabled
     : null;
   const betaCountersValid = betaDiagnostics
@@ -1612,6 +1615,23 @@ export default function Settings({
                 trailing={<Badge tone="ready">Beta</Badge>}
               />
               <SettingRow
+                title="Build provenance"
+                description={
+                  betaDiagnostics
+                    ? betaDiagnostics.buildLabel +
+                      " · " +
+                      betaDiagnostics.buildSource +
+                      " · " +
+                      betaDiagnostics.buildCommit.slice(0, 12)
+                    : "Run diagnostics to identify the exact build source and commit."
+                }
+                trailing={
+                  <Badge tone={betaDiagnostics ? "ready" : "planned"}>
+                    {betaDiagnostics ? "Traceable" : "Not run"}
+                  </Badge>
+                }
+              />
+              <SettingRow
                 title="Previous session"
                 description={
                   betaStatus.previousSessionUnclean
@@ -1669,7 +1689,7 @@ export default function Settings({
               />
               <SettingRow
                 title="Snapshot identity"
-                description="Validates diagnostics schema, product/version identity, Beta channel and the diagnostics telemetry flag."
+                description="Validates diagnostics schema, product/version identity, Beta channel, build provenance and the diagnostics telemetry flag."
                 trailing={
                   <Badge
                     tone={
