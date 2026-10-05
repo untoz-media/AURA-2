@@ -14,6 +14,8 @@ The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, 
 
 A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate; the current hosted-runner outage does not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest.
 
+For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance.
+
 ---
 
 ## Vision
