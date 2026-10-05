@@ -16,6 +16,9 @@ const DIAGNOSTICS_TOP_LEVEL_FIELDS: &[&str] = &[
     "appName",
     "appVersion",
     "channel",
+    "buildCommit",
+    "buildSource",
+    "buildLabel",
     "platform",
     "architecture",
     "paused",
@@ -118,6 +121,9 @@ pub struct DiagnosticsSnapshot {
     pub app_name: String,
     pub app_version: String,
     pub channel: String,
+    pub build_commit: String,
+    pub build_source: String,
+    pub build_label: String,
     pub platform: String,
     pub architecture: String,
     pub paused: bool,
@@ -564,10 +570,13 @@ mod tests {
     #[test]
     fn diagnostics_schema_is_explicitly_versioned() {
         let snapshot = DiagnosticsSnapshot {
-            schema_version: 2,
+            schema_version: 3,
             app_name: "AURA-2".to_string(),
             app_version: "0.9.0-beta.1".to_string(),
             channel: "beta".to_string(),
+            build_commit: "test-commit".to_string(),
+            build_source: "test".to_string(),
+            build_label: "diagnostics-test".to_string(),
             platform: "windows".to_string(),
             architecture: "x86_64".to_string(),
             paused: false,
@@ -592,7 +601,7 @@ mod tests {
             generated_at_ms: 1,
         };
 
-        assert_eq!(snapshot.schema_version, 2);
+        assert_eq!(snapshot.schema_version, 3);
         assert!(!snapshot.telemetry_enabled);
         validate_diagnostics_payload(&snapshot).expect("diagnostics privacy guard");
 
