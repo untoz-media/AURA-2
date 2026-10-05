@@ -922,6 +922,22 @@ export type SetBetaPreferencesRequest = {
   onboardingComplete: boolean;
 };
 
+
+export type BetaTestCheck = {
+  id: string;
+  label: string;
+  completed: boolean;
+  completedAtMs?: number | null;
+};
+
+export type BetaTestSession = {
+  schemaVersion: number;
+  active: boolean;
+  startedAtMs?: number | null;
+  updatedAtMs: number;
+  checks: BetaTestCheck[];
+};
+
 export type DiagnosticCheck = {
   id: string;
   label: string;
