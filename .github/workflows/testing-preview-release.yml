@@ -61,6 +61,9 @@ jobs:
         shell: pwsh
         run: npm ci
 
+      - name: Resolve Rust dependency lock
+        run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+
       - name: Windows Build Doctor
         shell: pwsh
         run: npm run beta:doctor:windows
@@ -72,7 +75,7 @@ jobs:
         run: npm run beta:validate
 
       - name: Run Rust regression tests
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Build Tauri + NSIS installer
         run: npm run build
@@ -88,10 +91,11 @@ jobs:
 
           $signature = Get-AuthenticodeSignature $installer.FullName
           $lockHash = (Get-FileHash "package-lock.json" -Algorithm SHA256).Hash.ToLower()
+          $cargoLockHash = (Get-FileHash "apps/desktop/src-tauri/Cargo.lock" -Algorithm SHA256).Hash.ToLower()
           $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
 
           $manifest = [ordered]@{
-            schemaVersion = 2
+            schemaVersion = 3
             product = "AURA-2"
             version = $version
             distributionLabel = "AURA-2 Alpha v1 — Testing Preview"
@@ -104,6 +108,7 @@ jobs:
             buildSource = $env:AURA_BUILD_SOURCE
             buildLabel = $env:AURA_BUILD_LABEL
             packageLockSha256 = $lockHash
+            cargoLockSha256 = $cargoLockHash
             workflowRunId = "${{ github.run_id }}"
             builtAtUtc = [DateTime]::UtcNow.ToString("o")
           }
@@ -119,7 +124,9 @@ jobs:
           $actualHash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
           if ($actualHash -ne ([string]$manifest.sha256).ToLower()) { throw "Installer checksum mismatch" }
           $lockHash = (Get-FileHash "package-lock.json" -Algorithm SHA256).Hash.ToLower()
-          if ($lockHash -ne ([string]$manifest.packageLockSha256).ToLower()) { throw "Dependency lock checksum mismatch" }
+          if ($lockHash -ne ([string]$manifest.packageLockSha256).ToLower()) { throw "npm dependency lock checksum mismatch" }
+          $cargoLockHash = (Get-FileHash "apps/desktop/src-tauri/Cargo.lock" -Algorithm SHA256).Hash.ToLower()
+          if ($cargoLockHash -ne ([string]$manifest.cargoLockSha256).ToLower()) { throw "Cargo dependency lock checksum mismatch" }
           if ($manifest.sourceCommit -ne $env:AURA_BUILD_COMMIT) { throw "Build provenance mismatch" }
 
       - name: Publish GitHub pre-release
@@ -137,3 +144,4 @@ jobs:
             AURA-2-Windows-x64.sha256
             AURA-2-Testing-Preview-Build.json
             package-lock.json
+            apps/desktop/src-tauri/Cargo.lock
