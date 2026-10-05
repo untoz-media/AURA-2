@@ -12,6 +12,8 @@ The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, 
 
 > **Current stage:** M009 Beta Candidate · AURA-2 0.9.0-beta.1 · Windows installer validation pending
 
+A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate; the current hosted-runner outage does not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest.
+
 ---
 
 ## Vision
