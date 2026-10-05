@@ -179,5 +179,5 @@ Local Beta builds now embed traceable build provenance:
 - `local-beta-build` source
 - `beta-local-smoke` label
 
-The local build manifest uses schema v2 and artifact verification rejects an untraceable source commit.
+The local build manifest uses schema v3. Before compilation, the local build resolves an npm `package-lock.json` and Rust `Cargo.lock`, uses those locks for the validation/test pass, copies both into the artifact directory and records both SHA-256 hashes. Artifact verification rejects an untraceable source commit or a changed dependency lock.
 
