@@ -28,9 +28,15 @@ use agents::{
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use beta::{
     begin_session as begin_beta_session, export_diagnostics as export_beta_diagnostics_file,
+    export_test_report as export_beta_test_report_file,
     local_health_checks as beta_local_health_checks,
-    mark_session_clean as mark_beta_session_clean, save_preferences as save_beta_preferences,
-    status as beta_status, BetaSessionRuntime, BetaStatus, DiagnosticCheck, DiagnosticsSnapshot,
+    mark_session_clean as mark_beta_session_clean,
+    reset_test_session as reset_beta_test_session_store,
+    save_preferences as save_beta_preferences,
+    set_test_check as set_beta_test_check_store,
+    start_test_session as start_beta_test_session_store,
+    status as beta_status, test_session as beta_test_session,
+    BetaSessionRuntime, BetaStatus, BetaTestSession, DiagnosticCheck, DiagnosticsSnapshot,
     SetBetaPreferencesRequest,
 };
 use computer::app_launcher::{launch_app, AppTarget};
@@ -2037,6 +2043,30 @@ fn set_beta_preferences(
 }
 
 #[tauri::command]
+fn get_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    beta_test_session(&app)
+}
+
+#[tauri::command]
+fn start_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    start_beta_test_session_store(&app)
+}
+
+#[tauri::command]
+fn set_beta_test_check(
+    app: AppHandle,
+    check_id: String,
+    completed: bool,
+) -> Result<BetaTestSession, String> {
+    set_beta_test_check_store(&app, &check_id, completed)
+}
+
+#[tauri::command]
+fn reset_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    reset_beta_test_session_store(&app)
+}
+
+#[tauri::command]
 fn get_beta_diagnostics(
     app: AppHandle,
     state: State<'_, RuntimeState>,
@@ -2059,6 +2089,24 @@ fn export_beta_diagnostics(
 ) -> Result<String, String> {
     let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)?;
     export_beta_diagnostics_file(&app, &snapshot)
+}
+
+#[tauri::command]
+fn export_beta_test_report(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
+) -> Result<String, String> {
+    let session = beta_test_session(&app)?;
+    if !session.active {
+        return Err("Start a Beta test session before exporting a test report.".to_string());
+    }
+
+    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)?;
+    export_beta_test_report_file(&app, &session, &snapshot)
 }
 
 #[tauri::command]
@@ -7158,8 +7206,13 @@ pub fn run() {
             get_app_status,
             get_beta_status,
             set_beta_preferences,
+            get_beta_test_session,
+            start_beta_test_session,
+            set_beta_test_check,
+            reset_beta_test_session,
             get_beta_diagnostics,
             export_beta_diagnostics,
+            export_beta_test_report,
             get_runtime_state,
             get_voice_preferences,
             set_voice_preferences,
