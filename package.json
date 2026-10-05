@@ -15,6 +15,7 @@
     "beta:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-beta-windows.ps1",
     "beta:verify:artifact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-beta-artifact.ps1",
     "preview:release-check": "node scripts/check-testing-preview.mjs",
-    "beta:doctor:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-build-doctor.ps1"
+    "beta:doctor:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-build-doctor.ps1",
+    "beta:panic-scan": "node scripts/check-production-rust-panics.mjs"
   }
 }
