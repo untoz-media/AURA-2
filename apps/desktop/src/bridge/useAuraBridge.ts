@@ -192,6 +192,8 @@ const DEFAULT_BETA_STATUS: BetaStatus = {
   channel: "beta",
   onboardingComplete: false,
   previousSessionUnclean: false,
+  consecutiveUncleanSessions: 0,
+  crashLoopGuardActive: false,
   telemetryEnabled: false,
   automaticCrashUploads: false,
   localDiagnosticsOnly: true,
