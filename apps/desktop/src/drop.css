@@ -312,3 +312,33 @@
     flex-direction: column-reverse;
   }
 }
+
+
+.drop-context-capability {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-top: 2px;
+  padding: 0 7px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 999px;
+  font-size: var(--text-3xs) !important;
+  font-weight: 620;
+  letter-spacing: 0.01em;
+}
+
+.drop-context-capability.ready {
+  color: var(--aura-text-2);
+  background: var(--aura-surface-3);
+}
+
+.drop-context-capability.partial {
+  color: var(--aura-text-3);
+  background: var(--aura-surface-2);
+}
+
+.drop-context-capability.metadata {
+  color: var(--aura-text-4);
+  background: transparent;
+}
