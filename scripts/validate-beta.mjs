@@ -93,6 +93,9 @@ console.log("AURA-2 Public Beta source validation");
 console.log(`Platform: ${process.platform} ${process.arch}`);
 
 run("Version metadata", process.execPath, ["scripts/verify-versions.mjs"]);
+run("Production Rust panic surface", process.execPath, [
+  "scripts/check-production-rust-panics.mjs",
+]);
 verifyReleaseConfiguration();
 run("Desktop TypeScript + Vite build", npm, [
   "--workspace",
