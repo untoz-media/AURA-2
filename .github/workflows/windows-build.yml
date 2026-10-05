@@ -58,6 +58,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Windows Build Doctor
+        shell: pwsh
+        run: npm run beta:doctor:windows
+
       - name: Validate Public Beta source
         run: npm run beta:validate
 
