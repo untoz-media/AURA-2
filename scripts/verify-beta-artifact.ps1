@@ -21,7 +21,7 @@ if (-not (Test-Path $checksumPath)) {
 
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 
-if ($manifest.schemaVersion -ne 1) {
+if ($manifest.schemaVersion -ne 2) {
   throw "Unsupported Beta build manifest schema: $($manifest.schemaVersion)"
 }
 if ($manifest.product -ne "AURA-2") {
@@ -32,6 +32,15 @@ if ($manifest.version -ne $version) {
 }
 if ($manifest.channel -ne "beta") {
   throw "Unexpected release channel in manifest: $($manifest.channel)"
+}
+if (-not $manifest.sourceCommit -or $manifest.sourceCommit -eq "unknown") {
+  throw "Build manifest does not contain a traceable source commit."
+}
+if (-not $manifest.buildSource) {
+  throw "Build manifest does not identify the build source."
+}
+if (-not $manifest.buildLabel) {
+  throw "Build manifest does not identify the build label."
 }
 if (-not $manifest.installer) {
   throw "Manifest does not identify an installer."
@@ -75,4 +84,5 @@ Write-Host "Bytes:      $($installer.Length)"
 Write-Host "SHA-256:    $actualHash"
 Write-Host "Signature:  $($signature.Status)"
 Write-Host "Commit:     $($manifest.sourceCommit)"
+Write-Host "Build:      $($manifest.buildLabel) · $($manifest.buildSource)"
 Write-Host "Built UTC:  $($manifest.builtAtUtc)"
