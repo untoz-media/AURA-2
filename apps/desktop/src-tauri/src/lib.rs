@@ -7166,7 +7166,7 @@ pub fn run() {
                                 let snapshot = runtime_snapshot(&current);
                                 let _ = pause_item_for_menu.set_checked(snapshot.paused);
                                 show_main_window(app);
-                                let _ = app.emit("aura:open-settings", ());
+                                let _ = app.emit("aura:open-settings", "beta");
                                 emit_lifecycle_event(
                                     app,
                                     "beta.recovery_resume_blocked",
@@ -7177,7 +7177,7 @@ pub fn run() {
                     }
                     "settings" => {
                         show_main_window(app);
-                        let _ = app.emit("aura:open-settings", ());
+                        let _ = app.emit("aura:open-settings", "general");
                     }
                     "quit" => {
                         let _ = mark_beta_session_clean(app);
