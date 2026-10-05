@@ -89,7 +89,7 @@ From the drop tray you can:
 - **Reveal** an accepted file in File Explorer.
 - **Use in Vision** for supported raster images.
 
-Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Chat attachments are one-turn and use a smaller model-context budget capped at 6,000 characters total. The composer shows removable filename chips; after an accepted message, the files are detached from the next turn automatically. Sending attached files with no typed question uses "Analyze the attached local files." as the visible request. Filesystem paths and attachment contents are not persisted in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
+Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Chat attachments are one-turn and use a smaller model-context budget capped at 6,000 characters total. When several text files are attached, AURA shares that budget across the batch so each previewable file receives context rather than allowing the first file to consume it all. The composer shows removable filename chips; after an accepted message, the files are detached from the next turn automatically. Sending attached files with no typed question uses "Analyze the attached local files." as the visible request. Filesystem paths and attachment contents are not persisted in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
 
 Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
 
