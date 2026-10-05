@@ -101,8 +101,14 @@ export async function getRuntimeState(): Promise<RuntimeState> {
   return invoke<RuntimeState>("get_runtime_state");
 }
 
-export async function setRuntimePaused(paused: boolean): Promise<RuntimeState> {
-  return invoke<RuntimeState>("set_runtime_paused", { paused });
+export async function setRuntimePaused(
+  paused: boolean,
+  recoveryOverride = false,
+): Promise<RuntimeState> {
+  return invoke<RuntimeState>("set_runtime_paused", {
+    paused,
+    recoveryOverride,
+  });
 }
 
 export async function setBackgroundEnabled(
