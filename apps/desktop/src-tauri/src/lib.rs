@@ -2089,9 +2089,33 @@ fn get_runtime_state(state: State<'_, RuntimeState>) -> RuntimeSnapshot {
 #[tauri::command]
 fn set_runtime_paused(
     app: tauri::AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
     paused: bool,
-) -> RuntimeSnapshot {
-    set_paused_state(&app, paused)
+    recovery_override: Option<bool>,
+) -> Result<RuntimeSnapshot, String> {
+    if !paused && !recovery_override.unwrap_or(false) {
+        let recovery = beta_status(&app, &beta)?;
+        let health_degraded = beta_local_health_checks(&app)
+            .iter()
+            .any(|check| check.status == "failed");
+
+        if recovery.crash_loop_guard_active || health_degraded {
+            return Err(
+                "AURA is paused by Recovery Safe Mode. Review Beta & Diagnostics and use Review & Resume to acknowledge the degraded recovery state."
+                    .to_string(),
+            );
+        }
+    }
+
+    if !paused && recovery_override.unwrap_or(false) {
+        emit_lifecycle_event(
+            &app,
+            "beta.recovery_override",
+            "The user explicitly reviewed the recovery state and resumed AURA from Beta & Diagnostics.",
+        );
+    }
+
+    Ok(set_paused_state(&app, paused))
 }
 
 #[tauri::command]
