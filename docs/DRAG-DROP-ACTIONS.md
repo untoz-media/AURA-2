@@ -126,6 +126,8 @@ In particular:
 
 This avoids hidden decompression, codec execution and large background reads while the dedicated context-attachment pipeline is still being designed.
 
+The bounded text family also covers common developer/source/subtitle formats such as SRT, VTT, IPYNB, Vue, Svelte, PowerShell, shell scripts, PHP and C#. Known extensionless text files are handled only through an explicit filename allowlist, including `.env`, `.gitignore`, `Dockerfile`, `Makefile` and `README`. Arbitrary extensionless files remain metadata-only.
+
 ## Inspect all
 
 The Drop Tray includes **Inspect all**.
@@ -207,6 +209,7 @@ The attachment context:
 - accepts at most eight current drop IDs;
 - never includes canonical filesystem paths;
 - is capped at **6,000 characters total** for the local model;
+- reserves bounded metadata space per attachment and shares the remaining text budget fairly across every previewable file;
 - caps each text-file excerpt again before model handoff;
 - labels attached file data as untrusted;
 - is supplied as turn-only context, separate from the visible user message;
