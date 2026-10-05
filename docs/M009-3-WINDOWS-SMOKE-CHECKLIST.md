@@ -44,9 +44,14 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Confirm the recovery banner does not offer one-click Resume while Crash Loop Guard is active.
 - [ ] Open Settings → Beta & Diagnostics and confirm the recovery streak is visible and the local health report is Degraded.
 - [ ] Try to resume from the General pause toggle and confirm AURA redirects to Beta & Diagnostics instead of silently unpausing.
+- [ ] Try to resume from the system-tray Pause AURA item and confirm the runtime stays paused, the main window opens and AURA navigates directly to Beta & Diagnostics.
 - [ ] Confirm a generic Core resume request is rejected while Crash Loop Guard or degraded startup health is active.
 - [ ] Use **Review & Resume**, accept the explicit warning and confirm AURA resumes only after that acknowledgement.
 - [ ] Confirm the lifecycle records the explicit recovery override locally.
+- [ ] Corrupt the disposable Beta session marker and confirm Diagnostics reports Session marker as Failed without deleting any user data.
+- [ ] Use **Repair recovery state** and confirm AURA preserves the old marker as a local recovery backup, creates a valid active marker, resets only the recovery streak and remains paused.
+- [ ] Confirm Memories, models, Project Memory, Agents and Automations remain unchanged after the repair.
+- [ ] Re-run Diagnostics and confirm the Session marker / Recovery streak checks recover.
 - [ ] Complete a normal exit, relaunch and confirm the recovery streak resets and the warning clears.
 
 ## D. Permissions and safety
@@ -265,7 +270,7 @@ OBS testing may be marked N/A only for a Beta validation machine where OBS is in
 
 M009.3 can be marked complete only when:
 
-1. `npm run beta:validate` passes;
+1. `npm run beta:validate` passes, including the production Rust panic-surface gate;
 2. Rust regression tests pass;
 3. `npm run beta:build:windows` produces the NSIS installer;
 4. `npm run beta:verify:artifact` passes;
