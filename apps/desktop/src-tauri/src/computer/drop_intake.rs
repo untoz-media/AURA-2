@@ -130,9 +130,14 @@ impl DropIntakeState {
                 .extension()
                 .and_then(|value| value.to_str())
                 .map(|value| value.to_ascii_lowercase());
-            let kind = classify(extension.as_deref()).to_string();
+            let can_preview_text = is_text_preview_path(&canonical);
+            let classified_kind = classify(extension.as_deref());
+            let kind = if classified_kind == "other" && can_preview_text {
+                "document".to_string()
+            } else {
+                classified_kind.to_string()
+            };
             let can_use_vision = kind == "image";
-            let can_preview_text = is_text_preview_extension(extension.as_deref());
             let id = format!(
                 "drop-{}-{}",
                 timestamp_ms(),
@@ -649,6 +654,34 @@ fn classify(extension: Option<&str>) -> &'static str {
     }
 }
 
+fn is_text_preview_path(path: &Path) -> bool {
+    if is_text_preview_extension(path.extension().and_then(|value| value.to_str())) {
+        return true;
+    }
+
+    let filename = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    matches!(
+        filename.as_str(),
+        ".env"
+            | ".gitignore"
+            | ".gitattributes"
+            | ".npmrc"
+            | ".prettierrc"
+            | ".editorconfig"
+            | "dockerfile"
+            | "makefile"
+            | "readme"
+            | "license"
+            | "authors"
+            | "changelog"
+    )
+}
+
 fn is_text_preview_extension(extension: Option<&str>) -> bool {
     matches!(
         extension.unwrap_or_default().to_ascii_lowercase().as_str(),
@@ -858,6 +891,18 @@ mod tests {
             assert!(is_text_preview_extension(Some(extension)));
             assert_eq!(classify(Some(extension)), "document");
         }
+    }
+
+    #[test]
+    fn known_extensionless_text_files_are_allowlisted() {
+        for filename in [".env", ".gitignore", "Dockerfile", "Makefile", "README"] {
+            assert!(
+                is_text_preview_path(Path::new(filename)),
+                "{filename} should be explicitly previewable"
+            );
+        }
+
+        assert!(!is_text_preview_path(Path::new("unknown-binary")));
     }
 
     #[test]
