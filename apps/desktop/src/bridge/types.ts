@@ -932,6 +932,9 @@ export type DiagnosticsSnapshot = {
   appName: string;
   appVersion: string;
   channel: string;
+  buildCommit: string;
+  buildSource: string;
+  buildLabel: string;
   platform: string;
   architecture: string;
   paused: boolean;
