@@ -368,6 +368,25 @@ export default function Settings({
     betaSnapshotIdentityValid === true &&
     betaCountersValid === true &&
     betaBackendHealthValid === true;
+  const betaPlatformCompatible = betaDiagnostics
+    ? betaDiagnostics.platform === "windows" &&
+      (betaDiagnostics.architecture === "x86_64" ||
+        betaDiagnostics.architecture === "x86")
+    : null;
+  const betaBuildTraceable = betaDiagnostics
+    ? betaDiagnostics.buildCommit !== "unknown" &&
+      betaDiagnostics.buildSource !== "local" &&
+      betaDiagnostics.buildLabel !== "development"
+    : null;
+  const betaCoreTestingReady = betaDiagnostics
+    ? betaSelfCheckPassed && !betaStatus.crashLoopGuardActive
+    : null;
+  const betaLocalAiReady =
+    managedRuntimeStatus.state === "ready" && Boolean(modelCatalog.activeModelId);
+  const betaTestingPreviewReady =
+    betaCoreTestingReady === true &&
+    betaPlatformCompatible === true &&
+    betaBuildTraceable === true;
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -1634,13 +1653,28 @@ export default function Settings({
               <SettingRow
                 title="Previous session"
                 description={
-                  betaStatus.previousSessionUnclean
-                    ? "The previous AURA session did not record a clean exit. AURA started paused for safety and no report was uploaded."
-                    : "The previous session ended cleanly or no recovery condition was detected."
+                  betaStatus.crashLoopGuardActive
+                    ? betaStatus.consecutiveUncleanSessions +
+                      " consecutive unclean sessions were detected. AURA is paused and background startup is suppressed until recovery is reviewed."
+                    : betaStatus.previousSessionUnclean
+                      ? "One unclean previous session was detected. AURA started paused for safety and no report was uploaded."
+                      : "The previous session ended cleanly or no recovery condition was detected."
                 }
                 trailing={
-                  <Badge tone={betaStatus.previousSessionUnclean ? "warning" : "ready"}>
-                    {betaStatus.previousSessionUnclean ? "Recovered" : "Clean"}
+                  <Badge
+                    tone={
+                      betaStatus.crashLoopGuardActive
+                        ? "critical"
+                        : betaStatus.previousSessionUnclean
+                          ? "warning"
+                          : "ready"
+                    }
+                  >
+                    {betaStatus.crashLoopGuardActive
+                      ? "Crash loop"
+                      : betaStatus.previousSessionUnclean
+                        ? "Recovered"
+                        : "Clean"}
                   </Badge>
                 }
               />
@@ -1654,6 +1688,116 @@ export default function Settings({
                 description="Crash and diagnostics data stay on this computer unless you manually export a diagnostics file."
                 trailing={<Badge tone="ready">Off</Badge>}
               />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaTestingPreviewReady
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaTestingPreviewReady
+                        ? "Ready"
+                        : "Setup needed"
+                      : "Not run"}
+                  </Badge>
+                }
+              >
+                Testing Preview readiness
+              </SectionLabel>
+              <SettingRow
+                title="Core & safety"
+                description="Requires the local health/self-check to pass and no crash-loop guard to be active."
+                trailing={
+                  <Badge
+                    tone={
+                      betaCoreTestingReady === null
+                        ? "planned"
+                        : betaCoreTestingReady
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaCoreTestingReady === null
+                      ? "Run diagnostics"
+                      : betaCoreTestingReady
+                        ? "Ready"
+                        : "Blocked"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Windows target"
+                description={
+                  betaDiagnostics
+                    ? betaDiagnostics.platform +
+                      " · " +
+                      betaDiagnostics.architecture
+                    : "Run diagnostics to verify the current platform and architecture."
+                }
+                trailing={
+                  <Badge
+                    tone={
+                      betaPlatformCompatible === null
+                        ? "planned"
+                        : betaPlatformCompatible
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaPlatformCompatible === null
+                      ? "Not checked"
+                      : betaPlatformCompatible
+                        ? "Compatible"
+                        : "Unsupported"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Build traceability"
+                description="Testing Preview binaries must identify a real source commit and release build source instead of local development fallbacks."
+                trailing={
+                  <Badge
+                    tone={
+                      betaBuildTraceable === null
+                        ? "planned"
+                        : betaBuildTraceable
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaBuildTraceable === null
+                      ? "Not checked"
+                      : betaBuildTraceable
+                        ? "Traceable"
+                        : "Development"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Local AI setup"
+                description={
+                  betaLocalAiReady
+                    ? "Managed Runtime is ready and an active local model is selected."
+                    : "Optional for shell testing. Install the Managed Runtime and select a model before testing local AI features."
+                }
+                trailing={
+                  <Badge tone={betaLocalAiReady ? "ready" : "planned"}>
+                    {betaLocalAiReady ? "Ready" : "Optional setup"}
+                  </Badge>
+                }
+              />
+              <p className="settings-helper">
+                This readiness panel does not replace the real Windows NSIS install/uninstall
+                smoke checklist required before publishing the download.
+              </p>
             </Surface>
 
             <Surface className="settings-card">
