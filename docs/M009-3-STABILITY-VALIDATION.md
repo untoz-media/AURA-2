@@ -183,13 +183,26 @@ The local build manifest uses schema v3. Before compilation, the local build res
 
 ## Hosted runner isolation probe
 
-A minimal GitHub-hosted runner workflow exists at:
+A temporary minimal GitHub-hosted runner workflow was used to isolate the failure. It deliberately used no checkout action, no Node, no Python, no Rust, no project code and no external `uses:` actions — only one `ubuntu-latest` shell step with `echo`.
 
-`.github/workflows/actions-runner-smoke.yml`
+On 5 October 2026 both push and pull-request executions failed before the first step with no logs and `steps: null`. This isolates the current hosted Actions failure from AURA-2 source/build logic: GitHub is rejecting or failing runner execution before workflow commands begin.
 
-It deliberately uses no checkout action, no Node, no Python, no Rust and no project code. Its only job is an `ubuntu-latest` shell step that prints a few environment values.
-
-On 5 October 2026 both the push and pull-request executions of this probe failed before the first step with no logs and `steps: null`. This isolates the current hosted Actions failure from AURA-2 source/build logic: GitHub is rejecting or failing runner execution before workflow commands begin.
+The temporary probe was removed after collecting the evidence so it does not remain as an additional permanently red PR check.
 
 Do not weaken the AURA build/release gates to compensate for this platform/account execution failure. Use the local Windows build path for M009.3 testing while hosted execution remains unavailable.
+
+## Beta Test Session
+
+Settings → Beta & Diagnostics now includes a persistent local structured testing session for M009.3.
+
+The checklist uses fixed Core-owned areas only. There is intentionally no arbitrary note field. Stored state is limited to:
+
+- fixed test area id/label
+- completed flag
+- completion timestamp
+- session start/update timestamps
+
+The backend normalizes the persisted checklist back to the allowlisted area catalog, drops unknown test-area entries, health-checks the store, bounds exported reports to 96 KiB and combines the session only with the existing privacy-validated Diagnostics snapshot.
+
+This gives the first Windows tester a repeatable pass/fail workflow without turning the test report into another data-collection surface.
 
