@@ -910,6 +910,8 @@ export type BetaStatus = {
   channel: "beta" | string;
   onboardingComplete: boolean;
   previousSessionUnclean: boolean;
+  consecutiveUncleanSessions: number;
+  crashLoopGuardActive: boolean;
   telemetryEnabled: boolean;
   automaticCrashUploads: boolean;
   localDiagnosticsOnly: boolean;
