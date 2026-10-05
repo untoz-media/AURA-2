@@ -44,8 +44,9 @@ impl GlobalMemoryGuard {
         })
     }
 
-    fn handle(&self) -> HGLOBAL {
-        self.handle.expect("global memory handle should exist")
+    fn handle(&self) -> Result<HGLOBAL, String> {
+        self.handle
+            .ok_or_else(|| "Clipboard memory handle is no longer available.".to_string())
     }
 
     fn transfer_to_windows(mut self) {
@@ -142,7 +143,7 @@ pub fn write_text(text: &str) -> Result<usize, String> {
         let global = GlobalMemoryGuard::allocate(
             wide.len() * std::mem::size_of::<u16>(),
         )?;
-        let handle = global.handle();
+        let handle = global.handle()?;
 
         let ptr = GlobalLock(handle);
         if ptr.is_null() {
