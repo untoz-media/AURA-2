@@ -41,6 +41,8 @@ const checks = [
   ["crash-loop guard suppresses background startup", lib.includes("&& !crash_loop_guard_active") && lib.includes("beta.crash_loop_guard")],
   ["desktop types expose crash-loop state", types.includes("consecutiveUncleanSessions: number") && types.includes("crashLoopGuardActive: boolean")],
   ["Testing Preview readiness UI exists", settings.includes("Testing Preview readiness") && settings.includes("betaBuildTraceable") && settings.includes("betaPlatformCompatible")],
+  ["Recovery resume is fail-closed", lib.includes("recovery_override") && lib.includes("Review Beta & Diagnostics")],
+  ["Recovery override is explicit in desktop UI", settings.includes("Review & Resume") && settings.includes("onPausedChange(false, true)")],
   ["preview release is a prerelease", releaseWorkflow.includes("prerelease: true")],
   ["preview release is not latest", releaseWorkflow.includes("make_latest: false")],
   ["preview workflow attaches checksum and manifest", releaseWorkflow.includes("AURA-2-Windows-x64.sha256") && releaseWorkflow.includes("AURA-2-Testing-Preview-Build.json")],
