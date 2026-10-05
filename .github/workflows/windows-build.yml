@@ -90,10 +90,43 @@ jobs:
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
           "$hash  $($installer.Name)" | Set-Content "AURA-2-Windows-x64.sha256" -Encoding ascii
 
+      - name: Generate build manifest
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer not found" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+          $manifest = [ordered]@{
+            schemaVersion = 2
+            product = "AURA-2"
+            version = $version
+            channel = "beta"
+            installer = $installer.Name
+            installerSizeBytes = $installer.Length
+            sha256 = $hash
+            signatureStatus = [string]$signature.Status
+            sourceCommit = $env:AURA_BUILD_COMMIT
+            buildSource = $env:AURA_BUILD_SOURCE
+            buildLabel = $env:AURA_BUILD_LABEL
+            workflowRunId = "${{ github.run_id }}"
+            builtAtUtc = [DateTime]::UtcNow.ToString("o")
+          }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content "AURA-2-Beta-Build.json" -Encoding utf8
+
       - name: Upload installer checksum
         uses: actions/upload-artifact@v4
         with:
           name: AURA-2-Windows-x64-SHA256
           path: AURA-2-Windows-x64.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-2-Windows-x64-Build-Metadata
+          path: AURA-2-Beta-Build.json
           if-no-files-found: error
           retention-days: 14
