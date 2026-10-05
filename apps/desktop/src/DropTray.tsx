@@ -43,6 +43,30 @@ function kindGlyph(kind: string) {
   }
 }
 
+function contextCapability(item: DropIntakeSnapshot["items"][number]) {
+  if (item.canPreviewText) {
+    return {
+      label: "Text context",
+      detail: "Bounded local text can be used by AURA.",
+      tone: "ready",
+    };
+  }
+
+  if (item.kind === "image") {
+    return {
+      label: "Image metadata",
+      detail: "Dimensions now; Vision is available explicitly.",
+      tone: "partial",
+    };
+  }
+
+  return {
+    label: "Metadata only",
+    detail: "Contents stay unopened in this Beta step.",
+    tone: "metadata",
+  };
+}
+
 export default function DropTray({
   snapshot,
   hovering,
@@ -138,7 +162,7 @@ export default function DropTray({
         <aside className="drop-tray" aria-live="polite">
           <div className="drop-tray-heading">
             <div>
-              <span className="feature-kicker">DRAG & DROP V2</span>
+              <span className="feature-kicker">FILE CONTEXT V2</span>
               <strong>
                 {snapshot.items.length} local file
                 {snapshot.items.length === 1 ? "" : "s"} ready
@@ -226,6 +250,17 @@ export default function DropTray({
                       {" · "}
                       {formatBytes(item.sizeBytes)}
                     </span>
+                    {(() => {
+                      const capability = contextCapability(item);
+                      return (
+                        <span
+                          className={`drop-context-capability ${capability.tone}`}
+                          title={capability.detail}
+                        >
+                          {capability.label}
+                        </span>
+                      );
+                    })()}
                     {item.modifiedAtMs > 0 && (
                       <small>
                         Modified {new Date(item.modifiedAtMs).toLocaleString()}
@@ -327,10 +362,10 @@ export default function DropTray({
             <strong>Temporary session context</strong>
             <span>
               File paths remain inside AURA Core memory. Attach to Chat only adds
-              an opaque temporary reference to the next desktop message. Content is
-              read only when that message is submitted, remains bounded and
-              ephemeral for that model turn, and is not added to Memory,
-              diagnostics, Agents or Automations.
+              an opaque temporary reference to the next desktop message. Text
+              context is budgeted fairly across all attachments, remains bounded
+              and ephemeral for that model turn, and is not added to Memory,
+              diagnostics, Agents or Automations. Metadata-only files stay unopened.
             </span>
           </div>
         </aside>
