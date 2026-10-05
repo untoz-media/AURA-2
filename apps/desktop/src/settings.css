@@ -1290,6 +1290,44 @@
 }
 
 
+
+.beta-recovery-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 10px 0 2px;
+  padding: 12px;
+  border: 1px solid var(--aura-border-1);
+  border-radius: 10px;
+  background: var(--aura-surface-2);
+}
+
+.beta-recovery-review > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.beta-recovery-review strong {
+  color: var(--aura-text-2);
+  font-size: var(--text-xs);
+}
+
+.beta-recovery-review span {
+  color: var(--aura-text-4);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+@media (max-width: 680px) {
+  .beta-recovery-review {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .settings-helper {
   margin: 10px 0 0;
   color: var(--aura-text-4);
