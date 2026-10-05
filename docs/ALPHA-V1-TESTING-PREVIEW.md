@@ -13,6 +13,7 @@ The distribution label is intentionally separate from the internal semantic vers
 
 Do not publish the Testing Preview until all of the following are true:
 
+- `npm run beta:doctor:windows` reports no blocking Windows build prerequisites
 - source validation passes
 - Rust regression tests pass
 - a real NSIS installer is produced on Windows
@@ -42,6 +43,18 @@ The release pipeline must attach:
 - the generated dependency lockfile used for that build
 
 The manifest records the product/version, source commit, build label, installer size, checksum, signature status and build timestamp.
+
+## Local build fallback
+
+While hosted runners are unavailable, a local Windows smoke candidate can be produced with:
+
+```powershell
+npm run beta:doctor:windows
+npm run beta:build:windows
+npm run beta:verify:artifact
+```
+
+The local build path loads the Visual Studio developer environment when available and embeds the exact source commit with the `local-beta-build / beta-local-smoke` provenance pair. A locally verified installer is useful for M009.3 smoke testing, but it does not by itself satisfy the separate hosted-CI release gate.
 
 ## First test pass
 
