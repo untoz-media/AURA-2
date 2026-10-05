@@ -55,18 +55,24 @@ jobs:
         with:
           workspaces: "./apps/desktop/src-tauri -> target"
 
-      - name: Install dependencies
-        run: npm install
-
       - name: Windows Build Doctor
         shell: pwsh
         run: npm run beta:doctor:windows
+
+      - name: Resolve npm dependency lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact npm dependencies
+        run: npm ci
+
+      - name: Resolve Rust dependency lock
+        run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Validate Public Beta source
         run: npm run beta:validate
 
       - name: Test Rust Core
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Build AURA-2
         run: npm run build
@@ -102,8 +108,10 @@ jobs:
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
           $signature = Get-AuthenticodeSignature $installer.FullName
           $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+          $packageLockHash = (Get-FileHash "package-lock.json" -Algorithm SHA256).Hash.ToLower()
+          $cargoLockHash = (Get-FileHash "apps/desktop/src-tauri/Cargo.lock" -Algorithm SHA256).Hash.ToLower()
           $manifest = [ordered]@{
-            schemaVersion = 2
+            schemaVersion = 3
             product = "AURA-2"
             version = $version
             channel = "beta"
@@ -114,6 +122,8 @@ jobs:
             sourceCommit = $env:AURA_BUILD_COMMIT
             buildSource = $env:AURA_BUILD_SOURCE
             buildLabel = $env:AURA_BUILD_LABEL
+            packageLockSha256 = $packageLockHash
+            cargoLockSha256 = $cargoLockHash
             workflowRunId = "${{ github.run_id }}"
             builtAtUtc = [DateTime]::UtcNow.ToString("o")
           }
@@ -127,10 +137,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload build manifest
+      - name: Upload build metadata
         uses: actions/upload-artifact@v4
         with:
           name: AURA-2-Windows-x64-Build-Metadata
-          path: AURA-2-Beta-Build.json
+          path: |
+            AURA-2-Beta-Build.json
+            package-lock.json
+            apps/desktop/src-tauri/Cargo.lock
           if-no-files-found: error
           retention-days: 14
