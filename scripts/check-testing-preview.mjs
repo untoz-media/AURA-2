@@ -47,6 +47,8 @@ const checks = [
   ["Testing Preview readiness UI exists", settings.includes("Testing Preview readiness") && settings.includes("betaBuildTraceable") && settings.includes("betaPlatformCompatible")],
   ["Recovery resume is fail-closed", lib.includes("recovery_override") && lib.includes("Review Beta & Diagnostics")],
   ["Recovery override is explicit in desktop UI", settings.includes("Review & Resume") && settings.includes("onPausedChange(false, true)")],
+  ["Recovery guard also protects tray resume", lib.includes("set_paused_state_guarded") && lib.includes("beta.recovery_resume_blocked") && lib.includes('app.emit("aura:open-settings", "beta")')],
+  ["Recovery State repair is available", beta.includes("repair_recovery_state") && beta.includes("recovery-backup") && settings.includes("Repair recovery state")],
   ["Testing Preview builds identify themselves", app.includes("AURA-2 TESTING PREVIEW") && app.includes("beta-local-smoke") && app.includes("buildCommit.slice(0, 12)")],
   ["Beta Test Session backend is fixed-area and privacy-safe", beta.includes("BETA_TEST_AREAS") && beta.includes("TEST_REPORT_MAX_BYTES") && beta.includes("normalize_test_session")],
   ["Beta Test Session commands are bridged", bridge.includes("get_beta_test_session") && bridge.includes("export_beta_test_report")],
