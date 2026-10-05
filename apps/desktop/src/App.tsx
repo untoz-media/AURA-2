@@ -263,6 +263,16 @@ function App() {
   const attachedDropItems = dropIntake.items.filter((item) =>
     attachedDropIds.includes(item.id),
   );
+  const attachedTextContextCount = attachedDropItems.filter(
+    (item) => item.canPreviewText,
+  ).length;
+  const attachedImageMetadataCount = attachedDropItems.filter(
+    (item) => !item.canPreviewText && item.kind === "image",
+  ).length;
+  const attachedMetadataOnlyCount =
+    attachedDropItems.length
+    - attachedTextContextCount
+    - attachedImageMetadataCount;
 
   function toggleDropAttachment(dropId: string) {
     setAttachedDropIds((current) =>
@@ -641,6 +651,15 @@ function App() {
                       <span>
                         {attachedDropItems.length} temporary file
                         {attachedDropItems.length === 1 ? "" : "s"} attached
+                        {attachedTextContextCount > 0
+                          ? ` · ${attachedTextContextCount} text context`
+                          : ""}
+                        {attachedImageMetadataCount > 0
+                          ? ` · ${attachedImageMetadataCount} image metadata`
+                          : ""}
+                        {attachedMetadataOnlyCount > 0
+                          ? ` · ${attachedMetadataOnlyCount} metadata only`
+                          : ""}
                       </span>
                       <button
                         type="button"
