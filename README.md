@@ -275,6 +275,8 @@ Current behavior:
 - sending attachments with an empty composer uses an explicit local "Analyze the attached local files." request
 - **Analyze with AURA** remains available as a one-click batch shortcut
 - model attachment context is capped to 6,000 characters total and never contains canonical filesystem paths
+- multi-file text excerpts share that budget fairly so later attachments are not starved by earlier files
+- the bounded text allowlist includes common source/config/subtitle formats plus known extensionless text files such as `.env`, `.gitignore`, `Dockerfile`, `Makefile` and `README`
 - attachment requests bypass deterministic computer-action, Routine and Director routing
 - attached text is explicitly marked as untrusted data for prompt-injection resistance
 - PDFs, Office files, video, audio and archives remain metadata-only in this Beta step
