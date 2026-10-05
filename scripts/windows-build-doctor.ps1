@@ -31,13 +31,13 @@ function Write-DoctorResult {
 
 function Add-Blocker {
   param([string]$Name, [string]$Detail)
-  $script:Blockers.Add("$Name: $Detail")
+  $script:Blockers.Add(("{0}: {1}" -f $Name, $Detail))
   Write-DoctorResult "FAIL" $Name $Detail
 }
 
 function Add-Warning {
   param([string]$Name, [string]$Detail)
-  $script:Warnings.Add("$Name: $Detail")
+  $script:Warnings.Add(("{0}: {1}" -f $Name, $Detail))
   Write-DoctorResult "WARN" $Name $Detail
 }
 
