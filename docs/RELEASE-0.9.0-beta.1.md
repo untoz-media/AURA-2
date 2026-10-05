@@ -76,3 +76,21 @@ Diagnostics stay local. A lightweight health report is generated automatically a
 This commit is a Beta Candidate, not yet the published Public Beta.
 
 Public Beta publication is gated on a successful Windows installer CI run with real build steps and a verified NSIS artifact.
+
+## Testing Preview release hardening
+
+The Beta candidate now includes the guarded distribution path for **AURA-2 Alpha v1 — Testing Preview** without changing the real application version.
+
+New release-readiness work:
+
+- diagnostics schema v3 adds privacy-safe build provenance: source commit, build source and build label
+- Settings → Beta & Diagnostics shows the exact build identity used for bug reports
+- Windows CI artifacts include a SHA-256 checksum and traceable build manifest
+- the Testing Preview release pipeline resolves and attaches the exact npm lockfile used for the build
+- the GitHub release is explicitly marked as a pre-release and not Latest
+- manual release dispatch requires explicit `RELEASE_ALPHA_V1` confirmation
+- security reports are routed to private GitHub Security Advisories
+- testing-preview bug reports ask for build provenance and privacy-safe diagnostics
+
+Publication remains blocked until a real Windows runner executes the source validation, Rust tests, NSIS build and smoke-test gate. A hosted runner failure before step 1 is not treated as release validation.
+
