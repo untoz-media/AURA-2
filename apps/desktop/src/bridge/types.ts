@@ -23,6 +23,7 @@ export type CommandRequest = {
   text: string;
   source: "desktop" | "overlay" | "voice";
   approvalId?: string;
+  dropIds?: string[];
 };
 
 export type PendingConfirmation = {
@@ -356,6 +357,61 @@ export type CurrentAppInfo = {
   capturedAtMs: number;
 };
 
+export type AppSkillDescriptor = {
+  id: string;
+  group: string;
+  appName: string;
+  name: string;
+  description: string;
+  command: string;
+  permission: PermissionClass;
+  available: boolean;
+  contextual: boolean;
+};
+
+export type AppSkillCatalog = {
+  skills: AppSkillDescriptor[];
+  contextAppName?: string | null;
+  refreshedAtMs: number;
+};
+
+export type DroppedFileItem = {
+  id: string;
+  name: string;
+  kind: "image" | "video" | "audio" | "document" | "archive" | "other" | string;
+  extension?: string | null;
+  sizeBytes: number;
+  modifiedAtMs: number;
+  canUseVision: boolean;
+  canReveal: boolean;
+  canInspect: boolean;
+  canPreviewText: boolean;
+};
+
+export type DroppedFileInspection = {
+  id: string;
+  name: string;
+  kind: string;
+  extension?: string | null;
+  sizeBytes: number;
+  modifiedAtMs: number;
+  contentMode: "metadataOnly" | "textPreview" | "imageMetadata" | string;
+  summary: string;
+  textPreview?: string | null;
+  previewTruncated: boolean;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  note?: string | null;
+  inspectedAtMs: number;
+};
+
+export type DropIntakeSnapshot = {
+  items: DroppedFileItem[];
+  rejectedCount: number;
+  truncated: boolean;
+  refreshedAtMs: number;
+};
+
 export type RecentFileItem = {
   name: string;
   modifiedAtMs: number;
@@ -432,11 +488,42 @@ export type ModelRuntimeStatus = {
   refreshedAtMs: number;
 };
 
+export type ImageRuntimeStatus = {
+  state: "stopped" | "loading" | "ready" | "generating" | "error" | string;
+  modelId: string;
+  device?: string | null;
+  cuda?: boolean | null;
+  lastError?: string | null;
+  refreshedAtMs: number;
+};
+
+export type ImageGenerationRequest = {
+  prompt: string;
+  negativePrompt?: string | null;
+  aspectRatio?: "square" | "landscape" | "portrait";
+  steps?: number;
+  seed?: number | null;
+};
+
+export type ImageGenerationResult = {
+  prompt: string;
+  negativePrompt?: string | null;
+  path: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  seed: number;
+  device?: string | null;
+  cuda?: boolean | null;
+  completedAtMs: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestampMs: number;
+  attachmentNames?: string[];
 };
 
 
@@ -567,6 +654,7 @@ export type VoiceCaptureEvent = {
     | "transcribed"
     | "submitted"
     | "conversationListening"
+    | "conversationPaused"
     | "conversationTimeout"
     | "wakeDetected"
     | "error";
@@ -815,4 +903,72 @@ export type AutomationEvent = {
   status: "completed" | "failed" | "error" | string;
   message: string;
   timestampMs: number;
+};
+
+
+export type BetaStatus = {
+  channel: "beta" | string;
+  onboardingComplete: boolean;
+  previousSessionUnclean: boolean;
+  consecutiveUncleanSessions: number;
+  crashLoopGuardActive: boolean;
+  telemetryEnabled: boolean;
+  automaticCrashUploads: boolean;
+  localDiagnosticsOnly: boolean;
+  refreshedAtMs: number;
+};
+
+export type SetBetaPreferencesRequest = {
+  onboardingComplete: boolean;
+};
+
+
+export type BetaTestCheck = {
+  id: string;
+  label: string;
+  completed: boolean;
+  completedAtMs?: number | null;
+};
+
+export type BetaTestSession = {
+  schemaVersion: number;
+  active: boolean;
+  startedAtMs?: number | null;
+  updatedAtMs: number;
+  checks: BetaTestCheck[];
+};
+
+export type DiagnosticCheck = {
+  id: string;
+  label: string;
+  status: "passed" | "failed" | string;
+  detail: string;
+};
+
+export type DiagnosticsSnapshot = {
+  schemaVersion: number;
+  appName: string;
+  appVersion: string;
+  channel: string;
+  buildCommit: string;
+  buildSource: string;
+  buildLabel: string;
+  platform: string;
+  architecture: string;
+  paused: boolean;
+  backgroundEnabled: boolean;
+  autostartEnabled: boolean;
+  activeModelId?: string | null;
+  installedModelIds: string[];
+  managedRuntimeState: string;
+  createImageRuntimeState: string;
+  agentRunsTotal: number;
+  activeAgentRuns: number;
+  savedActions: number;
+  automations: number;
+  enabledAutomations: number;
+  telemetryEnabled: boolean;
+  healthStatus: "healthy" | "degraded" | string;
+  healthChecks: DiagnosticCheck[];
+  generatedAtMs: number;
 };

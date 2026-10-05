@@ -3,6 +3,16 @@ import {
   connectObs,
   disconnectObs,
   getAppStatus,
+  getBetaStatus,
+  setBetaPreferences,
+  repairBetaRecoveryState,
+  getBetaTestSession,
+  startBetaTestSession,
+  setBetaTestCheck,
+  resetBetaTestSession,
+  getBetaDiagnostics,
+  exportBetaDiagnostics,
+  exportBetaTestReport,
   getObsConnectionState,
   getObsRuntimeState,
   getObsScenes,
@@ -12,10 +22,20 @@ import {
   getDirectorPresets,
   getMemories,
   getCurrentAppContext,
+  getAppSkillCatalog,
+  getDropIntake,
+  ingestDroppedFiles,
+  clearDropIntake,
+  revealDroppedFile,
+  inspectDroppedFile,
+  stageDroppedImageForVision,
+  listenToFileDrop,
   getRecentFilesContext,
   getModelCatalog,
   getModelRuntimeStatus,
   getManagedRuntimeStatus,
+  getCreateImageRuntimeStatus,
+  generateCreateImage,
   getPermissionPolicy,
   getRuntimeState,
   listenToAuraCore,
@@ -131,12 +151,17 @@ import type {
   MemorySnapshot,
   MemoryCreateResult,
   CurrentAppInfo,
+  AppSkillCatalog,
+  DropIntakeSnapshot,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
   ModelRuntimeStatus,
   ChatMessage,
   ManagedRuntimeStatus,
+  ImageRuntimeStatus,
+  ImageGenerationRequest,
+  ImageGenerationResult,
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
@@ -164,7 +189,32 @@ import type {
   AuraAutomation,
   SaveAutomationRequest,
   AutomationEvent,
+  BetaStatus,
+  BetaTestSession,
+  SetBetaPreferencesRequest,
+  DiagnosticsSnapshot,
 } from "./types";
+
+const DEFAULT_BETA_STATUS: BetaStatus = {
+  channel: "beta",
+  onboardingComplete: false,
+  previousSessionUnclean: false,
+  consecutiveUncleanSessions: 0,
+  crashLoopGuardActive: false,
+  telemetryEnabled: false,
+  automaticCrashUploads: false,
+  localDiagnosticsOnly: true,
+  refreshedAtMs: 0,
+};
+
+
+const DEFAULT_BETA_TEST_SESSION: BetaTestSession = {
+  schemaVersion: 1,
+  active: false,
+  startedAtMs: null,
+  updatedAtMs: 0,
+  checks: [],
+};
 
 const DEFAULT_ACTIVITY =
   "Desktop foundation online. AURA Core and background runtime are ready.";
@@ -198,6 +248,18 @@ const DEFAULT_OBS_AUDIO: ObsAudioInputList = {
 
 const DEFAULT_MEMORY: MemorySnapshot = {
   records: [],
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_APP_SKILLS: AppSkillCatalog = {
+  skills: [],
+  refreshedAtMs: 0,
+};
+
+const DEFAULT_DROP_INTAKE: DropIntakeSnapshot = {
+  items: [],
+  rejectedCount: 0,
+  truncated: false,
   refreshedAtMs: 0,
 };
 
@@ -277,6 +339,12 @@ const DEFAULT_MODEL_RUNTIME: ModelRuntimeStatus = {
   refreshedAtMs: 0,
 };
 
+const DEFAULT_IMAGE_RUNTIME: ImageRuntimeStatus = {
+  state: "stopped",
+  modelId: "create-tiny-sd",
+  refreshedAtMs: 0,
+};
+
 const DEFAULT_MANAGED_RUNTIME: ManagedRuntimeStatus = {
   state: "notInstalled",
   progressPercent: 0,
@@ -288,6 +356,12 @@ export function useAuraBridge() {
   const [status, setStatus] = useState<AuraStatus>("Idle");
   const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
+  const [betaStatus, setBetaStatusState] =
+    useState<BetaStatus>(DEFAULT_BETA_STATUS);
+  const [betaDiagnostics, setBetaDiagnostics] =
+    useState<DiagnosticsSnapshot | null>(null);
+  const [betaTestSession, setBetaTestSessionState] =
+    useState<BetaTestSession>(DEFAULT_BETA_TEST_SESSION);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>({
     paused: false,
     backgroundEnabled: true,
@@ -308,6 +382,11 @@ export function useAuraBridge() {
     useState<DirectorPresetRunResult | null>(null);
   const [memory, setMemory] = useState<MemorySnapshot>(DEFAULT_MEMORY);
   const [currentApp, setCurrentApp] = useState<CurrentAppInfo | null>(null);
+  const [appSkillCatalog, setAppSkillCatalog] =
+    useState<AppSkillCatalog>(DEFAULT_APP_SKILLS);
+  const [dropIntake, setDropIntake] =
+    useState<DropIntakeSnapshot>(DEFAULT_DROP_INTAKE);
+  const [dropHover, setDropHover] = useState(false);
   const [recentFiles, setRecentFiles] =
     useState<RecentFilesSnapshot>(DEFAULT_RECENT_FILES);
   const [modelCatalog, setModelCatalog] =
@@ -316,6 +395,10 @@ export function useAuraBridge() {
     useState<ModelRuntimeStatus>(DEFAULT_MODEL_RUNTIME);
   const [managedRuntimeStatus, setManagedRuntimeStatus] =
     useState<ManagedRuntimeStatus>(DEFAULT_MANAGED_RUNTIME);
+  const [imageRuntimeStatus, setImageRuntimeStatus] =
+    useState<ImageRuntimeStatus>(DEFAULT_IMAGE_RUNTIME);
+  const [lastGeneratedImage, setLastGeneratedImage] =
+    useState<ImageGenerationResult | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [routines, setRoutines] = useState<UserRoutine[]>([]);
   const [routineLastRun, setRoutineLastRun] =
@@ -369,36 +452,87 @@ export function useAuraBridge() {
     let cleanupAgent: (() => void) | undefined;
     let cleanupAutomation: (() => void) | undefined;
 
-    Promise.all([
+    Promise.allSettled([
       getAppStatus(),
       getRuntimeState(),
       getPermissionPolicy(),
       getObsConnectionState(),
       getDirectorPresets(),
-    ])
-      .then(([app, runtime, permissions, obs, presets]) => {
-        if (cancelled) return;
-        setAppStatus(app);
-        setRuntimeState(runtime);
-        setPermissionPolicyState(permissions);
-        setObsConnection(obs);
-        setDirectorPresets(presets);
+      getBetaStatus(),
+    ]).then(([app, runtime, permissions, obs, presets, beta]) => {
+      if (cancelled) return;
 
-        if (runtime.paused) {
+      const criticalFailures: string[] = [];
+
+      if (app.status === "fulfilled") {
+        setAppStatus(app.value);
+      } else {
+        criticalFailures.push("app status");
+      }
+
+      if (runtime.status === "fulfilled") {
+        setRuntimeState(runtime.value);
+
+        if (runtime.value.paused) {
           setActivity("AURA is paused. Resume it from the system tray or settings.");
-        } else if (runtime.backgroundEnabled) {
+        } else if (runtime.value.backgroundEnabled) {
           setActivity("AURA is ready and can remain available in the background.");
         } else {
           setActivity("Background mode is disabled. Closing AURA will quit the app.");
         }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setBridgeError({
-            code: "bridge.status_failed",
-            message: String(error),
-          });
+      } else {
+        criticalFailures.push("runtime state");
+      }
+
+      if (permissions.status === "fulfilled") {
+        setPermissionPolicyState(permissions.value);
+      } else {
+        criticalFailures.push("permission policy");
+      }
+
+      if (obs.status === "fulfilled") {
+        setObsConnection(obs.value);
+      }
+
+      if (presets.status === "fulfilled") {
+        setDirectorPresets(presets.value);
+      }
+
+      if (beta.status === "fulfilled") {
+        setBetaStatusState(beta.value);
+      }
+
+      if (criticalFailures.length > 0) {
+        const message =
+          `AURA started with unavailable core state: ${criticalFailures.join(", ")}. Safe defaults remain active where possible.`;
+        setBridgeError({
+          code: "bridge.partial_startup",
+          message,
+        });
+        setActivity(message);
+      }
+    });
+
+    getBetaDiagnostics()
+      .then((snapshot) => {
+        if (cancelled) return;
+        setBetaDiagnostics(snapshot);
+        if (snapshot.healthStatus === "degraded") {
+          setActivity(
+            "AURA Beta health check found a local subsystem that needs review.",
+          );
         }
+      })
+      .catch(() => {
+        // Beta diagnostics are supplementary and can be refreshed manually.
+      });
+
+    getBetaTestSession()
+      .then((session) => {
+        if (!cancelled) setBetaTestSessionState(session);
+      })
+      .catch(() => {
+        // Beta test session is supplementary and starts only when requested.
       });
 
     getRecentFilesContext()
@@ -527,6 +661,14 @@ export function useAuraBridge() {
       })
       .catch(() => {
         // Runtime remains stopped until a selected model is used.
+      });
+
+    getCreateImageRuntimeStatus()
+      .then((runtime) => {
+        if (!cancelled) setImageRuntimeStatus(runtime);
+      })
+      .catch(() => {
+        // AURA Create remains stopped until local image generation is used.
       });
 
     getManagedRuntimeStatus()
@@ -988,13 +1130,19 @@ export function useAuraBridge() {
     let cancelled = false;
 
     const updateCurrentApp = async () => {
-      try {
-        const context = await getCurrentAppContext();
-        if (!cancelled) {
-          setCurrentApp(context);
-        }
-      } catch {
-        // Current-app awareness is contextual; keep the last valid snapshot.
+      const [context, skills] = await Promise.allSettled([
+        getCurrentAppContext(),
+        getAppSkillCatalog(),
+      ]);
+
+      if (cancelled) return;
+
+      if (context.status === "fulfilled") {
+        setCurrentApp(context.value);
+      }
+
+      if (skills.status === "fulfilled") {
+        setAppSkillCatalog(skills.value);
       }
     };
 
@@ -1006,6 +1154,111 @@ export function useAuraBridge() {
       window.clearInterval(interval);
     };
   }, [runtimeState.paused]);
+
+  const refreshBetaStatus = useCallback(async () => {
+    const snapshot = await getBetaStatus();
+    setBetaStatusState(snapshot);
+    return snapshot;
+  }, []);
+
+  const updateBetaPreferences = useCallback(async (
+    request: SetBetaPreferencesRequest,
+  ) => {
+    const snapshot = await setBetaPreferences(request);
+    setBetaStatusState(snapshot);
+    return snapshot;
+  }, []);
+
+  const repairBetaRecoveryStateControl = useCallback(async () => {
+    try {
+      setBridgeError(null);
+      const status = await repairBetaRecoveryState();
+      setBetaStatusState(status);
+      const diagnostics = await getBetaDiagnostics();
+      setBetaDiagnostics(diagnostics);
+      setActivity(
+        "Recovery state repaired locally. Review Beta & Diagnostics before resuming AURA.",
+      );
+      return status;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.recovery_repair_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const refreshBetaTestSession = useCallback(async () => {
+    const session = await getBetaTestSession();
+    setBetaTestSessionState(session);
+    return session;
+  }, []);
+
+  const startBetaTestSessionControl = useCallback(async () => {
+    const session = await startBetaTestSession();
+    setBetaTestSessionState(session);
+    setActivity("AURA Beta test session started locally.");
+    return session;
+  }, []);
+
+  const setBetaTestCheckControl = useCallback(async (
+    checkId: string,
+    completed: boolean,
+  ) => {
+    const session = await setBetaTestCheck(checkId, completed);
+    setBetaTestSessionState(session);
+    return session;
+  }, []);
+
+  const resetBetaTestSessionControl = useCallback(async () => {
+    const session = await resetBetaTestSession();
+    setBetaTestSessionState(session);
+    setActivity("AURA Beta test session reset locally.");
+    return session;
+  }, []);
+
+  const refreshBetaDiagnostics = useCallback(async () => {
+    const snapshot = await getBetaDiagnostics();
+    setBetaDiagnostics(snapshot);
+    return snapshot;
+  }, []);
+
+  const exportBetaTestReportControl = useCallback(async () => {
+    try {
+      setBridgeError(null);
+      const path = await exportBetaTestReport();
+      setActivity(`Beta test report exported locally: ${path}`);
+      return path;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.test_report_export_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const exportBetaDiagnosticsControl = useCallback(async () => {
+    try {
+      setBridgeError(null);
+      const path = await exportBetaDiagnostics();
+      setActivity(`Diagnostics exported locally: ${path}`);
+      return path;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "beta.diagnostics_export_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
 
   const refreshObsRuntime = useCallback(async () => {
     if (!obsConnection.connected) {
@@ -1124,10 +1377,12 @@ export function useAuraBridge() {
       setActivity(runtime.message);
 
       if (action === "repair" || action === "remove") {
-        const modelRuntime = await getModelRuntimeStatus().catch(
-          () => DEFAULT_MODEL_RUNTIME,
-        );
+        const [modelRuntime, imageRuntime] = await Promise.all([
+          getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME),
+          getCreateImageRuntimeStatus().catch(() => DEFAULT_IMAGE_RUNTIME),
+        ]);
         setModelRuntimeStatus(modelRuntime);
+        setImageRuntimeStatus(imageRuntime);
       }
 
       return runtime;
@@ -1178,8 +1433,16 @@ export function useAuraBridge() {
       setModelCatalog(catalog);
 
       if (operation === "activate" || operation === "remove") {
-        const runtime = await getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME);
+        const [runtime, imageRuntime] = await Promise.all([
+          getModelRuntimeStatus().catch(() => DEFAULT_MODEL_RUNTIME),
+          getCreateImageRuntimeStatus().catch(() => DEFAULT_IMAGE_RUNTIME),
+        ]);
         setModelRuntimeStatus(runtime);
+        setImageRuntimeStatus(imageRuntime);
+
+        if (operation === "remove" && modelId === "create-tiny-sd") {
+          setLastGeneratedImage(null);
+        }
       }
 
       const model = catalog.models.find((item) => item.id === modelId);
@@ -1211,11 +1474,168 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const refreshImageRuntime = useCallback(async () => {
+    const runtime = await getCreateImageRuntimeStatus();
+    setImageRuntimeStatus(runtime);
+    return runtime;
+  }, []);
+
+  const generateImageControl = useCallback(async (
+    request: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult> => {
+    try {
+      setBridgeError(null);
+      setStatus("Working");
+      setActivity("AURA Create is generating an image locally…");
+
+      const result = await generateCreateImage(request);
+      setLastGeneratedImage(result);
+
+      const runtime = await getCreateImageRuntimeStatus().catch(
+        () => DEFAULT_IMAGE_RUNTIME,
+      );
+      setImageRuntimeStatus(runtime);
+      setStatus("Idle");
+      setActivity(
+        `Image generated locally · ${result.width}×${result.height} · seed ${result.seed}.`,
+      );
+      return result;
+    } catch (error) {
+      const message = String(error);
+      const runtime = await getCreateImageRuntimeStatus().catch(
+        () => DEFAULT_IMAGE_RUNTIME,
+      );
+      setImageRuntimeStatus(runtime);
+      setStatus("Idle");
+      setBridgeError({
+        code: "create.image_generation_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const ingestDroppedFilesControl = useCallback(async (paths: string[]) => {
+    try {
+      setBridgeError(null);
+      const snapshot = await ingestDroppedFiles(paths);
+      setDropIntake(snapshot);
+
+      if (snapshot.items.length > 0) {
+        setActivity(
+          `Received ${snapshot.items.length} local file${snapshot.items.length === 1 ? "" : "s"} through Drag & Drop.`,
+        );
+      } else {
+        setActivity("No supported local files were accepted from that drop.");
+      }
+
+      return snapshot;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.intake_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const clearDropIntakeControl = useCallback(async () => {
+    const snapshot = await clearDropIntake();
+    setDropIntake(snapshot);
+    setDropHover(false);
+    setActivity("Dropped-file session cleared.");
+    return snapshot;
+  }, []);
+
+  const revealDroppedFileControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const message = await revealDroppedFile(dropId);
+      setActivity(message);
+      return message;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.reveal_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const inspectDroppedFileControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const inspection = await inspectDroppedFile(dropId);
+      setActivity(inspection.summary);
+      return inspection;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.inspect_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
+  const stageDroppedImageForVisionControl = useCallback(async (dropId: string) => {
+    try {
+      setBridgeError(null);
+      const capture = await stageDroppedImageForVision(dropId);
+      setVisionCapture(capture);
+      setActivity("Dropped image staged locally for AURA Vision.");
+      return capture;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({ code: "drop.vision_stage_failed", message });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   const refreshCurrentApp = useCallback(async () => {
-    const context = await getCurrentAppContext();
+    const [context, skills] = await Promise.all([
+      getCurrentAppContext(),
+      getAppSkillCatalog(),
+    ]);
     setCurrentApp(context);
+    setAppSkillCatalog(skills);
     return context;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    getDropIntake()
+      .then((snapshot) => {
+        if (!cancelled) setDropIntake(snapshot);
+      })
+      .catch(() => {
+        // Drop intake is optional UI context; keep an empty safe default.
+      });
+
+    listenToFileDrop(
+      (paths) => {
+        if (!cancelled) {
+          void ingestDroppedFilesControl(paths);
+        }
+      },
+      (active) => {
+        if (!cancelled) setDropHover(active);
+      },
+    ).then((cleanup) => {
+      if (cancelled) {
+        cleanup();
+      } else {
+        unlisten = cleanup;
+      }
+    }).catch(() => {
+      // Native drop events remain optional if the current window does not expose them.
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [ingestDroppedFilesControl]);
 
   const refreshRecentFiles = useCallback(async () => {
     const snapshot = await getRecentFilesContext();
@@ -2118,11 +2538,16 @@ export function useAuraBridge() {
   const submitCommand = useCallback(async (
     text: string,
     source: "desktop" | "overlay" | "voice" = "desktop",
+    dropIds: string[] = [],
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return null;
 
     const clientMessageId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const attachmentNames = dropIds
+      .map((dropId) => dropIntake.items.find((item) => item.id === dropId)?.name)
+      .filter((name): name is string => Boolean(name));
+
     setChatMessages((current) => [
       ...current,
       {
@@ -2130,6 +2555,7 @@ export function useAuraBridge() {
         role: "user",
         content: trimmed,
         timestampMs: Date.now(),
+        attachmentNames: attachmentNames.length > 0 ? attachmentNames : undefined,
       },
     ]);
 
@@ -2138,6 +2564,7 @@ export function useAuraBridge() {
       const ack = await submitAuraCommand({
         text: trimmed,
         source,
+        dropIds: dropIds.length > 0 ? dropIds : undefined,
       });
       setStatus(ack.status);
       return ack;
@@ -2160,10 +2587,13 @@ export function useAuraBridge() {
       ]);
       return null;
     }
-  }, []);
+  }, [dropIntake.items]);
 
-  const setPaused = useCallback(async (paused: boolean) => {
-    const state = await setRuntimePaused(paused);
+  const setPaused = useCallback(async (
+    paused: boolean,
+    recoveryOverride = false,
+  ) => {
+    const state = await setRuntimePaused(paused, recoveryOverride);
     setRuntimeState(state);
     return state;
   }, []);
@@ -2284,6 +2714,9 @@ export function useAuraBridge() {
     status,
     activity,
     appStatus,
+    betaStatus,
+    betaDiagnostics,
+    betaTestSession,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -2296,6 +2729,9 @@ export function useAuraBridge() {
     directorLastRun,
     memory,
     currentApp,
+    appSkillCatalog,
+    dropIntake,
+    dropHover,
     recentFiles,
     routines,
     routineLastRun,
@@ -2317,10 +2753,22 @@ export function useAuraBridge() {
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
+    imageRuntimeStatus,
+    lastGeneratedImage,
     chatMessages,
     pendingConfirmation,
     bridgeError,
     submitCommand,
+    refreshBetaStatus,
+    updateBetaPreferences,
+    repairBetaRecoveryStateControl,
+    refreshBetaTestSession,
+    startBetaTestSessionControl,
+    setBetaTestCheckControl,
+    resetBetaTestSessionControl,
+    refreshBetaDiagnostics,
+    exportBetaDiagnosticsControl,
+    exportBetaTestReportControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
@@ -2336,6 +2784,11 @@ export function useAuraBridge() {
     refreshDirectorPresets,
     refreshMemories,
     refreshCurrentApp,
+    ingestDroppedFilesControl,
+    clearDropIntakeControl,
+    revealDroppedFileControl,
+    inspectDroppedFileControl,
+    stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
     saveRoutineControl,
@@ -2381,6 +2834,8 @@ export function useAuraBridge() {
     refreshModelRuntime,
     refreshManagedRuntime,
     runManagedRuntimeAction,
+    refreshImageRuntime,
+    generateImageControl,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,

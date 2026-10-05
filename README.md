@@ -8,7 +8,13 @@
 
 AURA is not designed to compete with general-purpose AI chatbots. Its purpose is different: to become an intelligent layer for your computer — able to understand context, control applications, automate workflows, assist with production tasks, and act on your behalf with explicit permissions.
 
-> **Current stage:** M008 Agents & Automations complete · AURA-2 0.8.0-alpha.1 · pre-Beta
+The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, local diagnostics export, session recovery detection and a hardened per-user Windows installer pipeline.
+
+> **Current stage:** M009 Beta Candidate · AURA-2 0.9.0-beta.1 · Windows installer validation pending
+
+A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate; the current hosted-runner outage does not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest.
+
+For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance.
 
 ---
 
@@ -95,10 +101,10 @@ AURA-2/
 - AURA Vision
 - AURA Voice
 - Computer Control
-- App Skills
-- File Intelligence
-- Clipboard Intelligence
-- Drag & Drop actions
+- App Skills ✅
+- File Intelligence ✅
+- Clipboard Intelligence ✅
+- Drag & Drop actions ✅
 - AURA Memory
 - Agent Mode
 - AURA Automations
@@ -159,9 +165,9 @@ https://github.com/untoz-media/AURA-1
 
 ## Status
 
-AURA-2 has completed **M008 — Agents & Automations** as **0.8.0-alpha.1**. The current Alpha combines deterministic Windows control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, live task status and permission-aware background execution.
+AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, named window state control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, local image generation through AURA Create, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local health diagnostics and an explicit zero-telemetry policy.
 
-APIs, architecture, features, compatibility and product behaviour may change significantly before Beta.
+The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. Drag & Drop intake is now included in the candidate and remains subject to the same Windows smoke gate. APIs, architecture and product behaviour may still change during the Beta cycle.
 
 ---
 
@@ -202,7 +208,7 @@ The desktop also supports persistent visual themes:
 - Aurora
 - Light
 
-Model downloads and media-generation engines are intentionally not simulated by the UI foundation. Their buttons remain disabled until the real backend engines are implemented.
+AURA Create now has a real local image-generation backend. Video remains deliberately unavailable until a real hardware-aware video engine is connected; AURA does not simulate unavailable generation features.
 
 
 ### Model Manager
@@ -242,6 +248,191 @@ Current runtime behavior:
 The desktop now includes a Managed Runtime installer that can prepare a private Python/PyTorch/Transformers environment under AURA Local Data. A compatible system Python or AURA_PYTHON override remains available for development, but is no longer the intended end-user path.
 
 
+
+
+
+
+### Drag & Drop Actions
+
+AURA now accepts local files dropped onto the main desktop window through Tauri's native drag/drop events.
+
+Drag & Drop V2 is an **explicit intake + bounded inspection layer**, not automatic execution.
+
+Current behavior:
+
+- up to 8 files accepted per drop
+- files are canonicalized locally before entering the temporary registry
+- directories are rejected
+- duplicate canonical paths are deduplicated
+- React receives an opaque drop id + safe metadata, not the real filesystem path
+- the canonical path remains inside an in-memory Core registry
+- nothing is opened, executed, uploaded, remembered or analyzed automatically
+- the temporary drop session can be dismissed without modifying the original files
+- any accepted file can be revealed explicitly in File Explorer
+- any accepted file can be inspected explicitly without exposing its real path to React
+- allowlisted text/code formats can expose a temporary preview bounded to 64 KiB / 12,000 characters
+- image inspection can expose local dimensions without creating a Vision capture
+- **Inspect all** applies the same bounded rules across the temporary batch
+- **Attach to Chat** / **Attach all to Chat** adds selected opaque drop IDs to the next desktop message
+- attached files appear as removable chips above the composer and safe filename labels in the local chat UI
+- attachments are one-turn: after an accepted send they are automatically detached from the next message
+- sending attachments with an empty composer uses an explicit local "Analyze the attached local files." request
+- **Analyze with AURA** remains available as a one-click batch shortcut
+- model attachment context is capped to 6,000 characters total and never contains canonical filesystem paths
+- multi-file text excerpts share that budget fairly so later attachments are not starved by earlier files
+- the bounded text allowlist includes common source/config/subtitle formats plus known extensionless text files such as `.env`, `.gitignore`, `Dockerfile`, `Makefile` and `README`
+- attachment requests bypass deterministic computer-action, Routine and Director routing
+- attached text is explicitly marked as untrusted data for prompt-injection resistance
+- PDFs, Office files, video, audio and archives remain metadata-only in this Beta step
+- PNG/JPEG/WebP/GIF/BMP images can be staged explicitly for AURA Vision
+- Vision works from a normalized PNG copy in AURA's cache, never from the original image
+- Vision image import is bounded to 40 MB and the existing 24-million-pixel capture limit
+- dropped-file paths/content are not added to Beta diagnostics
+
+The drop tray classifies metadata as image, video, audio, document, archive or other. V2 adds explicit bounded inspection for allowlisted UTF-8 text/code files while keeping complex binary formats metadata-only.
+
+### App Skills
+
+AURA now has a real deterministic **App Skills V2** layer backed by a Core-owned Skill Registry.
+
+The desktop UI no longer hard-codes which app capabilities exist. AURA Core publishes skill metadata, permission class and contextual availability, and the Computer workspace renders that catalog dynamically.
+
+V1 includes Browser Skills for **Brave** and **Google Chrome** with:
+
+- New tab
+- Next tab
+- Previous tab
+- Reload tab
+- Focus address bar
+- Reopen closed tab
+
+Every Browser Skill:
+
+1. resolves a known browser target;
+2. brings that browser window to the foreground;
+3. waits briefly for Windows to complete the focus transition;
+4. verifies the foreground process really is the requested browser;
+5. sends only the fixed shortcut associated with that skill.
+
+If foreground verification fails, no shortcut is injected.
+
+File Explorer Skills V1 can also open the known personal folders Desktop, Documents, Downloads, Pictures, Videos and Music using paths resolved by Windows/Tauri. They do not accept arbitrary paths or use a shell.
+
+Notepad Skills V1 are also available contextually:
+
+- New note → Act
+- Find → Act
+- Select all → Act
+- Undo → Modify
+- Redo → Modify
+
+Windows Terminal Skills V1:
+
+- New tab
+- Next tab
+- Previous tab
+- Command palette
+- Find
+- Tab/profile dropdown
+
+Terminal Skills never accept arbitrary shell command text. They use the documented default Windows Terminal key bindings and therefore respect the product boundary that AURA is navigating the Terminal UI, not executing a shell.
+
+Calculator Skills V1:
+
+- Standard mode
+- Scientific mode
+- Programmer mode
+- Date Calculation
+- Graphing mode
+
+Calculator Skills use the keyboard accelerators exercised by the official Microsoft Calculator repository's manual test plan.
+
+Notepad shortcuts use the same foreground-process verification as Browser Skills. Save/Close are intentionally not exposed in this pass because they can write files or risk unsaved work.
+
+App Skills remain deterministic and do not require an LLM.
+
+### File Intelligence
+
+AURA can now perform bounded filename/metadata search across the user's personal Windows libraries without scanning the whole machine or reading file contents.
+
+V2 also supports deterministic recent-file queries by filesystem modified time, including videos, images, audio, documents, archives and Downloads.
+
+Current V1 boundary:
+
+- Desktop
+- Documents
+- Downloads
+- Pictures
+- Videos
+- Music
+- maximum recursion depth: 4
+- maximum scanned entries: 8,000
+- maximum returned results: 20
+- symlinks are not followed
+- hidden dot-prefixed entries are skipped
+- only names and filesystem metadata are inspected
+- file contents are never opened by the search engine
+- a returned path can be revealed in File Explorer after a separate Act action
+- reveal validates the canonical path remains inside an allowed personal folder
+- AURA does not execute/open the matched file in V1
+
+Examples:
+
+- `Find file Artemis`
+- `Search files WorldUnited`
+- `Procura ficheiro thumbnail`
+- `Latest video`
+- `Latest video I exported`
+- `Imagens recentes`
+- `Último download`
+- `Recent documents`
+- `Reveal file "C:\\Users\\…\\Documents\\report.pdf"`
+
+For phrases such as “latest video I exported”, AURA explicitly reports the **most recently modified matching file**. It does not claim to know which application created or exported the file.
+
+### Clipboard Intelligence
+
+AURA can now interact with Windows text clipboard data through explicit commands and Computer workspace controls.
+
+Privacy rules:
+
+- clipboard reading is Sensitive and requires confirmation by default
+- clipboard writing is Modify and requires confirmation by default
+- clearing the clipboard is Destructive and requires confirmation
+- AURA does not poll or monitor clipboard changes in the background
+- clipboard text is never added to Beta diagnostics
+- voice-triggered clipboard reads are shown visually but are not spoken aloud by TTS
+- large clipboard reads are bounded before being returned to the conversation
+
+Examples:
+
+- `Read clipboard`
+- `Copy to clipboard Hello AURA`
+- `Clear clipboard`
+- `Lê o clipboard`
+- `Copia para o clipboard Olá`
+
+### AURA Create
+
+The Create workspace now includes real local text-to-image generation.
+
+Current behavior:
+
+- dedicated `AURA Create · Image` model managed separately from the assistant model
+- pinned model revision and SafeTensors-only weight manifest
+- one-time model download with pause/resume/cancel support
+- persistent local Diffusers worker using only installed files during inference
+- square, landscape and portrait presets
+- configurable inference steps, optional negative prompt and reproducible seed
+- CUDA-aware execution with CPU offload when CUDA is available
+- CPU fallback
+- generated PNG files saved under `Pictures/AURA Create` when the Pictures directory is available
+- preview remains in the current desktop session
+- removing or repairing the managed runtime stops all local AI workers first
+
+Video generation remains planned and is not simulated by the interface.
+
+
 ### Managed Runtime
 
 Local model users no longer need to configure Python manually.
@@ -255,7 +446,7 @@ From **Models**, AURA can install its own private Windows AI environment:
 - GPU-aware PyTorch installation
 - CUDA 12.8 wheels when NVIDIA is detected
 - CPU wheels otherwise
-- Transformers / Accelerate / BitsAndBytes / Safetensors
+- Transformers / Diffusers / Accelerate / BitsAndBytes / Safetensors
 - final import/version/CUDA verification
 - repair and removal controls
 
@@ -277,7 +468,7 @@ The managed setup:
 - verifies the official Python installer with Windows Authenticode
 - checks for at least 10 GB of free runtime space
 - selects CUDA or CPU PyTorch based on NVIDIA detection
-- installs Transformers, Accelerate, BitsAndBytes and Safetensors
+- installs Transformers, Diffusers, Accelerate, BitsAndBytes and Safetensors
 - verifies the final Python/AI stack before marking it Ready
 - exposes install, repair, reinstall and removal controls in the desktop UI
 

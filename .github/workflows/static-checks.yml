@@ -1,0 +1,51 @@
+name: Static Checks
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "package.json"
+      - "scripts/**"
+      - ".github/workflows/static-checks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: static-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Beta source validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Resolve npm dependency lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact npm dependencies
+        run: npm ci
+
+      - name: Validate Public Beta source
+        run: npm run beta:validate

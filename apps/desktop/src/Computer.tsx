@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type {
   CurrentAppInfo,
+  AppSkillCatalog,
   ObsConnectionState,
   ObsRuntimeState,
   RecentFilesSnapshot,
@@ -9,6 +11,7 @@ import "./feature-pages.css";
 
 type Props = {
   currentApp: CurrentAppInfo | null;
+  appSkillCatalog: AppSkillCatalog;
   runtimeState: RuntimeState;
   obsConnection: ObsConnectionState;
   obsRuntime: ObsRuntimeState;
@@ -19,6 +22,7 @@ type Props = {
 
 export default function Computer({
   currentApp,
+  appSkillCatalog,
   runtimeState,
   obsConnection,
   obsRuntime,
@@ -26,10 +30,42 @@ export default function Computer({
   onRecentFilesRefresh,
   onCommand,
 }: Props) {
+  const [clipboardDraft, setClipboardDraft] = useState("");
+  const [fileSearchDraft, setFileSearchDraft] = useState("");
+
+  const availableSkills = appSkillCatalog.skills.filter((skill) => skill.available);
+  const skillGroups = availableSkills.reduce<Record<string, typeof availableSkills>>(
+    (groups, skill) => {
+      const key = skill.appName;
+      (groups[key] ??= []).push(skill);
+      return groups;
+    },
+    {},
+  );
+
+  const contextualWindowActions = currentApp?.knownApp
+    ? [
+        {
+          label: `Minimize ${currentApp.appName}`,
+          command: `Minimize ${currentApp.appName}`,
+        },
+        {
+          label: `Maximize ${currentApp.appName}`,
+          command: `Maximize ${currentApp.appName}`,
+        },
+        {
+          label: `Restore ${currentApp.appName}`,
+          command: `Restore ${currentApp.appName}`,
+        },
+      ]
+    : [];
+
   const actions = [
+    ...contextualWindowActions,
     { label: "Show windows", command: "Show windows" },
     { label: "Current app", command: "What app am I using?" },
     { label: "Recent files", command: "Recent files" },
+    { label: "Read clipboard", command: "Read clipboard" },
     { label: "Production health", command: "Check production health" },
     { label: "List OBS scenes", command: "List OBS scenes" },
   ];
@@ -90,6 +126,144 @@ export default function Computer({
         </article>
       </div>
 
+      <div className="feature-section app-skills-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">APP SKILLS</span>
+            <strong>Capabilities published dynamically by AURA Core.</strong>
+          </div>
+          <span className="feature-badge">
+            {availableSkills.length} available
+          </span>
+        </div>
+
+        {Object.entries(skillGroups).length > 0 ? (
+          Object.entries(skillGroups).map(([appName, skills]) => (
+            <div className="app-skill-subsection" key={appName}>
+              <div className="app-skill-subheading">
+                <div>
+                  <span>{appName}</span>
+                  <small>
+                    {skills.some((skill) => skill.contextual)
+                      ? `Contextual · ${appSkillCatalog.contextAppName ?? "no active context"}`
+                      : "Always available"}
+                  </small>
+                </div>
+                <span className="feature-badge">
+                  {skills[0]?.permission ?? "act"}
+                </span>
+              </div>
+
+              <div className="app-skill-grid">
+                {skills.map((skill) => (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    className="quick-action-card"
+                    title={skill.description}
+                    disabled={runtimeState.paused}
+                    onClick={() => void onCommand(skill.command)}
+                  >
+                    <strong>{skill.name}</strong>
+                    <span>{skill.command}</span>
+                  </button>
+                ))}
+              </div>
+
+              {skills.some((skill) => skill.contextual) && (
+                <div className="feature-note">
+                  <strong>Context verified by Core</strong>
+                  <span>
+                    These skills are exposed only when their target application is
+                    the current or last external known app. Browser shortcuts still
+                    verify foreground process before injection.
+                  </span>
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="feature-empty">
+            No App Skills are currently available. The registry will update as
+            supported application context changes.
+          </div>
+        )}
+      </div>
+
+      <div className="feature-section file-intelligence-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">FILE INTELLIGENCE</span>
+            <strong>Find files by name without scanning your whole PC.</strong>
+          </div>
+          <span className="feature-badge">Read only</span>
+        </div>
+
+        <div className="file-intelligence-search">
+          <input
+            type="text"
+            maxLength={120}
+            value={fileSearchDraft}
+            disabled={runtimeState.paused}
+            placeholder="Search Desktop, Documents, Downloads, Pictures, Videos and Music…"
+            onChange={(event) => setFileSearchDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                const value = fileSearchDraft.trim();
+                if (value.length >= 2) {
+                  void onCommand(`Find file ${value}`);
+                }
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="feature-primary-button"
+            disabled={runtimeState.paused || fileSearchDraft.trim().length < 2}
+            onClick={() => {
+              const value = fileSearchDraft.trim();
+              if (value.length < 2) return;
+              void onCommand(`Find file ${value}`);
+            }}
+          >
+            Search files
+          </button>
+        </div>
+
+        <div className="file-intelligence-boundary">
+          <span>6 personal folders</span>
+          <span>Depth ≤ 4</span>
+          <span>≤ 8,000 entries</span>
+          <span>No file contents</span>
+          <span>No symlink traversal</span>
+        </div>
+
+        <div className="file-intelligence-recent">
+          <span>Recent file shortcuts</span>
+          <div>
+            {[
+              ["Latest video", "Latest video"],
+              ["Latest image", "Latest image"],
+              ["Latest download", "Latest download"],
+              ["Recent documents", "Recent documents"],
+            ].map(([label, command]) => (
+              <button
+                key={command}
+                type="button"
+                className="feature-secondary-button"
+                disabled={runtimeState.paused}
+                onClick={() => void onCommand(command)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <small>
+            Ranked by filesystem modified time. AURA does not infer which app created or exported the file.
+          </small>
+        </div>
+      </div>
+
       <div className="feature-section">
         <div className="feature-section-heading">
           <div>
@@ -127,11 +301,84 @@ export default function Computer({
         )}
       </div>
 
+      <div className="feature-section clipboard-section">
+        <div className="feature-section-heading">
+          <div>
+            <span className="feature-kicker">CLIPBOARD INTELLIGENCE</span>
+            <strong>On-demand only. No clipboard monitoring.</strong>
+          </div>
+          <span className="feature-badge">Private by default</span>
+        </div>
+
+        <div className="clipboard-grid">
+          <label className="clipboard-compose">
+            <span>Copy text to Windows clipboard</span>
+            <textarea
+              rows={4}
+              maxLength={3000}
+              value={clipboardDraft}
+              disabled={runtimeState.paused}
+              placeholder="Text to place on the clipboard…"
+              onChange={(event) => setClipboardDraft(event.target.value)}
+            />
+            <small>{clipboardDraft.length}/3000 · confirmation required</small>
+          </label>
+
+          <div className="clipboard-actions">
+            <button
+              type="button"
+              className="feature-primary-button"
+              disabled={runtimeState.paused || !clipboardDraft.trim()}
+              onClick={() => {
+                const value = clipboardDraft.trim();
+                if (!value) return;
+                void onCommand(`Copy to clipboard ${value}`);
+              }}
+            >
+              Copy text
+            </button>
+            <button
+              type="button"
+              className="feature-secondary-button"
+              disabled={runtimeState.paused}
+              onClick={() => void onCommand("Read clipboard")}
+            >
+              Read clipboard
+            </button>
+            <button
+              type="button"
+              className="feature-secondary-button danger"
+              disabled={runtimeState.paused}
+              onClick={() => void onCommand("Clear clipboard")}
+            >
+              Clear clipboard
+            </button>
+          </div>
+        </div>
+
+        <div className="feature-note clipboard-privacy-note">
+          <strong>Privacy boundary</strong>
+          <span>
+            Reading is Sensitive, writing is Modify and clearing is Destructive.
+            AURA never polls the clipboard, never adds clipboard contents to Beta
+            diagnostics and does not speak clipboard text aloud for voice commands.
+          </span>
+        </div>
+      </div>
+
       <div className="feature-section">
         <div className="feature-section-heading">
           <div>
             <span className="feature-kicker">QUICK ACTIONS</span>
             <strong>Ask the computer layer directly.</strong>
+            {currentApp?.knownApp && (
+              <small>
+                Window controls target {currentApp.appName}
+                {currentApp.contextSource === "lastExternal"
+                  ? " from your last external context."
+                  : "."}
+              </small>
+            )}
           </div>
         </div>
         <div className="quick-action-grid">

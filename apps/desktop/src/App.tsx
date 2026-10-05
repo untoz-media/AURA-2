@@ -17,6 +17,9 @@ import Tasks from "./Tasks";
 import DirectorMode from "./DirectorMode";
 import Vision from "./Vision";
 import Agents from "./Agents";
+import BetaWelcome from "./BetaWelcome";
+import DropTray from "./DropTray";
+import "./beta.css";
 import {
   applyAuraTheme,
   readAuraTheme,
@@ -37,6 +40,7 @@ type AppView =
 
 function App() {
   const [command, setCommand] = useState("");
+  const [attachedDropIds, setAttachedDropIds] = useState<string[]>([]);
   const [view, setView] = useState<AppView>("chat");
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("general");
@@ -47,6 +51,9 @@ function App() {
     status,
     activity,
     appStatus,
+    betaStatus,
+    betaDiagnostics,
+    betaTestSession,
     runtimeState,
     permissionPolicy,
     obsConnection,
@@ -59,6 +66,9 @@ function App() {
     directorLastRun,
     memory,
     currentApp,
+    appSkillCatalog,
+    dropIntake,
+    dropHover,
     recentFiles,
     routines,
     routineLastRun,
@@ -80,10 +90,22 @@ function App() {
     modelCatalog,
     modelRuntimeStatus,
     managedRuntimeStatus,
+    imageRuntimeStatus,
+    lastGeneratedImage,
     chatMessages,
     pendingConfirmation,
     bridgeError,
     submitCommand,
+    refreshBetaStatus,
+    updateBetaPreferences,
+    repairBetaRecoveryStateControl,
+    refreshBetaTestSession,
+    startBetaTestSessionControl,
+    setBetaTestCheckControl,
+    resetBetaTestSessionControl,
+    refreshBetaDiagnostics,
+    exportBetaDiagnosticsControl,
+    exportBetaTestReportControl,
     setPaused,
     setBackgroundMode,
     setAutostart,
@@ -98,6 +120,10 @@ function App() {
     refreshObsHealth,
     refreshDirectorPresets,
     refreshMemories,
+    clearDropIntakeControl,
+    revealDroppedFileControl,
+    inspectDroppedFileControl,
+    stageDroppedImageForVisionControl,
     refreshRecentFiles,
     refreshRoutines,
     saveRoutineControl,
@@ -141,6 +167,8 @@ function App() {
     refreshModels,
     refreshManagedRuntime,
     runManagedRuntimeAction,
+    refreshImageRuntime,
+    generateImageControl,
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
@@ -163,8 +191,8 @@ function App() {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
-    listenToOpenSettings(() => {
-      setSettingsSection("general");
+    listenToOpenSettings((section) => {
+      setSettingsSection(section === "beta" ? "beta" : "general");
       setView("settings");
     }).then((cleanup) => {
       if (cancelled) {
@@ -184,6 +212,13 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chatMessages.length, status]);
 
+  useEffect(() => {
+    const availableIds = new Set(dropIntake.items.map((item) => item.id));
+    setAttachedDropIds((current) =>
+      current.filter((dropId) => availableIds.has(dropId)),
+    );
+  }, [dropIntake.refreshedAtMs]);
+
   function changeTheme(nextTheme: AuraTheme) {
     setTheme(nextTheme);
     applyAuraTheme(nextTheme);
@@ -191,11 +226,19 @@ function App() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const value = command.trim();
+    const typedValue = command.trim();
+    const dropIds = [...attachedDropIds];
+    const value =
+      typedValue
+      || (dropIds.length > 0 ? "Analyze the attached local files." : "");
+
     if (!value) return;
 
     setCommand("");
-    await submitCommand(value);
+    const ack = await submitCommand(value, "desktop", dropIds);
+    if (ack) {
+      setAttachedDropIds([]);
+    }
   }
 
   async function runQuickCommand(value: string) {
@@ -213,6 +256,7 @@ function App() {
 
   function startNewConversation() {
     setCommand("");
+    setAttachedDropIds([]);
     setView("chat");
     void clearConversationControl();
   }
@@ -222,6 +266,34 @@ function App() {
     : status === "Working"
       ? "AURA working"
       : "Computer ready";
+
+  const attachedDropItems = dropIntake.items.filter((item) =>
+    attachedDropIds.includes(item.id),
+  );
+  const attachedTextContextCount = attachedDropItems.filter(
+    (item) => item.canPreviewText,
+  ).length;
+  const attachedImageMetadataCount = attachedDropItems.filter(
+    (item) => !item.canPreviewText && item.kind === "image",
+  ).length;
+  const attachedMetadataOnlyCount =
+    attachedDropItems.length
+    - attachedTextContextCount
+    - attachedImageMetadataCount;
+
+  function toggleDropAttachment(dropId: string) {
+    setAttachedDropIds((current) =>
+      current.includes(dropId)
+        ? current.filter((id) => id !== dropId)
+        : [...current, dropId].slice(0, 8),
+    );
+    setView("chat");
+  }
+
+  function attachAllDroppedFiles() {
+    setAttachedDropIds(dropIntake.items.map((item) => item.id).slice(0, 8));
+    setView("chat");
+  }
 
   return (
     <main className="app-shell aura1-evolved-shell">
@@ -389,6 +461,105 @@ function App() {
           <StatusPill status={status} />
         </header>
 
+        {betaStatus.onboardingComplete &&
+          betaDiagnostics &&
+          (betaDiagnostics.buildLabel === "alpha-v1-testing-preview" ||
+            betaDiagnostics.buildLabel === "beta-local-smoke") &&
+          view === "chat" && (
+            <div className="beta-recovery-banner beta-preview-banner" role="status">
+              <div className="beta-recovery-copy">
+                <span className="beta-recovery-kicker">
+                  {betaDiagnostics.buildLabel === "alpha-v1-testing-preview"
+                    ? "AURA-2 TESTING PREVIEW"
+                    : "AURA-2 LOCAL TEST BUILD"}
+                </span>
+                <strong>
+                  {betaDiagnostics.appVersion} ·{" "}
+                  {betaDiagnostics.buildCommit.slice(0, 12)}
+                </strong>
+                <span>
+                  This is a traceable pre-release build intended for testing.
+                  Build source: {betaDiagnostics.buildSource}.
+                </span>
+              </div>
+              <div className="beta-recovery-actions">
+                <button
+                  type="button"
+                  className="feature-secondary-button"
+                  onClick={() => openSettings("beta")}
+                >
+                  Build details
+                </button>
+              </div>
+            </div>
+          )}
+
+        {betaStatus.onboardingComplete &&
+          betaStatus.previousSessionUnclean &&
+          runtimeState.paused &&
+          view === "chat" && (
+            <div className="beta-recovery-banner" role={betaStatus.crashLoopGuardActive ? "alert" : "status"}>
+              <div className="beta-recovery-copy">
+                <span className="beta-recovery-kicker">
+                  {betaStatus.crashLoopGuardActive
+                    ? "CRASH LOOP GUARD"
+                    : "RECOVERY SAFE MODE"}
+                </span>
+                <strong>
+                  {betaStatus.crashLoopGuardActive
+                    ? "AURA detected repeated unclean sessions"
+                    : "AURA recovered after an unclean previous session"}
+                </strong>
+                <span>
+                  {betaStatus.crashLoopGuardActive
+                    ? "AURA is paused and background startup has been suppressed. Review Beta & Diagnostics before resuming from Settings."
+                    : "Agents and Automations are paused so nothing can run unexpectedly. Review diagnostics if needed, then resume AURA."}
+                </span>
+              </div>
+              <div className="beta-recovery-actions">
+                <button
+                  type="button"
+                  className="feature-secondary-button"
+                  onClick={() => openSettings("beta")}
+                >
+                  Review diagnostics
+                </button>
+                {!betaStatus.crashLoopGuardActive && (
+                  <button
+                    type="button"
+                    className="feature-primary-button"
+                    onClick={() => void setPaused(false)}
+                  >
+                    Resume AURA
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+        {betaDiagnostics?.healthStatus === "degraded" && view === "chat" && (
+          <div className="beta-recovery-banner beta-health-alert" role="alert">
+            <div className="beta-recovery-copy">
+              <span className="beta-recovery-kicker">BETA HEALTH CHECK</span>
+              <strong>A local AURA subsystem needs attention</strong>
+              <span>
+                The automatic startup health check found at least one failed
+                local check. Nothing was uploaded and unaffected features can
+                continue to work.
+              </span>
+            </div>
+            <div className="beta-recovery-actions">
+              <button
+                type="button"
+                className="feature-primary-button"
+                onClick={() => openSettings("beta")}
+              >
+                Review health report
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className={`workspace-content ${view === "chat" ? "chat-workspace" : ""}`}>
           {view === "chat" && (
             <section className="chat-view">
@@ -477,6 +648,16 @@ function App() {
                           <span>
                             {message.role === "assistant" ? "AURA" : "You"}
                           </span>
+                          {message.attachmentNames && message.attachmentNames.length > 0 && (
+                            <div className="chat-message-attachments">
+                              {message.attachmentNames.map((name, index) => (
+                                <span key={`${message.id}:attachment:${index}`} title={name}>
+                                  <span aria-hidden="true">▤</span>
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <p>{message.content}</p>
                         </div>
                       </article>
@@ -515,6 +696,49 @@ function App() {
                   />
                 )}
 
+                {attachedDropItems.length > 0 && (
+                  <div className="composer-attachments" aria-label="Attached local files">
+                    <div className="composer-attachments-heading">
+                      <span>
+                        {attachedDropItems.length} temporary file
+                        {attachedDropItems.length === 1 ? "" : "s"} attached
+                        {attachedTextContextCount > 0
+                          ? ` · ${attachedTextContextCount} text context`
+                          : ""}
+                        {attachedImageMetadataCount > 0
+                          ? ` · ${attachedImageMetadataCount} image metadata`
+                          : ""}
+                        {attachedMetadataOnlyCount > 0
+                          ? ` · ${attachedMetadataOnlyCount} metadata only`
+                          : ""}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedDropIds([])}
+                        disabled={status === "Working"}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="composer-attachment-chips">
+                      {attachedDropItems.map((item) => (
+                        <button
+                          type="button"
+                          className="composer-attachment-chip"
+                          key={item.id}
+                          title={`Remove ${item.name} from this message`}
+                          onClick={() => toggleDropAttachment(item.id)}
+                          disabled={status === "Working"}
+                        >
+                          <span aria-hidden="true">▤</span>
+                          <strong>{item.name}</strong>
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <form className="aura-composer" onSubmit={handleSubmit}>
                   <input
                     autoFocus
@@ -523,7 +747,9 @@ function App() {
                     placeholder={
                       runtimeState.paused
                         ? "AURA is paused…"
-                        : "Message AURA…"
+                        : attachedDropItems.length > 0
+                          ? `Ask AURA about ${attachedDropItems.length} attached file${attachedDropItems.length === 1 ? "" : "s"}…`
+                          : "Message AURA…"
                     }
                     aria-label="Message AURA"
                     disabled={
@@ -536,7 +762,7 @@ function App() {
                     type="submit"
                     aria-label="Send"
                     disabled={
-                      !command.trim()
+                      (!command.trim() && attachedDropItems.length === 0)
                       || status === "Working"
                       || runtimeState.paused
                       || Boolean(pendingConfirmation)
@@ -549,6 +775,9 @@ function App() {
                 <p className="composer-meta">
                   <span className="local-dot" />
                   Local-first · Private by design · {appStatus?.version ?? "AURA-2"}
+                  {attachedDropItems.length > 0 && (
+                    <> · Attachments are used for this turn only</>
+                  )}
                   <span className="composer-shortcut">
                     <ShortcutKey>Ctrl</ShortcutKey> + <ShortcutKey>Shift</ShortcutKey> +{" "}
                     <ShortcutKey>Space</ShortcutKey>
@@ -584,17 +813,49 @@ function App() {
             />
           )}
 
-          {view === "create" && <Create />}
+          {view === "create" && (
+            <Create
+              catalog={modelCatalog}
+              managedRuntime={managedRuntimeStatus}
+              imageRuntime={imageRuntimeStatus}
+              lastImage={lastGeneratedImage}
+              onModelOperation={runModelOperation}
+              onRuntimeAction={runManagedRuntimeAction}
+              onRuntimeRefresh={refreshImageRuntime}
+              onGenerateImage={generateImageControl}
+            />
+          )}
 
           {view === "computer" && (
             <Computer
               currentApp={currentApp}
+              appSkillCatalog={appSkillCatalog}
               runtimeState={runtimeState}
               obsConnection={obsConnection}
               obsRuntime={obsRuntime}
               recentFiles={recentFiles}
               onRecentFilesRefresh={refreshRecentFiles}
-              onCommand={runQuickCommand}
+              onCommand={async (value) => {
+                const normalized = value.toLowerCase();
+                const isPublishedAppSkill = appSkillCatalog.skills.some(
+                  (skill) => skill.command.toLowerCase() === normalized,
+                );
+
+                if (
+                  value === "Read clipboard" ||
+                  normalized.startsWith("find file ") ||
+                  normalized.startsWith("latest ") ||
+                  normalized.startsWith("recent ") ||
+                  normalized.startsWith("último ") ||
+                  normalized.startsWith("ultimo ") ||
+                  normalized.startsWith("última ") ||
+                  normalized.startsWith("ultima ") ||
+                  isPublishedAppSkill
+                ) {
+                  setView("chat");
+                }
+                await runQuickCommand(value);
+              }}
             />
           )}
 
@@ -723,10 +984,62 @@ function App() {
               onAudioSelect={selectAudioInput}
               onAudioTestStart={startAudioTest}
               onAudioTestStop={stopAudioTest}
+              betaStatus={betaStatus}
+              betaDiagnostics={betaDiagnostics}
+              betaTestSession={betaTestSession}
+              onBetaRefresh={refreshBetaStatus}
+              onBetaRecoveryRepair={repairBetaRecoveryStateControl}
+              onBetaTestRefresh={refreshBetaTestSession}
+              onBetaTestStart={startBetaTestSessionControl}
+              onBetaTestCheckChange={setBetaTestCheckControl}
+              onBetaTestReset={resetBetaTestSessionControl}
+              onBetaTestReportExport={exportBetaTestReportControl}
+              onBetaPreferencesChange={updateBetaPreferences}
+              onBetaDiagnosticsRefresh={refreshBetaDiagnostics}
+              onBetaDiagnosticsExport={exportBetaDiagnosticsControl}
             />
           )}
         </div>
       </section>
+
+      <DropTray
+        snapshot={dropIntake}
+        hovering={dropHover}
+        paused={runtimeState.paused}
+        onClear={clearDropIntakeControl}
+        attachedIds={attachedDropIds}
+        onToggleAttach={toggleDropAttachment}
+        onAttachAll={attachAllDroppedFiles}
+        onReveal={revealDroppedFileControl}
+        onInspect={inspectDroppedFileControl}
+        onAnalyze={async (dropIds) => {
+          setView("chat");
+          return submitCommand(
+            "Analyze the attached local files. Summarize the available content, compare the files when useful, and clearly state when a file is metadata-only.",
+            "desktop",
+            dropIds,
+          );
+        }}
+        onUseVision={async (dropId) => {
+          await stageDroppedImageForVisionControl(dropId);
+          setView("vision");
+        }}
+      />
+
+      {betaStatus.refreshedAtMs > 0 && !betaStatus.onboardingComplete && (
+        <BetaWelcome
+          status={betaStatus}
+          appStatus={appStatus}
+          onComplete={async () => {
+            await updateBetaPreferences({ onboardingComplete: true });
+          }}
+          onReviewPermissions={() => {
+            void updateBetaPreferences({ onboardingComplete: true }).then(() =>
+              openSettings("permissions"),
+            );
+          }}
+        />
+      )}
     </main>
   );
 }

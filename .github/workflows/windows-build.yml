@@ -1,10 +1,18 @@
 name: Windows Build
 
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
       - "apps/desktop/**"
       - "package.json"
+      - "scripts/**"
       - ".github/workflows/windows-build.yml"
   workflow_dispatch:
   push:
@@ -17,35 +25,64 @@ jobs:
   build-windows:
     name: Build Windows NSIS installer
     runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      AURA_BUILD_COMMIT: ${{ github.sha }}
+      AURA_BUILD_SOURCE: github-actions
+      AURA_BUILD_LABEL: beta-ci
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "./apps/desktop/src-tauri -> target"
 
-      - name: Install dependencies
-        run: npm install
+      - name: Windows Build Doctor
+        shell: pwsh
+        run: npm run beta:doctor:windows
 
-      - name: Generate Tauri icons
-        run: npm run icons
+      - name: Resolve npm dependency lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact npm dependencies
+        run: npm ci
+
+      - name: Resolve Rust dependency lock
+        run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Validate Public Beta source
+        run: npm run beta:validate
 
       - name: Test Rust Core
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Build AURA-2
         run: npm run build
+
+      - name: Verify NSIS installer presence
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer not found" }
+          Write-Host "Installer: $($installer.FullName)"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
@@ -53,3 +90,60 @@ jobs:
           name: AURA-2-Windows-x64
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer not found" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Set-Content "AURA-2-Windows-x64.sha256" -Encoding ascii
+
+      - name: Generate build manifest
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer not found" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          $version = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+          $packageLockHash = (Get-FileHash "package-lock.json" -Algorithm SHA256).Hash.ToLower()
+          $cargoLockHash = (Get-FileHash "apps/desktop/src-tauri/Cargo.lock" -Algorithm SHA256).Hash.ToLower()
+          $manifest = [ordered]@{
+            schemaVersion = 3
+            product = "AURA-2"
+            version = $version
+            channel = "beta"
+            installer = $installer.Name
+            installerSizeBytes = $installer.Length
+            sha256 = $hash
+            signatureStatus = [string]$signature.Status
+            sourceCommit = $env:AURA_BUILD_COMMIT
+            buildSource = $env:AURA_BUILD_SOURCE
+            buildLabel = $env:AURA_BUILD_LABEL
+            packageLockSha256 = $packageLockHash
+            cargoLockSha256 = $cargoLockHash
+            workflowRunId = "${{ github.run_id }}"
+            builtAtUtc = [DateTime]::UtcNow.ToString("o")
+          }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content "AURA-2-Beta-Build.json" -Encoding utf8
+
+      - name: Upload installer checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-2-Windows-x64-SHA256
+          path: AURA-2-Windows-x64.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-2-Windows-x64-Build-Metadata
+          path: |
+            AURA-2-Beta-Build.json
+            package-lock.json
+            apps/desktop/src-tauri/Cargo.lock
+          if-no-files-found: error
+          retention-days: 14

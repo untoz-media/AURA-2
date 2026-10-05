@@ -28,6 +28,10 @@ import type {
   SpeechRuntimeStatus,
   TtsRuntimeStatus,
   VoicePreferences,
+  BetaStatus,
+  BetaTestSession,
+  DiagnosticsSnapshot,
+  SetBetaPreferencesRequest,
 } from "./bridge/types";
 import { SectionLabel, ShortcutKey, Surface } from "./design-system/components";
 import DirectorPresets from "./DirectorPresets";
@@ -42,6 +46,7 @@ type SettingsSection =
   | "voice"
   | "overlay"
   | "shortcuts"
+  | "beta"
   | "integrations";
 
 type Props = {
@@ -49,7 +54,10 @@ type Props = {
   onSectionChange: (section: SettingsSection) => void;
   appStatus: AppStatus | null;
   runtimeState: RuntimeState;
-  onPausedChange: (paused: boolean) => Promise<RuntimeState>;
+  onPausedChange: (
+    paused: boolean,
+    recoveryOverride?: boolean,
+  ) => Promise<RuntimeState>;
   onBackgroundChange: (backgroundEnabled: boolean) => Promise<RuntimeState>;
   onAutostartChange: (autostartEnabled: boolean) => Promise<RuntimeState>;
   permissionPolicy: PermissionPolicy;
@@ -127,6 +135,24 @@ type Props = {
   onAudioSelect: (deviceName?: string) => Promise<AudioInputSnapshot>;
   onAudioTestStart: () => Promise<AudioInputSnapshot>;
   onAudioTestStop: () => Promise<AudioInputSnapshot>;
+  betaStatus: BetaStatus;
+  betaDiagnostics: DiagnosticsSnapshot | null;
+  betaTestSession: BetaTestSession;
+  onBetaRefresh: () => Promise<BetaStatus>;
+  onBetaRecoveryRepair: () => Promise<BetaStatus>;
+  onBetaTestRefresh: () => Promise<BetaTestSession>;
+  onBetaTestStart: () => Promise<BetaTestSession>;
+  onBetaTestCheckChange: (
+    checkId: string,
+    completed: boolean,
+  ) => Promise<BetaTestSession>;
+  onBetaTestReset: () => Promise<BetaTestSession>;
+  onBetaTestReportExport: () => Promise<string>;
+  onBetaPreferencesChange: (
+    request: SetBetaPreferencesRequest,
+  ) => Promise<BetaStatus>;
+  onBetaDiagnosticsRefresh: () => Promise<DiagnosticsSnapshot>;
+  onBetaDiagnosticsExport: () => Promise<string>;
 };
 
 const sections: Array<{
@@ -142,6 +168,7 @@ const sections: Array<{
   { id: "voice", label: "Voice", icon: "∿" },
   { id: "overlay", label: "Overlay", icon: "▱" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
+  { id: "beta", label: "Beta & Diagnostics", icon: "β" },
   { id: "integrations", label: "Integrations", icon: "⌁" },
 ];
 
@@ -295,6 +322,19 @@ export default function Settings({
   onAudioSelect,
   onAudioTestStart,
   onAudioTestStop,
+  betaStatus,
+  betaDiagnostics,
+  betaTestSession,
+  onBetaRefresh,
+  onBetaRecoveryRepair,
+  onBetaTestRefresh,
+  onBetaTestStart,
+  onBetaTestCheckChange,
+  onBetaTestReset,
+  onBetaTestReportExport,
+  onBetaPreferencesChange,
+  onBetaDiagnosticsRefresh,
+  onBetaDiagnosticsExport,
 }: Props) {
   const [obsHost, setObsHost] = useState(obsConnection.host);
   const [obsPort, setObsPort] = useState(String(obsConnection.port));
@@ -316,6 +356,80 @@ export default function Settings({
   const [wakePhraseDraft, setWakePhraseDraft] = useState(
     voicePreferences.wakePhrase,
   );
+  const [betaBusy, setBetaBusy] = useState<string | null>(null);
+  const [betaExportPath, setBetaExportPath] = useState<string | null>(null);
+  const [betaTestExportPath, setBetaTestExportPath] = useState<string | null>(null);
+  const betaPrivacyInvariant =
+    !betaStatus.telemetryEnabled &&
+    !betaStatus.automaticCrashUploads &&
+    betaStatus.localDiagnosticsOnly;
+  const betaSnapshotIdentityValid = betaDiagnostics
+    ? betaDiagnostics.schemaVersion === 3 &&
+      betaDiagnostics.appName === (appStatus?.name ?? "AURA-2") &&
+      betaDiagnostics.appVersion === (appStatus?.version ?? betaDiagnostics.appVersion) &&
+      betaDiagnostics.channel === "beta" &&
+      betaDiagnostics.buildCommit.length > 0 &&
+      betaDiagnostics.buildSource.length > 0 &&
+      betaDiagnostics.buildLabel.length > 0 &&
+      !betaDiagnostics.telemetryEnabled
+    : null;
+  const betaCountersValid = betaDiagnostics
+    ? betaDiagnostics.activeAgentRuns <= betaDiagnostics.agentRunsTotal &&
+      betaDiagnostics.enabledAutomations <= betaDiagnostics.automations
+    : null;
+  const betaBackendHealthValid = betaDiagnostics
+    ? betaDiagnostics.healthStatus === "healthy" &&
+      betaDiagnostics.healthChecks.every((check) => check.status === "passed")
+    : null;
+  const betaPassedHealthChecks = betaDiagnostics
+    ? betaDiagnostics.healthChecks.filter((check) => check.status === "passed").length
+    : 0;
+  const betaSelfCheckPassed =
+    betaDiagnostics !== null &&
+    betaPrivacyInvariant &&
+    betaSnapshotIdentityValid === true &&
+    betaCountersValid === true &&
+    betaBackendHealthValid === true;
+  const betaPlatformCompatible = betaDiagnostics
+    ? betaDiagnostics.platform === "windows" &&
+      betaDiagnostics.architecture === "x86_64"
+    : null;
+  const betaBuildTraceable = betaDiagnostics
+    ? betaDiagnostics.buildCommit !== "unknown" &&
+      betaDiagnostics.buildSource !== "local" &&
+      betaDiagnostics.buildLabel !== "development"
+    : null;
+  const betaCoreTestingReady = betaDiagnostics
+    ? betaSelfCheckPassed && !betaStatus.crashLoopGuardActive
+    : null;
+  const betaLocalAiReady =
+    managedRuntimeStatus.state === "ready" && Boolean(modelCatalog.activeModelId);
+  const betaTestingPreviewReady =
+    betaCoreTestingReady === true &&
+    betaPlatformCompatible === true &&
+    betaBuildTraceable === true;
+  const betaTestCompleted = betaTestSession.checks.filter(
+    (check) => check.completed,
+  ).length;
+  const betaTestTotal = betaTestSession.checks.length;
+  const betaTestComplete =
+    betaTestSession.active &&
+    betaTestTotal > 0 &&
+    betaTestCompleted === betaTestTotal;
+  const betaRecoveryRepairNeeded =
+    betaStatus.previousSessionUnclean ||
+    betaStatus.crashLoopGuardActive ||
+    Boolean(
+      betaDiagnostics?.healthChecks.some(
+        (check) =>
+          (check.id === "session-marker" || check.id === "recovery-streak") &&
+          check.status === "failed",
+      ),
+    );
+  const betaSafeResumeRequired =
+    runtimeState.paused &&
+    (betaStatus.crashLoopGuardActive ||
+      betaDiagnostics?.healthStatus === "degraded");
   const voiceModel = modelCatalog.models.find(
     (model) => model.id === "voice-whisper-base",
   );
@@ -604,7 +718,13 @@ export default function Settings({
                 trailing={
                   <Toggle
                     checked={runtimeState.paused}
-                    onChange={(value) => void onPausedChange(value)}
+                    onChange={(value) => {
+                      if (!value && betaSafeResumeRequired) {
+                        onSectionChange("beta");
+                        return;
+                      }
+                      void onPausedChange(value);
+                    }}
                     label="Pause AURA"
                   />
                 }
@@ -709,8 +829,18 @@ export default function Settings({
               />
               <SettingRow
                 title="Screen access"
-                description="Vision access will remain permission-based."
-                trailing={<Badge tone="planned">M007</Badge>}
+                description="Vision capture is permission-based and explicit. Read = Never blocks every Vision capture path."
+                trailing={<Badge tone="ready">Permission-gated</Badge>}
+              />
+              <SettingRow
+                title="Usage telemetry"
+                description="AURA-2 Beta does not upload product analytics or usage telemetry."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+              <SettingRow
+                title="Crash uploads"
+                description="Unexpected exits are detected locally. Crash reports are not uploaded automatically."
+                trailing={<Badge tone="ready">Off</Badge>}
               />
             </Surface>
           </>
@@ -1532,6 +1662,620 @@ export default function Settings({
           </>
         )}
 
+        {activeSection === "beta" && (
+          <>
+            <header className="settings-header">
+              <span className="eyebrow">AURA PUBLIC BETA</span>
+              <h2>Beta & Diagnostics</h2>
+              <p>
+                Local readiness information for troubleshooting the Beta without
+                silently sending diagnostic data anywhere.
+              </p>
+            </header>
+
+            <Surface className="settings-card">
+              <SectionLabel trailing={<Badge tone="ready">Local only</Badge>}>
+                Beta channel
+              </SectionLabel>
+              <SettingRow
+                title="Release channel"
+                description={(appStatus?.name ?? "AURA-2") + " " + (appStatus?.version ?? "") + " · " + (appStatus?.stage ?? "Public Beta")}
+                trailing={<Badge tone="ready">Beta</Badge>}
+              />
+              <SettingRow
+                title="Build provenance"
+                description={
+                  betaDiagnostics
+                    ? betaDiagnostics.buildLabel +
+                      " · " +
+                      betaDiagnostics.buildSource +
+                      " · " +
+                      betaDiagnostics.buildCommit.slice(0, 12)
+                    : "Run diagnostics to identify the exact build source and commit."
+                }
+                trailing={
+                  <Badge tone={betaDiagnostics ? "ready" : "planned"}>
+                    {betaDiagnostics ? "Traceable" : "Not run"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Previous session"
+                description={
+                  betaStatus.crashLoopGuardActive
+                    ? betaStatus.consecutiveUncleanSessions +
+                      " consecutive unclean sessions were detected. AURA is paused and background startup is suppressed until recovery is reviewed."
+                    : betaStatus.previousSessionUnclean
+                      ? "One unclean previous session was detected. AURA started paused for safety and no report was uploaded."
+                      : "The previous session ended cleanly or no recovery condition was detected."
+                }
+                trailing={
+                  <Badge
+                    tone={
+                      betaStatus.crashLoopGuardActive
+                        ? "critical"
+                        : betaStatus.previousSessionUnclean
+                          ? "warning"
+                          : "ready"
+                    }
+                  >
+                    {betaStatus.crashLoopGuardActive
+                      ? "Crash loop"
+                      : betaStatus.previousSessionUnclean
+                        ? "Recovered"
+                        : "Clean"}
+                  </Badge>
+                }
+              />
+              {betaRecoveryRepairNeeded && (
+                <SettingRow
+                  title="Repair recovery state"
+                  description="Preserves the current Beta session marker as a local backup, rebuilds only recovery metadata and keeps AURA paused. Memories, models, projects, Agents and Automations are not changed."
+                  trailing={
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        const confirmed = window.confirm(
+                          "Repair AURA's local Recovery State? The current Beta session marker will be preserved as a local backup. This does not resume AURA or delete your Memories, models, projects, Agents or Automations.",
+                        );
+                        if (!confirmed) return;
+
+                        setBetaBusy("recovery-repair");
+                        void onBetaRecoveryRepair()
+                          .then(async () => {
+                            await onBetaRefresh();
+                            await onBetaDiagnosticsRefresh();
+                          })
+                          .finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "recovery-repair"
+                        ? "Repairing…"
+                        : "Repair"}
+                    </button>
+                  }
+                />
+              )}
+              {betaSafeResumeRequired && (
+                <div className="beta-recovery-review">
+                  <div>
+                    <strong>Recovery acknowledgement required</strong>
+                    <span>
+                      AURA will stay paused until you explicitly acknowledge the
+                      degraded recovery state. Review the checks below before resuming.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="feature-primary-button"
+                    disabled={betaBusy === "resume"}
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        "Resume AURA despite the current recovery/degraded health state? Only continue after reviewing Beta & Diagnostics.",
+                      );
+                      if (!confirmed) return;
+
+                      setBetaBusy("resume");
+                      void onPausedChange(false, true)
+                        .then(async () => {
+                          await onBetaRefresh();
+                          await onBetaDiagnosticsRefresh();
+                        })
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "resume" ? "Resuming…" : "Review & Resume"}
+                  </button>
+                </div>
+              )}
+              <SettingRow
+                title="Telemetry"
+                description="No usage analytics are uploaded by this Beta build."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+              <SettingRow
+                title="Automatic crash uploads"
+                description="Crash and diagnostics data stay on this computer unless you manually export a diagnostics file."
+                trailing={<Badge tone="ready">Off</Badge>}
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaTestingPreviewReady
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaTestingPreviewReady
+                        ? "Ready"
+                        : "Setup needed"
+                      : "Not run"}
+                  </Badge>
+                }
+              >
+                Testing Preview readiness
+              </SectionLabel>
+              <SettingRow
+                title="Core & safety"
+                description="Requires the local health/self-check to pass and no crash-loop guard to be active."
+                trailing={
+                  <Badge
+                    tone={
+                      betaCoreTestingReady === null
+                        ? "planned"
+                        : betaCoreTestingReady
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaCoreTestingReady === null
+                      ? "Run diagnostics"
+                      : betaCoreTestingReady
+                        ? "Ready"
+                        : "Blocked"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Windows target"
+                description={
+                  betaDiagnostics
+                    ? betaDiagnostics.platform +
+                      " · " +
+                      betaDiagnostics.architecture
+                    : "Run diagnostics to verify the current platform and architecture."
+                }
+                trailing={
+                  <Badge
+                    tone={
+                      betaPlatformCompatible === null
+                        ? "planned"
+                        : betaPlatformCompatible
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaPlatformCompatible === null
+                      ? "Not checked"
+                      : betaPlatformCompatible
+                        ? "Compatible"
+                        : "Unsupported"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Build traceability"
+                description="Testing Preview binaries must identify a real source commit and release build source instead of local development fallbacks."
+                trailing={
+                  <Badge
+                    tone={
+                      betaBuildTraceable === null
+                        ? "planned"
+                        : betaBuildTraceable
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaBuildTraceable === null
+                      ? "Not checked"
+                      : betaBuildTraceable
+                        ? "Traceable"
+                        : "Development"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Local AI setup"
+                description={
+                  betaLocalAiReady
+                    ? "Managed Runtime is ready and an active local model is selected."
+                    : "Optional for shell testing. Install the Managed Runtime and select a model before testing local AI features."
+                }
+                trailing={
+                  <Badge tone={betaLocalAiReady ? "ready" : "planned"}>
+                    {betaLocalAiReady ? "Ready" : "Optional setup"}
+                  </Badge>
+                }
+              />
+              <p className="settings-helper">
+                This readiness panel does not replace the real Windows NSIS install/uninstall
+                smoke checklist required before publishing the download.
+              </p>
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaTestComplete
+                        ? "ready"
+                        : betaTestSession.active
+                          ? "warning"
+                          : "planned"
+                    }
+                  >
+                    {betaTestComplete
+                      ? "Complete"
+                      : betaTestSession.active
+                        ? betaTestCompleted + "/" + betaTestTotal
+                        : "Not started"}
+                  </Badge>
+                }
+              >
+                Beta Test Session
+              </SectionLabel>
+              <p className="settings-helper">
+                Run the first real AURA test pass with a fixed local checklist.
+                This stores only completion state and timestamps — no prompts,
+                file paths, screenshots or free-text notes.
+              </p>
+
+              {!betaTestSession.active ? (
+                <SettingRow
+                  title="Start test session"
+                  description="Creates a fresh local checklist for this testing pass."
+                  trailing={
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-start");
+                        setBetaTestExportPath(null);
+                        void onBetaTestStart().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "test-start" ? "Starting…" : "Start"}
+                    </button>
+                  }
+                />
+              ) : (
+                <>
+                  <div className="beta-test-list">
+                    {betaTestSession.checks.map((check) => (
+                      <label className="beta-test-item" key={check.id}>
+                        <input
+                          type="checkbox"
+                          checked={check.completed}
+                          disabled={betaBusy !== null}
+                          onChange={(event) => {
+                            setBetaBusy("test-" + check.id);
+                            void onBetaTestCheckChange(
+                              check.id,
+                              event.target.checked,
+                            ).finally(() => setBetaBusy(null));
+                          }}
+                        />
+                        <span>{check.label}</span>
+                        <Badge tone={check.completed ? "ready" : "planned"}>
+                          {check.completed ? "Passed" : "Pending"}
+                        </Badge>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="beta-test-actions">
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-refresh");
+                        void onBetaTestRefresh().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-export");
+                        setBetaTestExportPath(null);
+                        void onBetaTestReportExport()
+                          .then((path) => setBetaTestExportPath(path))
+                          .catch(() => setBetaTestExportPath(null))
+                          .finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "test-export" ? "Exporting…" : "Export report"}
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        if (!window.confirm("Reset the local Beta Test Session checklist?")) {
+                          return;
+                        }
+                        setBetaBusy("test-reset");
+                        setBetaTestExportPath(null);
+                        void onBetaTestReset().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  {betaTestExportPath && (
+                    <p className="beta-diagnostics-path">
+                      Test report saved locally to: {betaTestExportPath}
+                    </p>
+                  )}
+                </>
+              )}
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaSelfCheckPassed
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaSelfCheckPassed
+                        ? "Passed"
+                        : "Review"
+                      : "Not run"}
+                  </Badge>
+                }
+              >
+                Beta self-check
+              </SectionLabel>
+              <SettingRow
+                title="Privacy invariants"
+                description="Telemetry must remain off, automatic crash uploads disabled and diagnostics local-only."
+                trailing={
+                  <Badge tone={betaPrivacyInvariant ? "ready" : "warning"}>
+                    {betaPrivacyInvariant ? "Passed" : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Snapshot identity"
+                description="Validates diagnostics schema, product/version identity, Beta channel, build provenance and the diagnostics telemetry flag."
+                trailing={
+                  <Badge
+                    tone={
+                      betaSnapshotIdentityValid === null
+                        ? "planned"
+                        : betaSnapshotIdentityValid
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaSnapshotIdentityValid === null
+                      ? "Run diagnostics"
+                      : betaSnapshotIdentityValid
+                        ? "Passed"
+                        : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Runtime counters"
+                description="Checks that active Agent runs and enabled Automations cannot exceed their recorded totals."
+                trailing={
+                  <Badge
+                    tone={
+                      betaCountersValid === null
+                        ? "planned"
+                        : betaCountersValid
+                          ? "ready"
+                          : "warning"
+                    }
+                  >
+                    {betaCountersValid === null
+                      ? "Run diagnostics"
+                      : betaCountersValid
+                        ? "Passed"
+                        : "Failed"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Subsystem health"
+                description="Checks local storage, session state, permission safety floors, model metadata and Agent/Automation stores independently."
+                trailing={
+                  <Badge
+                    tone={
+                      betaBackendHealthValid === null
+                        ? "planned"
+                        : betaBackendHealthValid
+                          ? "ready"
+                          : "critical"
+                    }
+                  >
+                    {betaBackendHealthValid === null
+                      ? "Run diagnostics"
+                      : betaBackendHealthValid
+                        ? "Passed"
+                        : "Degraded"}
+                  </Badge>
+                }
+              />
+              <SettingRow
+                title="Overall Beta integrity"
+                description={
+                  betaDiagnostics
+                    ? betaSelfCheckPassed
+                      ? "Critical local Beta invariants are internally consistent."
+                      : "At least one critical Beta invariant needs review before release."
+                    : "Generate a diagnostics snapshot to complete the self-check."
+                }
+                trailing={
+                  <Badge
+                    tone={
+                      betaDiagnostics
+                        ? betaSelfCheckPassed
+                          ? "ready"
+                          : "warning"
+                        : "planned"
+                    }
+                  >
+                    {betaDiagnostics
+                      ? betaSelfCheckPassed
+                        ? "Healthy"
+                        : "Needs review"
+                      : "Pending"}
+                  </Badge>
+                }
+              />
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Local diagnostics</SectionLabel>
+              <SettingRow
+                title="Generate diagnostics snapshot"
+                description="Collects app/runtime state, installed model IDs and aggregate Agent/Automation counts. It does not include chat messages, prompts, screenshots, memory contents or passwords."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("refresh");
+                      void onBetaDiagnosticsRefresh().finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "refresh" ? "Checking…" : "Refresh"}
+                  </button>
+                }
+              />
+
+              {betaDiagnostics && (
+                <div className="beta-diagnostics-grid">
+                  <div><span>Platform</span><strong>{betaDiagnostics.platform} · {betaDiagnostics.architecture}</strong></div>
+                  <div><span>Managed runtime</span><strong>{betaDiagnostics.managedRuntimeState}</strong></div>
+                  <div><span>Create runtime</span><strong>{betaDiagnostics.createImageRuntimeState}</strong></div>
+                  <div><span>Installed models</span><strong>{betaDiagnostics.installedModelIds.length}</strong></div>
+                  <div><span>Agent runs</span><strong>{betaDiagnostics.activeAgentRuns} active · {betaDiagnostics.agentRunsTotal} recorded</strong></div>
+                  <div><span>Saved Actions</span><strong>{betaDiagnostics.savedActions}</strong></div>
+                  <div><span>Automations</span><strong>{betaDiagnostics.enabledAutomations}/{betaDiagnostics.automations} enabled</strong></div>
+                  <div><span>Health</span><strong>{betaPassedHealthChecks}/{betaDiagnostics.healthChecks.length} checks passed</strong></div>
+                </div>
+              )}
+
+              {betaDiagnostics && (
+                <div className="beta-health-check-list">
+                  {betaDiagnostics.healthChecks.map((check) => (
+                    <div className="beta-health-check" key={check.id}>
+                      <div>
+                        <strong>{check.label}</strong>
+                        <span>{check.detail}</span>
+                      </div>
+                      <Badge tone={check.status === "passed" ? "ready" : "critical"}>
+                        {check.status === "passed" ? "Passed" : "Failed"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <SettingRow
+                title="Export diagnostics"
+                description="Writes a size-bounded, allowlisted JSON diagnostics file to Downloads (or AURA Local Data as fallback). Unexpected fields are blocked by the privacy guard and nothing is uploaded automatically."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("export");
+                      setBetaExportPath(null);
+                      void onBetaDiagnosticsExport()
+                        .then((path) => setBetaExportPath(path))
+                        .catch(() => setBetaExportPath(null))
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    {betaBusy === "export" ? "Exporting…" : "Export JSON"}
+                  </button>
+                }
+              />
+              {betaExportPath && <p className="beta-diagnostics-path">Saved locally to: {betaExportPath}</p>}
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel>Beta onboarding</SectionLabel>
+              <SettingRow
+                title="First-run guide"
+                description="Show the Public Beta privacy, permissions and stability introduction again."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("onboarding");
+                      void onBetaPreferencesChange({ onboardingComplete: false })
+                        .finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    Show again
+                  </button>
+                }
+              />
+              <SettingRow
+                title="Permissions review"
+                description="Review Read, Act, Modify, Sensitive and Destructive rules before running Agents."
+                trailing={<button type="button" className="settings-action-button" onClick={() => onSectionChange("permissions")}>Review</button>}
+              />
+              <SettingRow
+                title="Refresh Beta status"
+                description="Re-read the local Beta session and recovery state."
+                trailing={
+                  <button
+                    type="button"
+                    className="settings-action-button"
+                    disabled={betaBusy !== null}
+                    onClick={() => {
+                      setBetaBusy("status");
+                      void onBetaRefresh().finally(() => setBetaBusy(null));
+                    }}
+                  >
+                    Refresh
+                  </button>
+                }
+              />
+            </Surface>
+          </>
+        )}
         {activeSection === "integrations" && (
           <>
             <header className="settings-header">
@@ -2186,7 +2930,8 @@ export default function Settings({
             <Surface className="settings-card">
               <SectionLabel>Available & planned</SectionLabel>
               <SettingRow title="Windows" description="Native app, window, input and system controls." trailing={<Badge tone="ready">M003</Badge>} />
-              <SettingRow title="Future Skills" description="Modular app integrations built on the AURA Skills architecture." trailing={<Badge tone="planned">Later</Badge>} />
+              <SettingRow title="App Skills" description="Core-owned dynamic Skill Registry. Includes Browser, Notepad, Windows Terminal, Calculator and safe File Explorer skills." trailing={<Badge tone="ready">V3 Beta</Badge>} />
+              <SettingRow title="File Context" description="V2 local file intake with opaque IDs, bounded inspection, fair multi-file Chat context, safe Explorer reveal and explicit Vision handoff." trailing={<Badge tone="ready">V2 Beta</Badge>} />
             </Surface>
           </>
         )}

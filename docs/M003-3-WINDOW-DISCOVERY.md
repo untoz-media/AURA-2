@@ -11,7 +11,8 @@ AURA now uses native Win32 APIs to:
 - read window titles
 - resolve owning process IDs
 - resolve executable names where permitted
-- restore minimized windows
+- restore minimized windows while switching
+- explicitly minimize, maximize and restore known app windows
 - request foreground activation
 
 Core APIs:
@@ -21,6 +22,8 @@ Core APIs:
 - `GetWindowThreadProcessId`
 - `QueryFullProcessImageNameW`
 - `IsIconic`
+- `ShowWindow(SW_MINIMIZE)`
+- `ShowWindow(SW_MAXIMIZE)`
 - `ShowWindow(SW_RESTORE)`
 - `SetForegroundWindow`
 
@@ -34,6 +37,15 @@ Switching:
 - `Vai para o OBS`
 - `Muda para o Brave`
 - `Troca para o Terminal`
+
+Window state:
+
+- `Minimize Brave`
+- `Maximize OBS`
+- `Restore Chrome`
+- `Minimiza o Brave`
+- `Maximiza o OBS`
+- `Restaura o Chrome`
 
 Discovery:
 
@@ -54,8 +66,9 @@ This allows the window manager to reuse the same application identity used by la
 
 - list visible windows → `Read`
 - switch/focus a known app window → `Act`
+- minimize/maximize/restore a known app window → `Act`
 
-Both are allowed by the current default policy.
+These reversible window operations are allowed by the current default policy.
 
 ## Windows foreground restrictions
 
@@ -65,6 +78,6 @@ AURA calls `SetForegroundWindow` and treats a false return as a normal controlle
 
 ## Scope
 
-M003.3 does not implement commands like `minimize this window`.
+Named-window state control is implemented for known `AppTarget` applications.
 
-When AURA Overlay has focus, “this window” is not necessarily the user's previous application. That will be implemented after AURA has explicit foreground-context tracking rather than guessing.
+AURA intentionally does **not** interpret ambiguous commands such as `minimize this window`. When AURA or its Overlay has focus, “this window” may not be the user's intended application. The Computer workspace instead exposes contextual controls only when AURA has a known external-app identity, including the last external context when appropriate.

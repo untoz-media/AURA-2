@@ -1,9 +1,15 @@
 use crate::computer::{
     app_launcher::AppTarget,
+    app_skills::{
+        BrowserSkill, BrowserSkillAction, CalculatorSkill, CalculatorSkillAction, NotepadSkill,
+        NotepadSkillAction, PersonalFolderSkill, TerminalSkill, TerminalSkillAction,
+    },
     audio::MediaAction,
+    file_intelligence::{FileCategory, PersonalRootFilter, RecentFileQuery},
     keyboard::KeyboardShortcut,
     mouse::{parse_point, validate_scroll_notches, MouseAction, MouseButton},
     system::{SettingsPage, SystemAction},
+    window_manager::WindowDisplayAction,
 };
 use crate::permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 
@@ -26,6 +32,10 @@ pub enum ActionIntent {
     LaunchApp(AppTarget),
     CloseApp(AppTarget),
     SwitchToApp(AppTarget),
+    SetAppWindowState {
+        target: AppTarget,
+        action: WindowDisplayAction,
+    },
     ListWindows,
     PressShortcut(KeyboardShortcut),
     TypeText(String),
@@ -48,6 +58,17 @@ pub enum ActionIntent {
     CurrentApp,
     ActiveWindow,
     RecentFiles,
+    ClipboardRead,
+    ClipboardWrite(String),
+    ClipboardClear,
+    FindPersonalFiles(String),
+    FindRecentPersonalFiles(RecentFileQuery),
+    RevealPersonalPath(String),
+    BrowserSkill(BrowserSkill),
+    NotepadSkill(NotepadSkill),
+    TerminalSkill(TerminalSkill),
+    CalculatorSkill(CalculatorSkill),
+    OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
 }
 
@@ -63,8 +84,10 @@ pub enum RouteResult {
     Action(RoutedAction),
     UnsupportedApp(String),
     InvalidKeyboard(String),
+    InvalidAppSkill(String),
     InvalidMouse(String),
     InvalidMedia(String),
+    InternalError(String),
     NoMatch,
 }
 
@@ -73,6 +96,9 @@ enum AppOperation {
     Launch,
     Close,
     Switch,
+    Minimize,
+    Maximize,
+    Restore,
 }
 
 fn system_request(input: &str) -> Option<SystemAction> {
@@ -355,6 +381,505 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn terminal_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "new tab in windows terminal"
+        | "new terminal tab"
+        | "open new tab in windows terminal"
+        | "novo separador no windows terminal"
+        | "novo separador no terminal"
+        | "abre novo separador no windows terminal" => Some(TerminalSkillAction::NewTab),
+
+        "next tab in windows terminal"
+        | "next terminal tab"
+        | "próximo separador no windows terminal"
+        | "proximo separador no windows terminal"
+        | "separador seguinte no terminal" => Some(TerminalSkillAction::NextTab),
+
+        "previous tab in windows terminal"
+        | "previous terminal tab"
+        | "separador anterior no windows terminal"
+        | "separador anterior no terminal" => Some(TerminalSkillAction::PreviousTab),
+
+        "command palette in windows terminal"
+        | "open command palette in windows terminal"
+        | "terminal command palette"
+        | "paleta de comandos no windows terminal"
+        | "paleta de comandos no terminal"
+        | "abre a paleta de comandos no terminal" => Some(TerminalSkillAction::CommandPalette),
+
+        "find in windows terminal"
+        | "search in windows terminal"
+        | "terminal find"
+        | "procurar no windows terminal"
+        | "pesquisar no windows terminal"
+        | "procurar no terminal" => Some(TerminalSkillAction::Find),
+
+        "open tab dropdown in windows terminal"
+        | "open terminal tab dropdown"
+        | "open profile dropdown in windows terminal"
+        | "abre a lista de perfis no windows terminal"
+        | "abre a lista de perfis no terminal" => Some(TerminalSkillAction::OpenTabDropdown),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::TerminalSkill(TerminalSkill { action }))
+}
+
+fn calculator_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "standard mode in calculator"
+        | "switch calculator to standard mode"
+        | "calculator standard mode"
+        | "modo standard na calculadora"
+        | "modo padrão na calculadora"
+        | "modo padrao na calculadora" => Some(CalculatorSkillAction::StandardMode),
+
+        "scientific mode in calculator"
+        | "switch calculator to scientific mode"
+        | "calculator scientific mode"
+        | "modo científico na calculadora"
+        | "modo cientifico na calculadora" => Some(CalculatorSkillAction::ScientificMode),
+
+        "programmer mode in calculator"
+        | "switch calculator to programmer mode"
+        | "calculator programmer mode"
+        | "modo programador na calculadora" => Some(CalculatorSkillAction::ProgrammerMode),
+
+        "date calculation in calculator"
+        | "switch calculator to date calculation"
+        | "calculator date calculation"
+        | "cálculo de datas na calculadora"
+        | "calculo de datas na calculadora"
+        | "modo cálculo de datas na calculadora"
+        | "modo calculo de datas na calculadora" => {
+            Some(CalculatorSkillAction::DateCalculationMode)
+        }
+
+        "graphing mode in calculator"
+        | "switch calculator to graphing mode"
+        | "calculator graphing mode"
+        | "modo gráfico na calculadora"
+        | "modo grafico na calculadora" => Some(CalculatorSkillAction::GraphingMode),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::CalculatorSkill(CalculatorSkill { action }))
+}
+
+fn notepad_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let action = match normalized.as_str() {
+        "new note in notepad"
+        | "new document in notepad"
+        | "nova nota no bloco de notas"
+        | "novo documento no bloco de notas" => Some(NotepadSkillAction::NewNote),
+
+        "find in notepad"
+        | "open find in notepad"
+        | "procurar no bloco de notas"
+        | "abre a pesquisa no bloco de notas" => Some(NotepadSkillAction::Find),
+
+        "select all in notepad"
+        | "select everything in notepad"
+        | "seleciona tudo no bloco de notas"
+        | "seleccionar tudo no bloco de notas" => Some(NotepadSkillAction::SelectAll),
+
+        "undo in notepad"
+        | "undo notepad"
+        | "desfazer no bloco de notas"
+        | "desfaz no bloco de notas" => Some(NotepadSkillAction::Undo),
+
+        "redo in notepad"
+        | "redo notepad"
+        | "refazer no bloco de notas"
+        | "refaz no bloco de notas" => Some(NotepadSkillAction::Redo),
+
+        _ => None,
+    };
+
+    action.map(|action| ActionIntent::NotepadSkill(NotepadSkill { action }))
+}
+
+fn personal_folder_skill_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let skill = match normalized.as_str() {
+        "open desktop" | "open desktop folder" | "abre o ambiente de trabalho"
+        | "abre a área de trabalho" | "abre a area de trabalho" => {
+            Some(PersonalFolderSkill::Desktop)
+        }
+        "open documents" | "open documents folder" | "abre os documentos"
+        | "abre a pasta documentos" => Some(PersonalFolderSkill::Documents),
+        "open downloads" | "open downloads folder" | "abre os downloads"
+        | "abre a pasta downloads" => Some(PersonalFolderSkill::Downloads),
+        "open pictures" | "open pictures folder" | "open photos"
+        | "abre as imagens" | "abre as fotografias" | "abre a pasta imagens" => {
+            Some(PersonalFolderSkill::Pictures)
+        }
+        "open videos" | "open videos folder" | "abre os vídeos" | "abre os videos"
+        | "abre a pasta vídeos" | "abre a pasta videos" => {
+            Some(PersonalFolderSkill::Videos)
+        }
+        "open music" | "open music folder" | "abre a música" | "abre a musica"
+        | "abre a pasta música" | "abre a pasta musica" => {
+            Some(PersonalFolderSkill::Music)
+        }
+        _ => None,
+    };
+
+    skill.map(ActionIntent::OpenPersonalFolder)
+}
+
+fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
+    const NEW_TAB_PREFIXES: &[&str] = &[
+        "new tab in ",
+        "open new tab in ",
+        "new tab on ",
+        "nova aba no ",
+        "nova aba no navegador ",
+        "novo separador no ",
+        "abre novo separador no ",
+        "abrir novo separador no ",
+    ];
+    const NEXT_TAB_PREFIXES: &[&str] = &[
+        "next tab in ",
+        "next tab on ",
+        "próximo separador no ",
+        "proximo separador no ",
+        "separador seguinte no ",
+    ];
+    const PREVIOUS_TAB_PREFIXES: &[&str] = &[
+        "previous tab in ",
+        "previous tab on ",
+        "prev tab in ",
+        "separador anterior no ",
+        "separador anterior em ",
+    ];
+    const FOCUS_ADDRESS_PREFIXES: &[&str] = &[
+        "focus address bar in ",
+        "focus url bar in ",
+        "focus address bar on ",
+        "foca a barra de endereços no ",
+        "foca a barra de enderecos no ",
+        "foca a barra de url no ",
+    ];
+    const REOPEN_PREFIXES: &[&str] = &[
+        "reopen closed tab in ",
+        "reopen last closed tab in ",
+        "reabrir separador fechado no ",
+        "reabre o separador fechado no ",
+        "reabre separador fechado no ",
+    ];
+
+    fn build(target_text: &str, action: BrowserSkillAction) -> Result<ActionIntent, String> {
+        let normalized_target = target_text.trim().to_lowercase();
+        let target_text = strip_article(&normalized_target);
+        let Some(target) = AppTarget::from_alias(target_text) else {
+            return Err(format!(
+                "Unknown browser target “{}”. Browser Skills V1 supports Brave and Chrome.",
+                target_text
+            ));
+        };
+
+        BrowserSkill::new(target, action)
+            .map(ActionIntent::BrowserSkill)
+    }
+
+    for (prefixes, action) in [
+        (NEW_TAB_PREFIXES, BrowserSkillAction::NewTab),
+        (NEXT_TAB_PREFIXES, BrowserSkillAction::NextTab),
+        (PREVIOUS_TAB_PREFIXES, BrowserSkillAction::PreviousTab),
+        (FOCUS_ADDRESS_PREFIXES, BrowserSkillAction::FocusAddressBar),
+        (REOPEN_PREFIXES, BrowserSkillAction::ReopenClosedTab),
+    ] {
+        if let Some(value) = value_after_prefix(input, prefixes) {
+            return Some(build(value, action));
+        }
+    }
+
+    let normalized = normalize_command(input);
+    for (prefix, action) in [
+        ("reload ", BrowserSkillAction::Reload),
+        ("refresh ", BrowserSkillAction::Reload),
+        ("recarrega ", BrowserSkillAction::Reload),
+        ("recarregar ", BrowserSkillAction::Reload),
+        ("atualiza ", BrowserSkillAction::Reload),
+    ] {
+        if let Some(value) = normalized.strip_prefix(prefix) {
+            return Some(build(value, action));
+        }
+    }
+
+    None
+}
+
+fn recent_file_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    let request = match normalized.as_str() {
+        "latest file" | "last file" | "most recent file" | "newest file"
+        | "último ficheiro" | "ultimo ficheiro" | "ficheiro mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent files" | "latest files" | "newest files"
+        | "ficheiros recentes" | "últimos ficheiros" | "ultimos ficheiros" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest video" | "last video" | "most recent video" | "newest video"
+        | "latest video i exported" | "last video i exported"
+        | "most recent video i exported"
+        | "último vídeo" | "ultimo video" | "vídeo mais recente" | "video mais recente"
+        | "último vídeo que exportei" | "ultimo video que exportei" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent videos" | "latest videos" | "newest videos"
+        | "vídeos recentes" | "videos recentes" | "últimos vídeos" | "ultimos videos" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Video,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest image" | "last image" | "most recent image" | "newest image"
+        | "latest picture" | "last picture"
+        | "última imagem" | "ultima imagem" | "imagem mais recente"
+        | "última fotografia" | "ultima fotografia" | "fotografia mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Image,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent images" | "latest images" | "newest images"
+        | "recent pictures" | "latest pictures"
+        | "imagens recentes" | "últimas imagens" | "ultimas imagens"
+        | "fotografias recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Image,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest audio" | "last audio" | "most recent audio"
+        | "latest audio file" | "last audio file"
+        | "último áudio" | "ultimo audio" | "áudio mais recente" | "audio mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Audio,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent audio" | "recent audio files" | "latest audio files"
+        | "áudios recentes" | "audios recentes" | "ficheiros de áudio recentes"
+        | "ficheiros de audio recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Audio,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest document" | "last document" | "most recent document"
+        | "último documento" | "ultimo documento" | "documento mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Document,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent documents" | "latest documents" | "newest documents"
+        | "documentos recentes" | "últimos documentos" | "ultimos documentos" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Document,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest archive" | "last archive" | "most recent archive"
+        | "último arquivo" | "ultimo arquivo" | "arquivo mais recente"
+        | "último ficheiro comprimido" | "ultimo ficheiro comprimido" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Archive,
+                PersonalRootFilter::All,
+                1,
+            ))
+        }
+        "recent archives" | "latest archives"
+        | "arquivos recentes" | "ficheiros comprimidos recentes" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Archive,
+                PersonalRootFilter::All,
+                10,
+            ))
+        }
+
+        "latest download" | "last download" | "most recent download" | "newest download"
+        | "último download" | "ultimo download" | "download mais recente" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::Downloads,
+                1,
+            ))
+        }
+        "recent downloads" | "latest downloads" | "newest downloads"
+        | "downloads recentes" | "últimos downloads" | "ultimos downloads" => {
+            Some(RecentFileQuery::bounded(
+                FileCategory::Any,
+                PersonalRootFilter::Downloads,
+                10,
+            ))
+        }
+
+        _ => None,
+    };
+
+    request.map(ActionIntent::FindRecentPersonalFiles)
+}
+
+fn file_reveal_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "reveal file ",
+        "reveal folder ",
+        "show file in explorer ",
+        "show folder in explorer ",
+        "show in explorer ",
+        "mostrar ficheiro no explorador ",
+        "mostrar pasta no explorador ",
+        "mostra ficheiro no explorador ",
+        "mostra pasta no explorador ",
+        "revela ficheiro ",
+        "revela pasta ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let path = unwrap_text_quotes(value).trim();
+        (!path.is_empty()).then(|| ActionIntent::RevealPersonalPath(path.to_string()))
+    })
+}
+
+fn file_search_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "find file ",
+        "find files ",
+        "search file ",
+        "search files ",
+        "look for file ",
+        "look for files ",
+        "encontra ficheiro ",
+        "encontrar ficheiro ",
+        "procura ficheiro ",
+        "procurar ficheiro ",
+        "pesquisa ficheiro ",
+        "pesquisar ficheiro ",
+        "procura ficheiros ",
+        "pesquisa ficheiros ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let query = unwrap_text_quotes(value).trim();
+        (!query.is_empty()).then(|| ActionIntent::FindPersonalFiles(query.to_string()))
+    })
+}
+
+fn clipboard_request(input: &str) -> Option<ActionIntent> {
+    let normalized = normalize_command(input);
+
+    if matches!(
+        normalized.as_str(),
+        "read clipboard"
+            | "show clipboard"
+            | "show my clipboard"
+            | "what is in my clipboard"
+            | "what's in my clipboard"
+            | "what is on my clipboard"
+            | "clipboard contents"
+            | "lê o clipboard"
+            | "le o clipboard"
+            | "mostra o clipboard"
+            | "o que está no clipboard"
+            | "o que esta no clipboard"
+            | "lê a área de transferência"
+            | "le a area de transferencia"
+            | "mostra a área de transferência"
+            | "mostra a area de transferencia"
+            | "o que está na área de transferência"
+            | "o que esta na area de transferencia"
+    ) {
+        return Some(ActionIntent::ClipboardRead);
+    }
+
+    if matches!(
+        normalized.as_str(),
+        "clear clipboard"
+            | "empty clipboard"
+            | "clear my clipboard"
+            | "limpa o clipboard"
+            | "limpar o clipboard"
+            | "esvazia o clipboard"
+            | "limpa a área de transferência"
+            | "limpa a area de transferencia"
+            | "esvazia a área de transferência"
+            | "esvazia a area de transferencia"
+    ) {
+        return Some(ActionIntent::ClipboardClear);
+    }
+
+    const WRITE_PREFIXES: &[&str] = &[
+        "copy to clipboard ",
+        "set clipboard to ",
+        "put on clipboard ",
+        "put in clipboard ",
+        "copia para o clipboard ",
+        "copiar para o clipboard ",
+        "coloca no clipboard ",
+        "colocar no clipboard ",
+        "guarda no clipboard ",
+        "guardar no clipboard ",
+        "copia para a área de transferência ",
+        "copia para a area de transferencia ",
+        "coloca na área de transferência ",
+        "coloca na area de transferencia ",
+    ];
+
+    value_after_prefix(input, WRITE_PREFIXES).and_then(|value| {
+        let text = unwrap_text_quotes(value).trim();
+        (!text.is_empty()).then(|| ActionIntent::ClipboardWrite(text.to_string()))
+    })
+}
+
+fn permission_for_clipboard(intent: &ActionIntent) -> Option<PermissionClass> {
+    match intent {
+        ActionIntent::ClipboardRead => Some(PermissionClass::Sensitive),
+        ActionIntent::ClipboardWrite(_) => Some(PermissionClass::Modify),
+        ActionIntent::ClipboardClear => Some(PermissionClass::Destructive),
+        _ => None,
+    }
 }
 
 fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
@@ -988,6 +1513,26 @@ fn is_list_windows_command(input: &str) -> bool {
 }
 
 fn app_request(input: &str) -> Option<(AppOperation, &str)> {
+    const MINIMIZE_PREFIXES: &[&str] = &[
+        "minimize ",
+        "minimise ",
+        "minimiza ",
+        "minimizar ",
+    ];
+
+    const MAXIMIZE_PREFIXES: &[&str] = &[
+        "maximize ",
+        "maximise ",
+        "maximiza ",
+        "maximizar ",
+    ];
+
+    const RESTORE_PREFIXES: &[&str] = &[
+        "restore ",
+        "restaura ",
+        "restaurar ",
+    ];
+
     const LAUNCH_PREFIXES: &[&str] = &[
         "open ",
         "launch ",
@@ -1019,24 +1564,23 @@ fn app_request(input: &str) -> Option<(AppOperation, &str)> {
         "focar ",
     ];
 
-    if let Some(value) = SWITCH_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-    {
-        return Some((AppOperation::Switch, strip_article(value)));
+    for (operation, prefixes) in [
+        (AppOperation::Minimize, MINIMIZE_PREFIXES),
+        (AppOperation::Maximize, MAXIMIZE_PREFIXES),
+        (AppOperation::Restore, RESTORE_PREFIXES),
+        (AppOperation::Switch, SWITCH_PREFIXES),
+        (AppOperation::Launch, LAUNCH_PREFIXES),
+        (AppOperation::Close, CLOSE_PREFIXES),
+    ] {
+        if let Some(value) = prefixes
+            .iter()
+            .find_map(|prefix| input.strip_prefix(prefix))
+        {
+            return Some((operation, strip_article(value)));
+        }
     }
 
-    if let Some(value) = LAUNCH_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-    {
-        return Some((AppOperation::Launch, strip_article(value)));
-    }
-
-    CLOSE_PREFIXES
-        .iter()
-        .find_map(|prefix| input.strip_prefix(prefix))
-        .map(|value| (AppOperation::Close, strip_article(value)))
+    None
 }
 
 pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
@@ -1072,9 +1616,109 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             ActionIntent::MemoryList => PermissionClass::Read,
             ActionIntent::MemoryRemember(_) => PermissionClass::Modify,
             ActionIntent::MemoryForget(_) => PermissionClass::Destructive,
-            _ => unreachable!(),
+            _ => {
+                return RouteResult::InternalError(
+                    "Memory parser returned a non-memory intent.".to_string(),
+                )
+            }
         };
 
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = terminal_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = calculator_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = notepad_skill_request(input) {
+        let ActionIntent::NotepadSkill(skill) = &intent else {
+            return RouteResult::InternalError(
+                "Notepad parser returned a non-Notepad intent.".to_string(),
+            );
+        };
+        let permission = skill.action.permission();
+
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = personal_folder_skill_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(skill) = browser_skill_request(input) {
+        return match skill {
+            Ok(intent) => {
+                let permission = PermissionClass::Act;
+                RouteResult::Action(RoutedAction {
+                    intent,
+                    permission,
+                    decision: policy.decision_for(permission),
+                })
+            }
+            Err(message) => RouteResult::InvalidAppSkill(message),
+        };
+    }
+
+    if let Some(intent) = recent_file_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = file_reveal_request(input) {
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = file_search_request(input) {
+        let permission = PermissionClass::Read;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = clipboard_request(input) {
+        let Some(permission) = permission_for_clipboard(&intent) else {
+            return RouteResult::InternalError(
+                "Clipboard parser returned an intent without a permission class.".to_string(),
+            );
+        };
         return RouteResult::Action(RoutedAction {
             intent,
             permission,
@@ -1101,7 +1745,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("media_request should only produce media intents"),
+            Ok(_) => RouteResult::InternalError(
+                "Media parser returned a non-media intent.".to_string(),
+            ),
             Err(message) => RouteResult::InvalidMedia(message),
         };
     }
@@ -1116,7 +1762,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => unreachable!("mouse_request should only produce mouse intents"),
+            Ok(_) => RouteResult::InternalError(
+                "Mouse parser returned a non-mouse intent.".to_string(),
+            ),
             Err(message) => RouteResult::InvalidMouse(message),
         };
     }
@@ -1124,8 +1772,11 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     if let Some(keyboard) = keyboard_request(input) {
         return match keyboard {
             Ok(intent) => {
-                let permission = permission_for_keyboard(&intent)
-                    .expect("keyboard intent should have a permission class");
+                let Some(permission) = permission_for_keyboard(&intent) else {
+                    return RouteResult::InternalError(
+                        "Keyboard parser returned an intent without a permission class.".to_string(),
+                    );
+                };
 
                 RouteResult::Action(RoutedAction {
                     intent,
@@ -1250,6 +1901,27 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             ActionIntent::SwitchToApp(target),
             PermissionClass::Act,
         ),
+        AppOperation::Minimize => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Minimize,
+            },
+            PermissionClass::Act,
+        ),
+        AppOperation::Maximize => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Maximize,
+            },
+            PermissionClass::Act,
+        ),
+        AppOperation::Restore => (
+            ActionIntent::SetAppWindowState {
+                target,
+                action: WindowDisplayAction::Restore,
+            },
+            PermissionClass::Act,
+        ),
     };
 
     RouteResult::Action(RoutedAction {
@@ -1266,6 +1938,399 @@ mod tests {
         keyboard::{KeyCode, ModifierKey},
         mouse::{MouseAction, MouseButton, ScreenPoint},
     };
+
+    #[test]
+    fn routes_named_window_state_controls_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Minimize Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::Brave,
+                    action: WindowDisplayAction::Minimize,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Maximiza o OBS", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::ObsStudio,
+                    action: WindowDisplayAction::Maximize,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Restaura o Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::SetAppWindowState {
+                    target: AppTarget::Brave,
+                    action: WindowDisplayAction::Restore,
+                },
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn unknown_window_state_target_is_not_guessed() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Minimize Photoshop", &policy),
+            RouteResult::UnsupportedApp(name) if name == "photoshop"
+        ));
+    }
+
+    #[test]
+    fn routes_windows_terminal_navigation_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("New tab in Windows Terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(TerminalSkill {
+                    action: TerminalSkillAction::NewTab,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Paleta de comandos no terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(TerminalSkill {
+                    action: TerminalSkillAction::CommandPalette,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn terminal_router_does_not_accept_arbitrary_shell_commands() {
+        let policy = PermissionPolicy::default();
+        assert!(!matches!(
+            route_command("Run rm -rf in Windows Terminal", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::TerminalSkill(_),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_calculator_modes_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Scientific mode in Calculator", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::CalculatorSkill(CalculatorSkill {
+                    action: CalculatorSkillAction::ScientificMode,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Modo programador na calculadora", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::CalculatorSkill(CalculatorSkill {
+                    action: CalculatorSkillAction::ProgrammerMode,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_notepad_navigation_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Find in Notepad", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Find,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Seleciona tudo no bloco de notas", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::SelectAll,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn notepad_edit_skills_use_modify_confirmation() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Undo in Notepad", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Undo,
+                }),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Refaz no bloco de notas", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::NotepadSkill(NotepadSkill {
+                    action: NotepadSkillAction::Redo,
+                }),
+                permission: PermissionClass::Modify,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_personal_folder_skills_as_act() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Open Downloads", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::OpenPersonalFolder(PersonalFolderSkill::Downloads),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+
+        assert!(matches!(
+            route_command("Abre a pasta vídeos", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::OpenPersonalFolder(PersonalFolderSkill::Videos),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn browser_skill_targets_are_case_insensitive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in GOOGLE CHROME", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Chrome,
+                    action: BrowserSkillAction::NewTab,
+                }),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_brave_new_tab_as_app_skill() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Brave,
+                    action: BrowserSkillAction::NewTab,
+                }),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_portuguese_chrome_address_bar_skill() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Foca a barra de endereços no Chrome", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::BrowserSkill(BrowserSkill {
+                    target: AppTarget::Chrome,
+                    action: BrowserSkillAction::FocusAddressBar,
+                }),
+                permission: PermissionClass::Act,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_browser_skill_for_non_browser_target() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("New tab in Notepad", &policy),
+            RouteResult::InvalidAppSkill(_)
+        ));
+    }
+
+    #[test]
+    fn routes_latest_video_as_bounded_read_query() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Latest video I exported", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Video,
+                    root: PersonalRootFilter::All,
+                    limit: 1,
+                }),
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            })
+        ));
+    }
+
+    #[test]
+    fn routes_portuguese_recent_images() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Imagens recentes", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Image,
+                    root: PersonalRootFilter::All,
+                    limit: 10,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn latest_download_is_scoped_to_downloads() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Último download", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Any,
+                    root: PersonalRootFilter::Downloads,
+                    limit: 1,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn reveal_file_is_reversible_act_action() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command(
+                "Reveal file \"C:\\Users\\Test\\Documents\\report.pdf\"",
+                &policy
+            ),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::RevealPersonalPath(path),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if path.ends_with("Documents\\report.pdf")
+        ));
+    }
+
+    #[test]
+    fn file_search_is_read_only_and_preserves_query_case() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Find file \"WorldUnited Final.psd\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindPersonalFiles(query),
+                permission: PermissionClass::Read,
+                decision: PermissionDecision::Allow,
+            }) if query == "WorldUnited Final.psd"
+        ));
+    }
+
+    #[test]
+    fn portuguese_file_search_routes_to_personal_search() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Procura ficheiro Artemis", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindPersonalFiles(query),
+                permission: PermissionClass::Read,
+                ..
+            }) if query == "Artemis"
+        ));
+    }
+
+    #[test]
+    fn clipboard_read_is_sensitive_and_requires_confirmation() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("What's in my clipboard?", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardRead,
+                permission: PermissionClass::Sensitive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+    }
+
+    #[test]
+    fn clipboard_write_preserves_case_and_is_modify() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Copy to clipboard \"Hello AURA 2\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardWrite(text),
+                permission: PermissionClass::Modify,
+                decision: PermissionDecision::Ask,
+            }) if text == "Hello AURA 2"
+        ));
+    }
+
+    #[test]
+    fn clipboard_clear_is_destructive() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Limpa o clipboard", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ClipboardClear,
+                permission: PermissionClass::Destructive,
+                decision: PermissionDecision::Ask,
+            })
+        ));
+    }
+
+    #[test]
+    fn parser_permission_helpers_fail_closed_for_unrelated_intents() {
+        assert_eq!(
+            permission_for_clipboard(&ActionIntent::CurrentApp),
+            None
+        );
+        assert_eq!(
+            permission_for_keyboard(&ActionIntent::CurrentApp),
+            None
+        );
+    }
 
     #[test]
     fn routes_system_status_as_read() {

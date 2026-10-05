@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   AppStatus,
   CommandAck,
@@ -36,11 +37,17 @@ import type {
   MemoryCreateResult,
   MemoryRecord,
   CurrentAppInfo,
+  AppSkillCatalog,
+  DropIntakeSnapshot,
+  DroppedFileInspection,
   RecentFilesSnapshot,
   ModelCatalog,
   ModelDownloadProgress,
   ModelRuntimeStatus,
   ManagedRuntimeStatus,
+  ImageRuntimeStatus,
+  ImageGenerationRequest,
+  ImageGenerationResult,
   UserRoutine,
   SaveRoutineRequest,
   RoutineRunResult,
@@ -68,6 +75,10 @@ import type {
   AuraAutomation,
   SaveAutomationRequest,
   AutomationEvent,
+  BetaStatus,
+  BetaTestSession,
+  SetBetaPreferencesRequest,
+  DiagnosticsSnapshot,
 } from "./types";
 
 export const AURA_EVENTS = {
@@ -91,8 +102,14 @@ export async function getRuntimeState(): Promise<RuntimeState> {
   return invoke<RuntimeState>("get_runtime_state");
 }
 
-export async function setRuntimePaused(paused: boolean): Promise<RuntimeState> {
-  return invoke<RuntimeState>("set_runtime_paused", { paused });
+export async function setRuntimePaused(
+  paused: boolean,
+  recoveryOverride = false,
+): Promise<RuntimeState> {
+  return invoke<RuntimeState>("set_runtime_paused", {
+    paused,
+    recoveryOverride,
+  });
 }
 
 export async function setBackgroundEnabled(
@@ -147,9 +164,9 @@ export async function hideOverlay(): Promise<void> {
 }
 
 export async function listenToOpenSettings(
-  handler: () => void,
+  handler: (section?: string) => void,
 ): Promise<UnlistenFn> {
-  return listen("aura:open-settings", () => handler());
+  return listen<string>("aura:open-settings", ({ payload }) => handler(payload));
 }
 
 export async function listenToLifecycle(
@@ -329,6 +346,60 @@ export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {
 
 export async function getCurrentAppContext(): Promise<CurrentAppInfo> {
   return invoke<CurrentAppInfo>("get_current_app_context");
+}
+
+export async function getAppSkillCatalog(): Promise<AppSkillCatalog> {
+  return invoke<AppSkillCatalog>("get_app_skill_catalog");
+}
+
+export async function getDropIntake(): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("get_drop_intake");
+}
+
+export async function ingestDroppedFiles(
+  paths: string[],
+): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("ingest_dropped_files", { paths });
+}
+
+export async function clearDropIntake(): Promise<DropIntakeSnapshot> {
+  return invoke<DropIntakeSnapshot>("clear_drop_intake");
+}
+
+export async function revealDroppedFile(dropId: string): Promise<string> {
+  return invoke<string>("reveal_dropped_file", { dropId });
+}
+
+export async function inspectDroppedFile(
+  dropId: string,
+): Promise<DroppedFileInspection> {
+  return invoke<DroppedFileInspection>("inspect_dropped_file", { dropId });
+}
+
+export async function stageDroppedImageForVision(
+  dropId: string,
+): Promise<VisionCapture> {
+  return invoke<VisionCapture>("stage_dropped_image_for_vision", { dropId });
+}
+
+export async function listenToFileDrop(
+  handler: (paths: string[]) => void,
+  hover?: (active: boolean) => void,
+): Promise<UnlistenFn> {
+  return getCurrentWindow().onDragDropEvent((event) => {
+    if (event.payload.type === "enter" || event.payload.type === "over") {
+      hover?.(true);
+      return;
+    }
+
+    if (event.payload.type === "drop") {
+      hover?.(false);
+      handler(event.payload.paths);
+      return;
+    }
+
+    hover?.(false);
+  });
 }
 
 export async function getRecentFilesContext(): Promise<RecentFilesSnapshot> {
@@ -517,6 +588,17 @@ export async function stopTtsSpeaking(): Promise<TtsRuntimeStatus> {
 }
 
 
+export async function getCreateImageRuntimeStatus(): Promise<ImageRuntimeStatus> {
+  return invoke<ImageRuntimeStatus>("get_create_image_runtime_status");
+}
+
+export async function generateCreateImage(
+  request: ImageGenerationRequest,
+): Promise<ImageGenerationResult> {
+  return invoke<ImageGenerationResult>("generate_create_image", { request });
+}
+
+
 export async function getVisionRuntimeStatus(): Promise<VisionRuntimeStatus> {
   return invoke<VisionRuntimeStatus>("get_vision_runtime_status");
 }
@@ -657,4 +739,50 @@ export async function listenToAutomation(
     AURA_EVENTS.automation,
     ({ payload }) => handler(payload),
   );
+}
+
+
+export async function getBetaStatus(): Promise<BetaStatus> {
+  return invoke<BetaStatus>("get_beta_status");
+}
+
+export async function setBetaPreferences(
+  request: SetBetaPreferencesRequest,
+): Promise<BetaStatus> {
+  return invoke<BetaStatus>("set_beta_preferences", { request });
+}
+
+export async function repairBetaRecoveryState(): Promise<BetaStatus> {
+  return invoke<BetaStatus>("repair_beta_recovery_state");
+}
+
+export async function getBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("get_beta_test_session");
+}
+
+export async function startBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("start_beta_test_session");
+}
+
+export async function setBetaTestCheck(
+  checkId: string,
+  completed: boolean,
+): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("set_beta_test_check", { checkId, completed });
+}
+
+export async function resetBetaTestSession(): Promise<BetaTestSession> {
+  return invoke<BetaTestSession>("reset_beta_test_session");
+}
+
+export async function getBetaDiagnostics(): Promise<DiagnosticsSnapshot> {
+  return invoke<DiagnosticsSnapshot>("get_beta_diagnostics");
+}
+
+export async function exportBetaDiagnostics(): Promise<string> {
+  return invoke<string>("export_beta_diagnostics");
+}
+
+export async function exportBetaTestReport(): Promise<string> {
+  return invoke<string>("export_beta_test_report");
 }

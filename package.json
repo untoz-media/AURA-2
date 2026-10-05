@@ -1,6 +1,6 @@
 {
   "name": "aura-2",
-  "version": "0.3.0-alpha.1",
+  "version": "0.9.0-beta.1",
   "private": true,
   "workspaces": [
     "apps/desktop"
@@ -10,6 +10,12 @@
     "build": "npm --workspace @untoz/aura-desktop run tauri:build",
     "frontend:dev": "npm --workspace @untoz/aura-desktop run dev",
     "frontend:build": "npm --workspace @untoz/aura-desktop run build",
-    "icons": "npm --workspace @untoz/aura-desktop run icons"
+    "icons": "npm --workspace @untoz/aura-desktop run icons",
+    "beta:validate": "node scripts/validate-beta.mjs",
+    "beta:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-beta-windows.ps1",
+    "beta:verify:artifact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-beta-artifact.ps1",
+    "preview:release-check": "node scripts/check-testing-preview.mjs",
+    "beta:doctor:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-build-doctor.ps1",
+    "beta:panic-scan": "node scripts/check-production-rust-panics.mjs"
   }
 }

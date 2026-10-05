@@ -1,0 +1,26 @@
+name: AURA-2 feature request
+description: Suggest an improvement or new capability for AURA.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AURA is local-first and permission-aware. Describe the user goal first, then the capability that should solve it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should AURA solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: What should the user be able to say/do, and what should AURA do?
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy / permission expectations
+      description: If this feature reads data or acts on the PC, describe what should require Allow, Ask or explicit confirmation.

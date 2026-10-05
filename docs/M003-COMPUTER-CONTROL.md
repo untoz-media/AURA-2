@@ -14,6 +14,7 @@ AURA-2 now moves from desktop infrastructure into real Windows actions.
 - **M003.8 — Permission Engine**
 - **M003.9 — Confirmation Flow**
 - **M003.10 — Computer Control validation**
+- **Post-M003 Beta extensions — Window Control V2, Clipboard Intelligence, File Intelligence**
 
 ## M003.1
 
@@ -237,3 +238,56 @@ A manual hardware checklist is documented in `docs/M003-10-VALIDATION.md` for be
 **M003 release marker:** `AURA-2 0.3.0-alpha.1`
 
 With M003 complete, AURA-2 has a deterministic, permission-aware Windows Computer Control foundation. M004 moves into direct OBS WebSocket control and Director Mode.
+
+
+## Post-M003 Beta extensions
+
+The original M003 milestone remains closed, but the M009 Beta candidate extends the deterministic Computer layer with three additional capabilities.
+
+### Window Control V2
+
+Known application targets can now be minimized, maximized and restored explicitly.
+
+Examples:
+
+- `Minimize Brave`
+- `Maximize OBS`
+- `Restore Chrome`
+- `Minimiza o Brave`
+- `Maximiza o OBS`
+- `Restaura o Chrome`
+
+These operations are reversible and use `PermissionClass::Act`. AURA still does not guess ambiguous targets such as “this window”.
+
+### Clipboard Intelligence V1
+
+AURA can explicitly read, write and clear **text** clipboard data.
+
+Permission classes are deliberately conservative:
+
+- read clipboard → `Sensitive`
+- write clipboard → `Modify`
+- clear clipboard → `Destructive`
+
+AURA does not poll the clipboard and does not keep a clipboard history.
+
+Clipboard reads triggered by Voice are displayed visually after confirmation but are not passed to automatic TTS, preventing sensitive clipboard contents from being unexpectedly spoken aloud.
+
+### File Intelligence V1
+
+AURA can search file/folder names and metadata inside the user's personal Windows libraries:
+
+- Desktop
+- Documents
+- Downloads
+- Pictures
+- Videos
+- Music
+
+The search is bounded to four directory levels and 8,000 scanned entries, returns at most 20 matches, does not follow symlinks and never reads matched file contents.
+
+Search uses `PermissionClass::Read`.
+
+A returned path can also be revealed safely in File Explorer. Reveal canonicalizes both the target and allowed roots, rejects paths outside those roots and only selects the item in Explorer; it does not execute/open the file. Reveal uses `PermissionClass::Act`.
+
+These Beta extensions continue the original M003 design rule: deterministic computer actions do not need an LLM and must remain inside explicit permission and target boundaries.

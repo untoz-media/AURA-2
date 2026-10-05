@@ -1,0 +1,183 @@
+# AURA-2 Beta Quick Start
+
+## 0. Building a local testing installer
+
+If you are building the current candidate locally on Windows, start with:
+
+```powershell
+npm run beta:doctor:windows
+```
+
+The Build Doctor checks Node, Rust/MSVC, Visual Studio C++ Build Tools, Windows SDK, Python and build disk space. `npm run beta:build:windows` runs the same doctor automatically and attempts to load the Visual Studio developer environment when the tools are installed but not exposed in the normal PowerShell PATH.
+
+Then use:
+
+```powershell
+npm run beta:build:windows
+npm run beta:verify:artifact
+```
+
+A successful local build embeds its exact Git commit and local-smoke build identity in AURA Diagnostics.
+
+## 1. Install
+
+Run the verified AURA-2 Windows x64 NSIS installer.
+
+Normal Beta installation is per-user and does not require administrator privileges.
+
+## 2. Read the first-run guide
+
+AURA explains the Beta privacy model and Permission Engine before normal use.
+
+## 3. Review permissions
+
+Recommended safe defaults:
+
+- Read: Allow
+- Act: Allow
+- Modify: Ask
+- Sensitive: Ask
+- Destructive: Ask
+
+Sensitive and Destructive cannot be permanently set to Allow.
+
+## 4. Install the Managed AI Runtime
+
+Open Models and install AURA's private managed Python/AI runtime.
+
+## 5. Install an assistant model
+
+Install AURA-1 if you want free-form local model responses and Agent planning.
+
+AURA-2 model remains a future model line until its own weights are available.
+
+## 6. Optional feature models
+
+Install only the local features you want:
+
+- Whisper Base for Voice STT
+- Piper voices for local TTS
+- SmolVLM2 for Vision
+- AURA Create · Image for local text-to-image generation
+
+## 7. Try deterministic controls first
+
+Examples:
+
+- open Brave
+- switch to OBS
+- minimize Brave
+- maximize OBS
+- restore Brave
+- new tab in Brave
+- focus address bar in Brave
+- open Downloads
+- find in Notepad
+- undo in Notepad
+- new tab in Windows Terminal
+- command palette in Windows Terminal
+- scientific mode in Calculator
+- find file Artemis
+- read clipboard
+- what app am I using?
+- run a saved routine
+
+## 8. Try Voice and Vision
+
+- Ctrl + Shift + F8: Push-to-Talk
+- Ctrl + Shift + F9 twice: select a Vision region
+- Ctrl + Shift + Space: Overlay
+
+## 9. Try Agents
+
+Open Agents, describe a bounded goal, review the proposed steps and approve only if the plan matches your intent.
+
+## 9.4 Drag a local file into AURA
+
+Drag one or more local files onto the main AURA window.
+
+AURA accepts up to eight files per drop and creates temporary local metadata context only.
+
+From the drop tray you can:
+
+- **Inspect** one accepted file.
+- **Inspect all** files in the temporary batch.
+- **Attach to Chat** for one file or **Attach all to Chat** for the current batch.
+- Write your own question in Chat and send it with those temporary attachments.
+- **Analyze with AURA** for a one-click analysis shortcut.
+- **Reveal** an accepted file in File Explorer.
+- **Use in Vision** for supported raster images.
+
+Inspect can show dimensions for images and a bounded local preview for allowlisted UTF-8 text/code files. The text preview is capped at 64 KiB and 12,000 characters. Chat attachments are one-turn and use a smaller model-context budget capped at 6,000 characters total. When several text files are attached, AURA shares that budget across the batch so each previewable file receives context rather than allowing the first file to consume it all. The composer shows removable filename chips; after an accepted message, the files are detached from the next turn automatically. Sending attached files with no typed question uses "Analyze the attached local files." as the visible request. Filesystem paths and attachment contents are not persisted in Chat history. PDFs, Office files, video, audio and archives remain metadata-only.
+
+Dropping a file never opens, executes, uploads, remembers or analyzes it automatically.
+
+For images, **Use in Vision** creates a normalized PNG copy inside AURA's cache. The original image remains untouched.
+
+## 9.5 Create a local image
+
+Open **Create → Image**.
+
+If required:
+
+1. Install or repair the AURA Runtime.
+2. Download **AURA Create · Image**.
+3. Enter a prompt.
+4. Choose square, landscape or portrait.
+5. Optionally set a negative prompt, inference steps or seed.
+6. Choose **Generate image**.
+
+The first generation takes longer because the local Diffusers pipeline must load. Later generations reuse the resident worker.
+
+Generated PNGs are saved locally under **Pictures → AURA Create** when Windows exposes the Pictures directory.
+
+The model download requires network access once. Inference is configured to use the installed local files only.
+
+## 10. Diagnostics
+
+AURA runs a lightweight local health report on startup. You can inspect it at:
+
+Settings → Beta & Diagnostics
+
+A healthy Beta should show the local subsystem checks as Passed. If Chat shows a degraded-health warning, open the report before relying on the affected subsystem.
+
+For a support snapshot:
+
+Settings → Beta & Diagnostics → Refresh → Export JSON
+
+Nothing is uploaded automatically.
+
+If AURA detects that the previous session ended unexpectedly, it starts paused in Recovery Safe Mode. Review the recovery/health state and explicitly choose Resume AURA when you are ready.
+
+If two consecutive sessions end uncleanly, **Crash Loop Guard** activates. AURA stays visible even if it was launched with `--background`, remains paused, and removes the one-click Resume action from the Chat recovery banner until you review Beta & Diagnostics. A later clean shutdown resets the recovery streak.
+
+The **Testing Preview readiness** card separates core/safety readiness, Windows x64 compatibility and build provenance from optional local-model setup. It is a preflight aid, not a replacement for the full NSIS smoke checklist.
+
+## 11. Run a Beta Test Session
+
+Open:
+
+**Settings → Beta & Diagnostics → Beta Test Session**
+
+Start a fresh session before a structured test pass. AURA provides a fixed checklist covering:
+
+- install / first run
+- desktop lifecycle
+- Recovery Safe Mode / Crash Loop Guard
+- permissions and safety
+- Computer Control
+- Managed Runtime / models
+- Drag & Drop / file context
+- AURA Create
+- Voice
+- Vision
+- Memory / context
+- Agents / Automations
+- Director Mode / OBS
+- Beta diagnostics
+- installer lifecycle
+
+The session stores only fixed area IDs, completion state and timestamps. It has no free-text notes field and does not store prompts, file paths, screenshots or user content.
+
+Use **Export report** to create a local JSON report containing the checklist plus the already privacy-validated Beta diagnostics snapshot. Nothing is uploaded automatically.
+

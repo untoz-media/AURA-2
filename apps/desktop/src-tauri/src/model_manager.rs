@@ -65,6 +65,21 @@ const WHISPER_BASE_FILES: &[&str] = &[
     "vocab.json",
 ];
 
+const CREATE_TINY_SD_FILES: &[&str] = &[
+    "model_index.json",
+    "scheduler/scheduler_config.json",
+    "text_encoder/config.json",
+    "text_encoder/model.safetensors",
+    "tokenizer/merges.txt",
+    "tokenizer/special_tokens_map.json",
+    "tokenizer/tokenizer_config.json",
+    "tokenizer/vocab.json",
+    "unet/config.json",
+    "unet/diffusion_pytorch_model.safetensors",
+    "vae/config.json",
+    "vae/diffusion_pytorch_model.safetensors",
+];
+
 const AURA_1_FILES: &[&str] = &[
     "LICENSE",
     "README.md",
@@ -189,6 +204,21 @@ fn model_definitions() -> Vec<ModelDefinition> {
             license: Some("Apache-2.0"),
             estimated_size_bytes: Some(2_040_000_000),
             files: SMOLVLM2_500M_FILES,
+            availability_message: None,
+        },
+        ModelDefinition {
+            id: "create-tiny-sd",
+            name: "AURA Create · Image",
+            subtitle: "Tiny-SD · Local · Text-to-Image",
+            description: "Lightweight local image generation for AURA Create, backed by a pinned SafeTensors revision of Segmind Tiny-SD.",
+            generation: "Create",
+            role: "imageGeneration",
+            selectable: false,
+            source_repo: Some("segmind/tiny-sd"),
+            source_revision: Some("66c1a55ae6659210a4de881223ac9626df59f04c"),
+            license: Some("CreativeML Open RAIL-M"),
+            estimated_size_bytes: Some(1_061_000_000),
+            files: CREATE_TINY_SD_FILES,
             availability_message: None,
         },
     ]
@@ -1447,6 +1477,44 @@ mod tests {
     }
 
     #[test]
+    fn vision_model_is_feature_specific_and_local_downloadable() {
+        let vision = definition_for("vision-smolvlm2-500m").unwrap();
+        assert_eq!(vision.role, "vision");
+        assert!(!vision.selectable);
+        assert_eq!(
+            vision.source_repo,
+            Some("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
+        );
+        assert_eq!(vision.license, Some("Apache-2.0"));
+        assert!(vision.files.contains(&"model.safetensors"));
+    }
+
+    #[test]
+    fn create_image_model_is_pinned_and_safetensors_only() {
+        let create = definition_for("create-tiny-sd").unwrap();
+        assert_eq!(create.role, "imageGeneration");
+        assert!(!create.selectable);
+        assert_eq!(create.source_repo, Some("segmind/tiny-sd"));
+        assert_eq!(
+            create.source_revision,
+            Some("66c1a55ae6659210a4de881223ac9626df59f04c")
+        );
+        assert_eq!(create.license, Some("CreativeML Open RAIL-M"));
+        assert!(create
+            .files
+            .iter()
+            .any(|file| file.ends_with(".safetensors")));
+        assert!(!create.files.iter().any(|file| file.ends_with(".bin")));
+        assert!(create.files.contains(&"text_encoder/model.safetensors"));
+        assert!(create
+            .files
+            .contains(&"unet/diffusion_pytorch_model.safetensors"));
+        assert!(create
+            .files
+            .contains(&"vae/diffusion_pytorch_model.safetensors"));
+    }
+
+    #[test]
     fn progress_percentage_is_clamped() {
         assert_eq!(percent(0, 100), 0.0);
         assert_eq!(percent(50, 100), 50.0);
@@ -1460,18 +1528,16 @@ mod tests {
             "https://huggingface.co/Qwen/Test/resolve/main/config.json"
         );
     }
-}
 
     #[test]
-    fn vision_model_is_feature_specific_and_local_downloadable() {
-        let vision = definition_for("vision-smolvlm2-500m").unwrap();
-        assert_eq!(vision.role, "vision");
-        assert!(!vision.selectable);
+    fn nested_huggingface_paths_remain_deterministic() {
         assert_eq!(
-            vision.source_repo,
-            Some("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
+            huggingface_url(
+                "segmind/tiny-sd",
+                "66c1a55ae6659210a4de881223ac9626df59f04c",
+                "unet/diffusion_pytorch_model.safetensors",
+            ),
+            "https://huggingface.co/segmind/tiny-sd/resolve/66c1a55ae6659210a4de881223ac9626df59f04c/unet/diffusion_pytorch_model.safetensors"
         );
-        assert_eq!(vision.license, Some("Apache-2.0"));
-        assert!(vision.files.contains(&"model.safetensors"));
     }
 }

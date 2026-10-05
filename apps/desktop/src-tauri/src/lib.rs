@@ -1,8 +1,10 @@
 mod agents;
 mod audio_input;
+mod beta;
 mod computer;
 mod core;
 mod integrations;
+mod image_runtime;
 mod managed_runtime;
 mod memory;
 mod model_manager;
@@ -24,17 +26,49 @@ use agents::{
     SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
-use computer::app_launcher::launch_app;
+use beta::{
+    begin_session as begin_beta_session, export_diagnostics as export_beta_diagnostics_file,
+    export_test_report as export_beta_test_report_file,
+    local_health_checks as beta_local_health_checks,
+    mark_session_clean as mark_beta_session_clean,
+    repair_recovery_state as repair_beta_recovery_state_store,
+    reset_test_session as reset_beta_test_session_store,
+    save_preferences as save_beta_preferences,
+    set_test_check as set_beta_test_check_store,
+    start_test_session as start_beta_test_session_store,
+    status as beta_status, test_session as beta_test_session,
+    BetaSessionRuntime, BetaStatus, BetaTestSession, DiagnosticCheck, DiagnosticsSnapshot,
+    SetBetaPreferencesRequest,
+};
+use computer::app_launcher::{launch_app, AppTarget};
 use computer::app_lifecycle::close_app;
+use computer::app_skills::{
+    app_skill_catalog, execute_browser_skill, execute_calculator_skill, execute_notepad_skill,
+    execute_personal_folder_skill, execute_terminal_skill, AppSkillCatalog,
+};
 use computer::audio::{execute_media_action, MediaAction};
+use computer::clipboard::{
+    clear as clear_clipboard, read_text as read_clipboard_text,
+    summarize_text as summarize_clipboard_text, write_text as write_clipboard_text,
+};
+use computer::drop_intake::{
+    build_drop_model_context, inspect_drop, is_supported_vision_image, reveal_drop,
+    DropIntakeSnapshot, DropIntakeState, DroppedFileInspection,
+};
+use computer::file_intelligence::{
+    recent_personal_files, reveal_personal_path, search_personal_files,
+    summarize_file_search, summarize_recent_files as summarize_recent_file_search,
+};
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
 use computer::recent_files::{
-    default_recent_files_snapshot, recent_files_snapshot, summarize_recent_files, RecentFilesSnapshot,
+    default_recent_files_snapshot, recent_files_snapshot,
+    summarize_recent_files as summarize_windows_recent_files, RecentFilesSnapshot,
 };
 use computer::system::{execute_system_action, summarize_system, SystemAction};
 use computer::window_manager::{
-    list_windows, summarize_windows, switch_to_app, CurrentAppAwareness, CurrentAppInfo,
+    list_windows, set_app_window_state, summarize_windows, switch_to_app, CurrentAppAwareness,
+    CurrentAppInfo,
 };
 use core::{
     action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
@@ -48,6 +82,7 @@ use integrations::director::{
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
 use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
+use image_runtime::{ImageGenerationRequest, ImageGenerationResult, ImageRuntime, ImageRuntimeStatus};
 use memory::{
     create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
     CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
@@ -69,7 +104,8 @@ use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
 use vision_capture::{
     capture_active_window, capture_full_screen, capture_region, capture_window_handle,
-    cursor_position, region_from_points, remove_capture, CaptureRect, VisionCapture,
+    cursor_position, import_local_image, region_from_points, remove_capture, CaptureRect,
+    VisionCapture,
 };
 use vision_history::{
     clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
@@ -109,6 +145,7 @@ struct RuntimeState {
     permission_policy: Mutex<PermissionPolicy>,
     pending_confirmations: Mutex<HashMap<String, PendingConfirmation>>,
     voice_command_ids: Mutex<HashSet<String>>,
+    private_voice_command_ids: Mutex<HashSet<String>>,
     voice_preferences: Mutex<VoicePreferences>,
     wake_monitor_generation: AtomicU64,
     conversation_active: AtomicBool,
@@ -129,6 +166,7 @@ impl Default for RuntimeState {
             permission_policy: Mutex::new(PermissionPolicy::default()),
             pending_confirmations: Mutex::new(HashMap::new()),
             voice_command_ids: Mutex::new(HashSet::new()),
+            private_voice_command_ids: Mutex::new(HashSet::new()),
             voice_preferences: Mutex::new(VoicePreferences::default()),
             wake_monitor_generation: AtomicU64::new(1),
             conversation_active: AtomicBool::new(false),
@@ -282,6 +320,8 @@ struct CommandRequest {
     source: String,
     #[serde(default)]
     approval_id: Option<String>,
+    #[serde(default)]
+    drop_ids: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -806,7 +846,51 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     app.state::<AgentEngine>().set_global_paused(app, paused);
     app.state::<AutomationScheduler>().set_paused(paused);
 
+    if paused {
+        state.conversation_active.store(false, Ordering::Relaxed);
+
+        let audio = app.state::<AudioInputManager>();
+        if audio.capture_active() {
+            let _ = audio.stop_push_to_talk();
+            let _ = audio.take_last_capture();
+        }
+
+        let _ = app.state::<TtsRuntime>().interrupt();
+    }
+
     emit_runtime_state(app)
+}
+
+
+fn set_paused_state_guarded(
+    app: &tauri::AppHandle,
+    beta: &BetaSessionRuntime,
+    paused: bool,
+    recovery_override: bool,
+) -> Result<RuntimeSnapshot, String> {
+    if !paused && !recovery_override {
+        let recovery = beta_status(app, beta)?;
+        let health_degraded = beta_local_health_checks(app)
+            .iter()
+            .any(|check| check.status == "failed");
+
+        if recovery.crash_loop_guard_active || health_degraded {
+            return Err(
+                "AURA is paused by Recovery Safe Mode. Review Beta & Diagnostics and use Review & Resume to acknowledge the degraded recovery state."
+                    .to_string(),
+            );
+        }
+    }
+
+    if !paused && recovery_override {
+        emit_lifecycle_event(
+            app,
+            "beta.recovery_override",
+            "The user explicitly reviewed the recovery state and resumed AURA from Beta & Diagnostics.",
+        );
+    }
+
+    Ok(set_paused_state(app, paused))
 }
 
 fn set_background_state(
@@ -1243,6 +1327,7 @@ fn process_voice_capture(
                         text: command_text.clone(),
                         source: "voice".to_string(),
                         approval_id: None,
+                        drop_ids: Vec::new(),
                     },
                 ) {
                     Ok(_) => emit_voice_capture_event(
@@ -1296,6 +1381,10 @@ fn process_voice_capture(
 fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     thread::spawn(move || {
         let runtime = app.state::<RuntimeState>();
+        if runtime_snapshot(&runtime).paused {
+            return;
+        }
+
         if runtime
             .conversation_active
             .swap(true, Ordering::Relaxed)
@@ -1365,6 +1454,27 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
         let timeout = Duration::from_secs(preferences.conversation_timeout_seconds);
 
         while started.elapsed() < timeout {
+            if runtime_snapshot(&runtime).paused {
+                let _ = audio.stop_push_to_talk();
+                let _ = audio.take_last_capture();
+                runtime.conversation_active.store(false, Ordering::Relaxed);
+                emit_voice_capture_event(
+                    &app,
+                    VoiceCaptureEvent {
+                        phase: "conversationPaused",
+                        shortcut: "conversation",
+                        sample_count: 0,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        sample_rate: None,
+                        channels: None,
+                        message: "Conversation Mode stopped because AURA was paused.".to_string(),
+                        text: None,
+                        timestamp_ms: unix_timestamp_ms(),
+                    },
+                );
+                return;
+            }
+
             let level = audio.current_level();
 
             if level >= 0.015 {
@@ -1443,7 +1553,10 @@ fn resume_wake_monitor_if_enabled(app: tauri::AppHandle) {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .wake_word_enabled;
 
-    if !enabled || state.conversation_active.load(Ordering::Relaxed) {
+    if !enabled
+        || state.conversation_active.load(Ordering::Relaxed)
+        || runtime_snapshot(&state).paused
+    {
         return;
     }
 
@@ -1566,6 +1679,7 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
                         text: command,
                         source: "voice".to_string(),
                         approval_id: None,
+                        drop_ids: Vec::new(),
                     },
                 );
             }
@@ -1584,6 +1698,11 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let is_voice = voice_ids.contains(&event.id);
+        let mut private_voice_ids = state
+            .private_voice_command_ids
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let is_private_voice_result = private_voice_ids.contains(&event.id);
         let terminal = matches!(
             event.kind,
             "command.completed" | "command.failed" | "command.cancelled"
@@ -1591,11 +1710,14 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
 
         if terminal {
             voice_ids.remove(&event.id);
+            private_voice_ids.remove(&event.id);
         }
 
         (
             is_voice && terminal,
-            is_voice && matches!(event.kind, "command.completed" | "command.failed"),
+            is_voice
+                && !is_private_voice_result
+                && matches!(event.kind, "command.completed" | "command.failed"),
         )
     };
 
@@ -1706,12 +1828,340 @@ fn aura_tray_icon() -> Image<'static> {
     Image::new_owned(rgba, SIZE, SIZE)
 }
 
+fn build_beta_diagnostics(
+    app: &AppHandle,
+    state: &RuntimeState,
+    manager: &ModelManager,
+    setup: &ManagedRuntimeSetup,
+    engine: &AgentEngine,
+    image: &ImageRuntime,
+) -> Result<DiagnosticsSnapshot, String> {
+    let runtime = runtime_snapshot(state);
+    let mut health_checks = beta_local_health_checks(app);
+
+    let policy = state
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    if policy.destructive == PermissionDecision::Allow
+        || policy.sensitive == PermissionDecision::Allow
+    {
+        health_checks.push(DiagnosticCheck::failed(
+            "permission-safety-floor",
+            "Permission safety floor",
+            "Sensitive or destructive actions are configured as permanently allowed.",
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::passed(
+            "permission-safety-floor",
+            "Permission safety floor",
+            "Sensitive and destructive actions still require Ask or Never.",
+        ));
+    }
+
+    let (active_model_id, installed_model_ids) = match manager.catalog(app) {
+        Ok(catalog) => {
+            let installed_model_ids: Vec<String> = catalog
+                .models
+                .iter()
+                .filter(|model| model.installed)
+                .map(|model| model.id.clone())
+                .collect();
+            let active_model_id = catalog.active_model_id.clone();
+            let active_model_valid = active_model_id
+                .as_ref()
+                .map(|id| installed_model_ids.iter().any(|installed| installed == id))
+                .unwrap_or(true);
+
+            if active_model_valid {
+                health_checks.push(DiagnosticCheck::passed(
+                    "model-catalog",
+                    "Model catalog",
+                    "Local model metadata is readable and the active model selection is valid.",
+                ));
+            } else {
+                health_checks.push(DiagnosticCheck::failed(
+                    "model-catalog",
+                    "Model catalog",
+                    "The selected active model is not present in the installed model set.",
+                ));
+            }
+
+            (active_model_id, installed_model_ids)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "model-catalog",
+                "Model catalog",
+                "Local model metadata could not be read.",
+            ));
+            (None, Vec::new())
+        }
+    };
+
+    let (agent_runs_total, active_agent_runs) = match engine.snapshot(app) {
+        Ok(agent_snapshot) => {
+            let active = agent_snapshot
+                .runs
+                .iter()
+                .filter(|run| {
+                    matches!(
+                        run.state.as_str(),
+                        "queued" | "running" | "paused" | "cancelling"
+                    )
+                })
+                .count();
+            health_checks.push(DiagnosticCheck::passed(
+                "agent-store",
+                "Agent run store",
+                "Persisted Agent run metadata is readable.",
+            ));
+            (agent_snapshot.runs.len(), active)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "agent-store",
+                "Agent run store",
+                "Persisted Agent run metadata could not be read.",
+            ));
+            (0, 0)
+        }
+    };
+
+    let saved_actions = match list_saved_actions(app) {
+        Ok(actions) => {
+            health_checks.push(DiagnosticCheck::passed(
+                "action-store",
+                "Saved Actions store",
+                "Saved AURA Actions are readable.",
+            ));
+            actions.len()
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "action-store",
+                "Saved Actions store",
+                "Saved AURA Actions could not be read.",
+            ));
+            0
+        }
+    };
+
+    let (automations, enabled_automations) = match list_automations(app) {
+        Ok(automations) => {
+            let enabled = automations.iter().filter(|automation| automation.enabled).count();
+            health_checks.push(DiagnosticCheck::passed(
+                "automation-store",
+                "Automation store",
+                "Persisted Automations are readable.",
+            ));
+            (automations.len(), enabled)
+        }
+        Err(_) => {
+            health_checks.push(DiagnosticCheck::failed(
+                "automation-store",
+                "Automation store",
+                "Persisted Automations could not be read.",
+            ));
+            (0, 0)
+        }
+    };
+
+    let managed_runtime_state = setup.status(app).state;
+    health_checks.push(DiagnosticCheck::passed(
+        "managed-runtime-state",
+        "Managed runtime state",
+        format!("Managed runtime state is readable: {managed_runtime_state}."),
+    ));
+
+    let create_image_runtime = image.status();
+    if create_image_runtime.state == "error" {
+        health_checks.push(DiagnosticCheck::failed(
+            "create-image-runtime",
+            "AURA Create runtime",
+            create_image_runtime
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "The local image runtime is in an error state.".to_string()),
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::passed(
+            "create-image-runtime",
+            "AURA Create runtime",
+            format!(
+                "Local image runtime state is readable: {}.",
+                create_image_runtime.state
+            ),
+        ));
+    }
+
+    health_checks.push(DiagnosticCheck::passed(
+        "privacy-boundary",
+        "Privacy boundary",
+        "Usage telemetry and automatic diagnostic uploads are disabled.",
+    ));
+
+    if active_agent_runs <= agent_runs_total && enabled_automations <= automations {
+        health_checks.push(DiagnosticCheck::passed(
+            "runtime-counters",
+            "Runtime counters",
+            "Agent and Automation aggregate counters are internally consistent.",
+        ));
+    } else {
+        health_checks.push(DiagnosticCheck::failed(
+            "runtime-counters",
+            "Runtime counters",
+            "Agent or Automation aggregate counters are inconsistent.",
+        ));
+    }
+
+    let health_status = if health_checks.iter().any(|check| check.status == "failed") {
+        "degraded"
+    } else {
+        "healthy"
+    }
+    .to_string();
+
+    Ok(DiagnosticsSnapshot {
+        schema_version: 3,
+        app_name: "AURA-2".to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        channel: "beta".to_string(),
+        build_commit: option_env!("AURA_BUILD_COMMIT")
+            .unwrap_or("unknown")
+            .to_string(),
+        build_source: option_env!("AURA_BUILD_SOURCE")
+            .unwrap_or("local")
+            .to_string(),
+        build_label: option_env!("AURA_BUILD_LABEL")
+            .unwrap_or("development")
+            .to_string(),
+        platform: std::env::consts::OS.to_string(),
+        architecture: std::env::consts::ARCH.to_string(),
+        paused: runtime.paused,
+        background_enabled: runtime.background_enabled,
+        autostart_enabled: runtime.autostart_enabled,
+        active_model_id,
+        installed_model_ids,
+        managed_runtime_state,
+        create_image_runtime_state: create_image_runtime.state,
+        agent_runs_total,
+        active_agent_runs,
+        saved_actions,
+        automations,
+        enabled_automations,
+        telemetry_enabled: false,
+        health_status,
+        health_checks,
+        generated_at_ms: unix_timestamp_ms(),
+    })
+}
+
+#[tauri::command]
+fn get_beta_status(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+) -> Result<BetaStatus, String> {
+    beta_status(&app, &beta)
+}
+
+#[tauri::command]
+fn set_beta_preferences(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+    request: SetBetaPreferencesRequest,
+) -> Result<BetaStatus, String> {
+    save_beta_preferences(&app, &beta, request)
+}
+
+#[tauri::command]
+fn repair_beta_recovery_state(
+    app: AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
+) -> Result<BetaStatus, String> {
+    let status = repair_beta_recovery_state_store(&app, &beta)?;
+    emit_lifecycle_event(
+        &app,
+        "beta.recovery_state_repaired",
+        "AURA preserved the previous Beta session marker, reset the recovery streak and kept the runtime paused for review.",
+    );
+    Ok(status)
+}
+
+#[tauri::command]
+fn get_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    beta_test_session(&app)
+}
+
+#[tauri::command]
+fn start_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    start_beta_test_session_store(&app)
+}
+
+#[tauri::command]
+fn set_beta_test_check(
+    app: AppHandle,
+    check_id: String,
+    completed: bool,
+) -> Result<BetaTestSession, String> {
+    set_beta_test_check_store(&app, &check_id, completed)
+}
+
+#[tauri::command]
+fn reset_beta_test_session(app: AppHandle) -> Result<BetaTestSession, String> {
+    reset_beta_test_session_store(&app)
+}
+
+#[tauri::command]
+fn get_beta_diagnostics(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
+) -> Result<DiagnosticsSnapshot, String> {
+    build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)
+}
+
+#[tauri::command]
+fn export_beta_diagnostics(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
+) -> Result<String, String> {
+    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)?;
+    export_beta_diagnostics_file(&app, &snapshot)
+}
+
+#[tauri::command]
+fn export_beta_test_report(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    manager: State<'_, ModelManager>,
+    setup: State<'_, ManagedRuntimeSetup>,
+    engine: State<'_, AgentEngine>,
+    image: State<'_, ImageRuntime>,
+) -> Result<String, String> {
+    let session = beta_test_session(&app)?;
+    if !session.active {
+        return Err("Start a Beta test session before exporting a test report.".to_string());
+    }
+
+    let snapshot = build_beta_diagnostics(&app, &state, &manager, &setup, &engine, &image)?;
+    export_beta_test_report_file(&app, &session, &snapshot)
+}
+
 #[tauri::command]
 fn get_app_status() -> AppStatus {
     AppStatus {
         name: "AURA-2",
         version: env!("CARGO_PKG_VERSION"),
-        stage: "M008 Complete · Agents & Automations · 0.8.0-alpha.1",
+        stage: "M009 Beta Candidate · 0.9.0-beta.1",
         local_first: true,
     }
 }
@@ -1734,9 +2184,16 @@ fn get_runtime_state(state: State<'_, RuntimeState>) -> RuntimeSnapshot {
 #[tauri::command]
 fn set_runtime_paused(
     app: tauri::AppHandle,
+    beta: State<'_, BetaSessionRuntime>,
     paused: bool,
-) -> RuntimeSnapshot {
-    set_paused_state(&app, paused)
+    recovery_override: Option<bool>,
+) -> Result<RuntimeSnapshot, String> {
+    set_paused_state_guarded(
+        &app,
+        &beta,
+        paused,
+        recovery_override.unwrap_or(false),
+    )
 }
 
 #[tauri::command]
@@ -1913,6 +2370,7 @@ fn resolve_confirmation(
             text: pending.command,
             source: pending.source,
             approval_id: Some(id),
+            drop_ids: Vec::new(),
         },
     )?;
 
@@ -1966,6 +2424,27 @@ fn process_user_command(
         };
         emit_core_error(&app, error);
         return Err("Unknown command source.".to_string());
+    }
+
+    let drop_ids = request.drop_ids.clone();
+    if drop_ids.len() > 8 {
+        let error = CoreError {
+            id: None,
+            code: "drop.context_too_many",
+            message: "AURA accepts at most 8 dropped-file attachments per request.".to_string(),
+        };
+        emit_core_error(&app, error);
+        return Err("Too many dropped-file context attachments.".to_string());
+    }
+
+    if !drop_ids.is_empty() && request.source != "desktop" {
+        let error = CoreError {
+            id: None,
+            code: "drop.context_invalid_source",
+            message: "Dropped-file context can only be attached from the main desktop UI.".to_string(),
+        };
+        emit_core_error(&app, error);
+        return Err("Dropped-file context is only available from the desktop UI.".to_string());
     }
 
     let source = request.source.clone();
@@ -2032,16 +2511,47 @@ fn process_user_command(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone();
 
-    let base_route = route_command(&text, &policy);
-    let routine_route = route_user_routine(&app, &text, &policy);
-    let director_route = route_director_preset(&app, &text, &policy);
+    // Submitting a desktop Chat message with explicitly attached drop IDs is
+    // the one-shot user gesture for Read=Ask. Read=Never remains a hard block.
+    if !drop_ids.is_empty()
+        && policy.decision_for(PermissionClass::Read) == PermissionDecision::Never
+    {
+        let error = CoreError {
+            id: Some(id.clone()),
+            code: "drop.context_blocked",
+            message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+        };
+        emit_core_error(&app, error);
+        emit_core_event(
+            &app,
+            CoreEvent {
+                id: id.clone(),
+                kind: "command.failed",
+                status: AuraRuntimeStatus::Idle,
+                message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+                command: Some(text.clone()),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+        return Err("Dropped-file context is blocked by AURA's Read permission policy.".to_string());
+    }
 
-    let routed = match routine_route {
-        Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
-        _ => match director_route {
-            Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
-            _ => base_route,
-        },
+    // File attachments are reasoning context only. They never enter deterministic
+    // action/routine/director routing, so untrusted file content cannot trigger actions.
+    let routed = if !drop_ids.is_empty() {
+        RouteResult::NoMatch
+    } else {
+        let base_route = route_command(&text, &policy);
+        let routine_route = route_user_routine(&app, &text, &policy);
+        let director_route = route_director_preset(&app, &text, &policy);
+
+        match routine_route {
+            Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
+            _ => match director_route {
+                Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+                _ => base_route,
+            },
+        }
     };
 
     match routed {
@@ -2071,6 +2581,17 @@ fn process_user_command(
             } else {
                 action.decision
             };
+
+            if source == "voice"
+                && decision == PermissionDecision::Allow
+                && matches!(&action.intent, ActionIntent::ClipboardRead)
+            {
+                state
+                    .private_voice_command_ids
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(id.clone());
+            }
 
             match decision {
             PermissionDecision::Allow => {
@@ -2189,6 +2710,73 @@ fn process_user_command(
                                         CoreError {
                                             id: Some(worker_id),
                                             code: "computer.window_switch_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::SetAppWindowState { target, action } => {
+                            let display_name = target.display_name();
+                            let gerund = action.gerund();
+                            let completed = action.completed_verb();
+
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("{} {}…", gerund, display_name),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match set_app_window_state(target, action) {
+                                Ok(window) => {
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id,
+                                            kind: "command.completed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: format!(
+                                                "{} {} — {}.",
+                                                completed,
+                                                display_name,
+                                                window.title
+                                            ),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                }
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not {} {}: {}",
+                                        action.verb(),
+                                        display_name,
+                                        error
+                                    );
+
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.window_state_failed",
                                             message,
                                         },
                                     );
@@ -3037,7 +3625,7 @@ fn process_user_command(
                             }
                         }
                         ActionIntent::RecentFiles => {
-                            match summarize_recent_files(8) {
+                            match summarize_windows_recent_files(8) {
                                 Ok(summary) => {
                                     emit_core_event(
                                         &worker_app,
@@ -3072,6 +3660,564 @@ fn process_user_command(
                                         CoreError {
                                             id: Some(worker_id),
                                             code: "context.recent_files_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::TerminalSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_terminal_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Windows Terminal skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.terminal_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::CalculatorSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_calculator_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Calculator skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.calculator_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::NotepadSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_notepad_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Notepad skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.notepad_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::OpenPersonalFolder(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Opening {} in File Explorer…",
+                                        skill.display_name()
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_personal_folder_skill(&worker_app, skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("File Explorer skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.folder_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::BrowserSkill(skill) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Running {}…", skill.summary()),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match execute_browser_skill(skill) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Browser skill failed: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.browser_skill_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::RevealPersonalPath(path) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Revealing the selected path in File Explorer…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match reveal_personal_path(&worker_app, &path) {
+                                Ok(message) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not reveal that path: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.file_reveal_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::FindRecentPersonalFiles(request) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Finding recent {} in {}…",
+                                        request.category.display_name(),
+                                        request.root.display_name()
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match recent_personal_files(&worker_app, &request) {
+                                Ok(snapshot) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_recent_file_search(&snapshot, &request),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not find recent files: {error}"
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.recent_file_search_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::FindPersonalFiles(query) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Searching personal folders for “{}”…",
+                                        query
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match search_personal_files(&worker_app, &query) {
+                                Ok(snapshot) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_file_search(&snapshot),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!(
+                                        "Could not search personal files: {error}"
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.file_search_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    ActionIntent::ClipboardRead => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Reading clipboard text locally…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match read_clipboard_text() {
+                                Ok(text) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summarize_clipboard_text(&text),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not read clipboard text: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_read_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ClipboardWrite(text) => {
+                            let character_count = text.chars().count();
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!(
+                                        "Copying {character_count} characters to the clipboard…"
+                                    ),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match write_clipboard_text(&text) {
+                                Ok(written) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: format!(
+                                            "Copied {written} characters to the clipboard."
+                                        ),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not write clipboard text: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_write_failed",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::ClipboardClear => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: "Clearing the Windows clipboard…".to_string(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match clear_clipboard() {
+                                Ok(()) => emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: "Clipboard cleared.".to_string(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                ),
+                                Err(error) => {
+                                    let message = format!("Could not clear the clipboard: {error}");
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "computer.clipboard_clear_failed",
                                             message,
                                         },
                                     );
@@ -3990,6 +5136,11 @@ fn process_user_command(
                         "Switching to {} requires confirmation under the current permission policy.",
                         target.display_name()
                     ),
+                    ActionIntent::SetAppWindowState { target, action } => format!(
+                        "{} {} requires confirmation under the current permission policy.",
+                        action.gerund(),
+                        target.display_name()
+                    ),
                     ActionIntent::ListWindows => {
                         "Reading visible windows requires confirmation under the current permission policy."
                             .to_string()
@@ -4028,6 +5179,57 @@ fn process_user_command(
                     }
                     ActionIntent::RecentFiles => {
                         "Reading Windows Recent Items requires confirmation under the current permission policy."
+                            .to_string()
+                    }
+                    ActionIntent::RevealPersonalPath(_) => {
+                        "Showing a personal file or folder in File Explorer requires confirmation under the current Act policy."
+                            .to_string()
+                    }
+                    ActionIntent::FindRecentPersonalFiles(request) => format!(
+                        "Reading filesystem metadata to find recent {} in {} requires confirmation under the current Read policy.",
+                        request.category.display_name(),
+                        request.root.display_name()
+                    ),
+                    ActionIntent::FindPersonalFiles(query) => format!(
+                        "Searching file and folder names for “{}” in your personal Windows folders requires confirmation under the current Read policy.",
+                        query
+                    ),
+                    ActionIntent::BrowserSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
+                    ),
+                    ActionIntent::OpenPersonalFolder(skill) => format!(
+                        "Opening {} in File Explorer requires confirmation under the current Act policy.",
+                        skill.display_name()
+                    ),
+                    ActionIntent::TerminalSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
+                    ),
+                    ActionIntent::CalculatorSkill(skill) => format!(
+                        "Running {} requires confirmation under the current Act policy.",
+                        skill.summary()
+                    ),
+                    ActionIntent::NotepadSkill(skill) => match skill.action.permission() {
+                        PermissionClass::Modify => format!(
+                            "{} can change the active Notepad document state and requires confirmation.",
+                            skill.summary()
+                        ),
+                        _ => format!(
+                            "Running {} requires confirmation under the current Act policy.",
+                            skill.summary()
+                        ),
+                    },
+                    ActionIntent::ClipboardRead => {
+                        "The clipboard can contain passwords, tokens or private text. Confirm before AURA reads it."
+                            .to_string()
+                    }
+                    ActionIntent::ClipboardWrite(value) => format!(
+                        "Copying {} characters to the Windows clipboard requires confirmation.",
+                        value.chars().count()
+                    ),
+                    ActionIntent::ClipboardClear => {
+                        "Clearing the Windows clipboard is destructive and requires confirmation."
                             .to_string()
                     }
                     ActionIntent::UserRoutine(routine_id) => format!(
@@ -4205,6 +5407,19 @@ fn process_user_command(
             }
             }
         }
+        RouteResult::InvalidAppSkill(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!("App Skill rejected: {}", message),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+        }
         RouteResult::InvalidKeyboard(message) => {
             emit_core_event(
                 &app,
@@ -4244,6 +5459,27 @@ fn process_user_command(
                 },
             );
         }
+        RouteResult::InternalError(message) => {
+            emit_core_event(
+                &app,
+                CoreEvent {
+                    id: id.clone(),
+                    kind: "command.failed",
+                    status: AuraRuntimeStatus::Idle,
+                    message: format!(
+                        "AURA safely stopped an inconsistent internal command route: {}",
+                        message
+                    ),
+                    command: Some(text.clone()),
+                    timestamp_ms: unix_timestamp_ms(),
+                },
+            );
+            emit_lifecycle_event(
+                &app,
+                "core.route_guard",
+                "AURA blocked an inconsistent internal command route instead of executing it.",
+            );
+        }
         RouteResult::UnsupportedApp(target) => {
             emit_core_event(
                 &app,
@@ -4261,7 +5497,13 @@ fn process_user_command(
             );
         }
         RouteResult::NoMatch => {
-            if let Some(target) = vision_query_target(&text) {
+            let vision_target = if drop_ids.is_empty() {
+                vision_query_target(&text)
+            } else {
+                None
+            };
+
+            if let Some(target) = vision_target {
                 let read_decision = state
                     .permission_policy
                     .lock()
@@ -4348,15 +5590,26 @@ fn process_user_command(
                 let worker_app = app.clone();
                 let worker_id = id.clone();
                 let worker_text = text.clone();
+                let worker_drop_ids = drop_ids.clone();
     
                 thread::spawn(move || {
+                    let attachment_count = worker_drop_ids.len();
+                    let processing_message = if attachment_count > 0 {
+                        format!(
+                            "Analyzing {attachment_count} attached local file{} with the selected local model…",
+                            if attachment_count == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        "Thinking with the selected local model…".to_string()
+                    };
+
                     emit_core_event(
                         &worker_app,
                         CoreEvent {
                             id: worker_id.clone(),
                             kind: "command.processing",
                             status: AuraRuntimeStatus::Working,
-                            message: "Thinking with the selected local model…".to_string(),
+                            message: processing_message,
                             command: Some(worker_text.clone()),
                             timestamp_ms: unix_timestamp_ms(),
                         },
@@ -4364,59 +5617,93 @@ fn process_user_command(
     
                     let manager = worker_app.state::<ModelManager>();
                     let runtime = worker_app.state::<ModelRuntime>();
-                    let desktop_context = {
+                    let desktop_context = (|| -> Result<Option<String>, String> {
                         let awareness = worker_app.state::<CurrentAppAwareness>();
                         let foreground = awareness.snapshot().ok();
                         let recent = recent_files_snapshot(5).ok();
                         let project = summarize_active_project(&worker_app).ok().flatten();
-    
-                        if foreground.is_none() && recent.is_none() && project.is_none() {
-                            None
-                        } else {
-                            let mut summary = String::new();
-    
-                            if let Some(context) = foreground {
-                                summary.push_str(&format!(
-                                    "Current app: {}\nProcess: {}",
-                                    context.app_name, context.process_name
-                                ));
-    
-                                if let Some(title) = context.window_title.as_deref() {
-                                    summary.push_str(&format!("\nActive window title: {title}"));
-                                }
-    
-                                if context.context_source == "lastExternal" {
-                                    summary.push_str(
-                                        "\nContext source: last external window before AURA took focus",
-                                    );
-                                } else {
-                                    summary.push_str("\nContext source: foreground");
-                                }
+                        let drop_context = {
+                            let drops = worker_app.state::<DropIntakeState>();
+                            build_drop_model_context(&drops, &worker_drop_ids)?
+                        };
+
+                        let mut summary = String::new();
+
+                        if let Some(context) = foreground {
+                            summary.push_str(&format!(
+                                "Current app: {}\nProcess: {}",
+                                context.app_name, context.process_name
+                            ));
+
+                            if let Some(title) = context.window_title.as_deref() {
+                                summary.push_str(&format!("\nActive window title: {title}"));
                             }
-    
-                            if let Some(snapshot) = recent {
-                                if !snapshot.items.is_empty() {
-                                    if !summary.is_empty() {
-                                        summary.push_str("\n");
-                                    }
-                                    let names = snapshot
-                                        .items
-                                        .iter()
-                                        .map(|item| item.name.as_str())
-                                        .collect::<Vec<_>>()
-                                        .join(" · ");
-                                    summary.push_str(&format!("Recent files: {names}"));
-                                }
+
+                            if context.context_source == "lastExternal" {
+                                summary.push_str(
+                                    "\nContext source: last external window before AURA took focus",
+                                );
+                            } else {
+                                summary.push_str("\nContext source: foreground");
                             }
-    
-                            if let Some(project) = project {
+                        }
+
+                        if let Some(snapshot) = recent {
+                            if !snapshot.items.is_empty() {
                                 if !summary.is_empty() {
                                     summary.push_str("\n");
                                 }
-                                summary.push_str(&project);
+                                let names = snapshot
+                                    .items
+                                    .iter()
+                                    .map(|item| item.name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" · ");
+                                summary.push_str(&format!("Recent files: {names}"));
                             }
-    
-                            (!summary.is_empty()).then_some(summary)
+                        }
+
+                        if let Some(project) = project {
+                            if !summary.is_empty() {
+                                summary.push_str("\n");
+                            }
+                            summary.push_str(&project);
+                        }
+
+                        if let Some(drop_context) = drop_context {
+                            if !summary.is_empty() {
+                                summary.push_str("\n\n");
+                            }
+                            summary.push_str(&drop_context);
+                        }
+
+                        Ok((!summary.is_empty()).then_some(summary))
+                    })();
+
+                    let desktop_context = match desktop_context {
+                        Ok(context) => context,
+                        Err(error) => {
+                            let message = format!("Dropped-file context unavailable: {error}");
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.failed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: message.clone(),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+                            emit_core_error(
+                                &worker_app,
+                                CoreError {
+                                    id: Some(worker_id),
+                                    code: "drop.context_failed",
+                                    message,
+                                },
+                            );
+                            return;
                         }
                     };
     
@@ -4632,11 +5919,17 @@ fn get_managed_runtime_status(
 fn install_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.start_install(app, false)
 }
 
@@ -4644,11 +5937,17 @@ fn install_managed_runtime(
 fn repair_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.start_install(app, true)
 }
 
@@ -4656,11 +5955,17 @@ fn repair_managed_runtime(
 fn remove_managed_runtime(
     app: AppHandle,
     runtime: State<'_, ModelRuntime>,
+    speech: State<'_, SpeechRuntime>,
+    tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
     setup: State<'_, ManagedRuntimeSetup>,
 ) -> Result<ManagedRuntimeStatus, String> {
     runtime.stop();
+    speech.stop();
+    tts.stop();
     vision.stop();
+    image.stop();
     setup.remove(&app)
 }
 
@@ -4744,6 +6049,7 @@ fn remove_model(
     speech: State<'_, SpeechRuntime>,
     tts: State<'_, TtsRuntime>,
     vision: State<'_, VisionRuntime>,
+    image: State<'_, ImageRuntime>,
 ) -> Result<ModelCatalog, String> {
     if model_id == "voice-whisper-base" {
         speech.stop();
@@ -4756,6 +6062,9 @@ fn remove_model(
     }
     if model_id == "vision-smolvlm2-500m" {
         vision.stop();
+    }
+    if model_id == "create-tiny-sd" {
+        image.stop();
     }
     let catalog = manager.remove_model(&app, &model_id)?;
     runtime.stop();
@@ -4819,6 +6128,32 @@ fn test_tts_voice(
         .tts_voice_id
         .clone();
     runtime.speak(&app, &manager, phrase, speed, &voice_id)
+}
+
+#[tauri::command]
+fn get_create_image_runtime_status(
+    runtime: State<'_, ImageRuntime>,
+) -> ImageRuntimeStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+async fn generate_create_image(
+    app: AppHandle,
+    request: ImageGenerationRequest,
+) -> Result<ImageGenerationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RuntimeState>();
+        if runtime_snapshot(&state).paused {
+            return Err("AURA is paused. Resume it before generating an image.".to_string());
+        }
+
+        let runtime = app.state::<ImageRuntime>();
+        let manager = app.state::<ModelManager>();
+        runtime.generate(&app, &manager, request)
+    })
+    .await
+    .map_err(|error| format!("AURA Create worker task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -5016,10 +6351,125 @@ fn stop_audio_input_test(
 }
 
 #[tauri::command]
+fn ingest_dropped_files(
+    paths: Vec<String>,
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.ingest(paths)
+}
+
+#[tauri::command]
+fn get_drop_intake(
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.snapshot()
+}
+
+#[tauri::command]
+fn clear_drop_intake(
+    drops: State<'_, DropIntakeState>,
+) -> DropIntakeSnapshot {
+    drops.clear()
+}
+
+#[tauri::command]
+fn reveal_dropped_file(
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<String, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Act)
+        == PermissionDecision::Never
+    {
+        return Err("Reveal in Explorer is blocked by AURA's Act permission policy.".to_string());
+    }
+
+    // This command is only exposed through an explicit dropped-file UI action.
+    // If Act=Ask, the click itself is the one-shot confirmation.
+    reveal_drop(&drops, &drop_id)
+}
+
+#[tauri::command]
+fn inspect_dropped_file(
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<DroppedFileInspection, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Dropped-file inspection is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    // Inspection is only exposed through an explicit dropped-file UI action.
+    // If Read=Ask, the click is the one-shot confirmation for this temporary item.
+    inspect_drop(&drops, &drop_id)
+}
+
+#[tauri::command]
+fn stage_dropped_image_for_vision(
+    app: AppHandle,
+    drop_id: String,
+    runtime: State<'_, RuntimeState>,
+    drops: State<'_, DropIntakeState>,
+) -> Result<VisionCapture, String> {
+    if runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .decision_for(PermissionClass::Read)
+        == PermissionDecision::Never
+    {
+        return Err("Dropped-image analysis is blocked by AURA's Read permission policy.".to_string());
+    }
+
+    let path = drops.path_for(&drop_id)?;
+    if !is_supported_vision_image(&path) {
+        return Err("That dropped item is not a supported local Vision image.".to_string());
+    }
+
+    let capture = import_local_image(&app, &path)?;
+    let capture = store_last_vision_capture(&app, capture);
+
+    emit_vision_event(
+        &app,
+        VisionEvent {
+            phase: "captured",
+            message: "Dropped image staged locally for AURA Vision.".to_string(),
+            capture: Some(capture.clone()),
+            analysis: None,
+            timestamp_ms: unix_timestamp_ms(),
+        },
+    );
+
+    Ok(capture)
+}
+
+#[tauri::command]
 fn get_current_app_context(
     awareness: State<'_, CurrentAppAwareness>,
 ) -> Result<CurrentAppInfo, String> {
     awareness.snapshot().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_app_skill_catalog(
+    awareness: State<'_, CurrentAppAwareness>,
+) -> AppSkillCatalog {
+    let context = awareness
+        .snapshot()
+        .ok()
+        .and_then(|current| AppTarget::from_process_image(&current.process_name));
+
+    app_skill_catalog(context)
 }
 
 #[tauri::command]
@@ -5290,11 +6740,13 @@ async fn stop_obs_streaming(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .manage(RuntimeState::default())
+        .manage(BetaSessionRuntime::default())
         .manage(AgentEngine::default())
         .manage(AutomationScheduler::default())
         .manage(VisionSession::default())
+        .manage(DropIntakeState::default())
         .manage(AudioInputManager::default())
         .manage(CurrentAppAwareness::default())
         .manage(ManagedRuntimeSetup::default())
@@ -5303,6 +6755,7 @@ pub fn run() {
         .manage(SpeechRuntime::default())
         .manage(TtsRuntime::default())
         .manage(VisionRuntime::default())
+        .manage(ImageRuntime::default())
         .manage(ObsController::default())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -5588,6 +7041,13 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let beta_runtime = app.state::<BetaSessionRuntime>();
+            let beta_recovery_mode =
+                begin_beta_session(app.handle(), &beta_runtime).unwrap_or(true);
+            let crash_loop_guard_active = beta_status(app.handle(), &beta_runtime)
+                .map(|status| status.crash_loop_guard_active)
+                .unwrap_or(true);
+
             let preferences = load_preferences(app.handle());
             let voice_preferences = load_voice_preferences(app.handle());
             let permission_policy = load_permission_policy(app.handle());
@@ -5619,12 +7079,42 @@ pub fn run() {
                     voice_preferences.clone();
             }
 
+            let startup_health_degraded = beta_local_health_checks(app.handle())
+                .iter()
+                .any(|check| check.status == "failed");
+            let beta_safe_mode = beta_recovery_mode || startup_health_degraded;
+
             let _ = recover_interrupted_runs(app.handle());
             app.state::<AutomationScheduler>()
                 .set_permission_policy(permission_policy);
-            app.state::<AutomationScheduler>().set_paused(false);
+
+            set_paused_state(app.handle(), beta_safe_mode);
             app.state::<AutomationScheduler>()
                 .start(app.handle().clone());
+
+            if beta_recovery_mode {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.recovery_safe_mode",
+                    "AURA recovered from an unclean session and started paused. Review the previous session, then resume AURA when ready.",
+                );
+            }
+
+            if startup_health_degraded {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.health_safe_mode",
+                    "AURA detected a local startup health failure and started paused before Agents or Automations could run. Review Beta & Diagnostics before resuming.",
+                );
+            }
+
+            if crash_loop_guard_active {
+                emit_lifecycle_event(
+                    app.handle(),
+                    "beta.crash_loop_guard",
+                    "AURA detected repeated unclean sessions. Background startup is suppressed and AURA remains paused until the recovery state is reviewed.",
+                );
+            }
 
             if voice_preferences.wake_word_enabled {
                 let generation = app
@@ -5634,7 +7124,8 @@ pub fn run() {
                 spawn_wake_monitor(app.handle().clone(), generation);
             }
 
-            let launched_in_background = std::env::args().any(|arg| arg == "--background");
+            let launched_in_background = std::env::args().any(|arg| arg == "--background")
+                && !crash_loop_guard_active;
 
             let shortcut = Shortcut::new(
                 Some(Modifiers::CONTROL | Modifiers::SHIFT),
@@ -5657,7 +7148,7 @@ pub fn run() {
             let open_item =
                 MenuItem::with_id(app, "open", "Open AURA", true, None::<&str>)?;
             let pause_item =
-                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, false, None::<&str>)?;
+                CheckMenuItem::with_id(app, "pause", "Pause AURA", true, beta_safe_mode, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item =
@@ -5680,18 +7171,36 @@ pub fn run() {
                     "pause" => {
                         let current = app.state::<RuntimeState>();
                         let next = !runtime_snapshot(&current).paused;
-                        let snapshot = set_paused_state(app, next);
-                        let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                        let beta = app.state::<BetaSessionRuntime>();
+
+                        match set_paused_state_guarded(app, &beta, next, false) {
+                            Ok(snapshot) => {
+                                let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                            }
+                            Err(message) => {
+                                let snapshot = runtime_snapshot(&current);
+                                let _ = pause_item_for_menu.set_checked(snapshot.paused);
+                                show_main_window(app);
+                                let _ = app.emit("aura:open-settings", "beta");
+                                emit_lifecycle_event(
+                                    app,
+                                    "beta.recovery_resume_blocked",
+                                    &message,
+                                );
+                            }
+                        }
                     }
                     "settings" => {
                         show_main_window(app);
-                        let _ = app.emit("aura:open-settings", ());
+                        let _ = app.emit("aura:open-settings", "general");
                     }
                     "quit" => {
+                        let _ = mark_beta_session_clean(app);
                         app.state::<ModelRuntime>().stop();
                         app.state::<SpeechRuntime>().stop();
                         app.state::<TtsRuntime>().stop();
                         app.state::<VisionRuntime>().stop();
+                        app.state::<ImageRuntime>().stop();
                         app.exit(0);
                     },
                     _ => {}
@@ -5726,10 +7235,12 @@ pub fn run() {
                                 "AURA is running in the background. Use the tray or shortcut to return.",
                             );
                         } else {
+                            let _ = mark_beta_session_clean(&app_for_close);
                             app_for_close.state::<ModelRuntime>().stop();
                             app_for_close.state::<SpeechRuntime>().stop();
                             app_for_close.state::<TtsRuntime>().stop();
                             app_for_close.state::<VisionRuntime>().stop();
+                            app_for_close.state::<ImageRuntime>().stop();
                             app_for_close.exit(0);
                         }
                     }
@@ -5760,6 +7271,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
+            get_beta_status,
+            set_beta_preferences,
+            repair_beta_recovery_state,
+            get_beta_test_session,
+            start_beta_test_session,
+            set_beta_test_check,
+            reset_beta_test_session,
+            get_beta_diagnostics,
+            export_beta_diagnostics,
+            export_beta_test_report,
             get_runtime_state,
             get_voice_preferences,
             set_voice_preferences,
@@ -5802,6 +7323,8 @@ pub fn run() {
             prepare_tts_runtime,
             test_tts_voice,
             stop_tts_speaking,
+            get_create_image_runtime_status,
+            generate_create_image,
             get_vision_runtime_status,
             get_vision_history,
             set_vision_preferences,
@@ -5812,11 +7335,18 @@ pub fn run() {
             capture_vision_active_window,
             capture_vision_region,
             analyze_last_vision_capture,
+            ingest_dropped_files,
+            get_drop_intake,
+            clear_drop_intake,
+            reveal_dropped_file,
+            inspect_dropped_file,
+            stage_dropped_image_for_vision,
             get_audio_input_state,
             select_audio_input_device,
             start_audio_input_test,
             stop_audio_input_test,
             get_current_app_context,
+            get_app_skill_catalog,
             get_recent_files_context,
             get_project_memory,
             save_project_memory,
@@ -5856,6 +7386,9 @@ pub fn run() {
             start_obs_streaming,
             stop_obs_streaming
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AURA-2");
+        .run(tauri::generate_context!());
+
+    if let Err(error) = result {
+        eprintln!("AURA-2 runtime exited with a fatal Tauri error: {error}");
+    }
 }
