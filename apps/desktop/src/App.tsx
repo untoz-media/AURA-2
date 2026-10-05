@@ -98,6 +98,7 @@ function App() {
     submitCommand,
     refreshBetaStatus,
     updateBetaPreferences,
+    repairBetaRecoveryStateControl,
     refreshBetaTestSession,
     startBetaTestSessionControl,
     setBetaTestCheckControl,
@@ -987,6 +988,7 @@ function App() {
               betaDiagnostics={betaDiagnostics}
               betaTestSession={betaTestSession}
               onBetaRefresh={refreshBetaStatus}
+              onBetaRecoveryRepair={repairBetaRecoveryStateControl}
               onBetaTestRefresh={refreshBetaTestSession}
               onBetaTestStart={startBetaTestSessionControl}
               onBetaTestCheckChange={setBetaTestCheckControl}
