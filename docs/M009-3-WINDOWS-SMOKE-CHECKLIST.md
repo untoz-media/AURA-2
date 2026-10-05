@@ -15,6 +15,8 @@ Record the installer SHA-256 and source commit from `AURA-2-Beta-Build.json` bef
 - [ ] Confirm AURA-2 appears in the Start Menu under Untoz.
 - [ ] Confirm the installed version is `0.9.0-beta.1`.
 - [ ] Confirm launching from Start Menu opens the main window.
+- [ ] On a `beta-local-smoke` build, confirm Chat shows **AURA-2 LOCAL TEST BUILD** with the exact app version and source commit.
+- [ ] On the final Alpha v1 pipeline build, confirm Chat shows **AURA-2 TESTING PREVIEW** and **Build details** opens Beta & Diagnostics.
 - [ ] Confirm the first-run Public Beta onboarding appears.
 - [ ] Confirm onboarding states local-first behavior, explicit model installation, permission boundaries and zero automatic telemetry/crash uploads.
 
