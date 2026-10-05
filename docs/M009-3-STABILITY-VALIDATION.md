@@ -148,3 +148,36 @@ M009.3 remains pending until both of these are true:
 2. the hosted Windows CI can execute real steps and pass again.
 
 A runner failure before step 1 is infrastructure failure and does not count as successful validation.
+
+## Windows Build Doctor
+
+Before attempting a local NSIS build, run:
+
+```powershell
+npm run beta:doctor:windows
+```
+
+The doctor performs a fail-fast prerequisite pass for:
+
+- PowerShell
+- Git
+- Node.js 22+
+- npm
+- Rust `x86_64-pc-windows-msvc`
+- Visual Studio 2022 C++ Build Tools
+- MSVC `cl.exe` / `link.exe`
+- Windows 10/11 SDK x64 libraries
+- Python used by source validation
+- minimum build disk space
+- WebView2 presence as a non-blocking runtime warning
+
+When invoked by `npm run beta:build:windows`, the doctor also loads `VsDevCmd.bat` into the build process when available so an installed MSVC toolchain does not have to be manually exposed in the user's normal PowerShell PATH.
+
+Local Beta builds now embed traceable build provenance:
+
+- exact Git commit
+- `local-beta-build` source
+- `beta-local-smoke` label
+
+The local build manifest uses schema v2 and artifact verification rejects an untraceable source commit.
+
