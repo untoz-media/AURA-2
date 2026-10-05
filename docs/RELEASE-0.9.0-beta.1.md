@@ -26,7 +26,7 @@ with new Beta-readiness work.
 - permission review entry point
 - local previous-session recovery detection
 - local diagnostics snapshot/export
-- diagnostics schema v2 with structured subsystem health checks
+- diagnostics schema v3 with build provenance and structured subsystem health checks
 - automatic startup health report with degraded-state Chat warning
 - crash recovery safe mode that starts AURA paused after an unclean session
 - atomic Beta/session state persistence
@@ -132,3 +132,24 @@ The Beta & Diagnostics workspace now includes a structured local test pass for t
 - **Export report** writes a size-bounded JSON bundle containing the checklist plus the existing privacy-validated diagnostics snapshot
 - nothing is uploaded automatically
 
+## Panic-free Core hardening
+
+A source-level gate now blocks panic-prone constructs from the production Rust surface.
+
+- Action Router invariants fail closed through `RouteResult::InternalError`
+- parser mismatches no longer call `expect()` or `unreachable!()`
+- browser Skill Registry no longer assumes an impossible target with `unreachable!()`
+- clipboard global-memory ownership returns a controlled error instead of `expect()`
+- fatal Tauri runtime errors are handled explicitly instead of panicking
+- `npm run beta:validate` includes the production panic-surface scan
+
+## Recovery State repair
+
+Recovery Safe Mode now has an explicit repair path for a damaged/stuck Beta session marker.
+
+- tray Resume uses the same fail-closed recovery guard as the desktop UI
+- blocked tray Resume opens Beta & Diagnostics directly
+- **Repair recovery state** preserves the old marker as a timestamped local backup
+- only recovery metadata/streak is reset
+- the runtime remains paused after repair
+- user Memories, models, projects, Agents and Automations are left untouched
