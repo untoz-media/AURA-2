@@ -392,6 +392,7 @@ pub fn local_health_checks(app: &AppHandle) -> Vec<DiagnosticCheck> {
         ),
         session_marker_health_check(app),
         beta_preferences_health_check(app),
+        beta_test_session_health_check(app),
         recovery_streak_health_check(app),
     ]
 }
@@ -520,6 +521,46 @@ fn beta_preferences_health_check(app: &AppHandle) -> DiagnosticCheck {
     }
 }
 
+
+fn beta_test_session_health_check(app: &AppHandle) -> DiagnosticCheck {
+    let path = match test_session_path(app) {
+        Ok(path) => path,
+        Err(_) => {
+            return DiagnosticCheck::failed(
+                "beta-test-session",
+                "Beta Test Session",
+                "AURA could not resolve the local Beta Test Session store.",
+            );
+        }
+    };
+
+    if !path.exists() {
+        return DiagnosticCheck::passed(
+            "beta-test-session",
+            "Beta Test Session",
+            "No Beta Test Session has been started yet.",
+        );
+    }
+
+    match fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<BetaTestSession>(&content).ok())
+        .map(normalize_test_session)
+    {
+        Some(session) if session.checks.len() == BETA_TEST_AREAS.len() => {
+            DiagnosticCheck::passed(
+                "beta-test-session",
+                "Beta Test Session",
+                "The local testing checklist is readable and uses only fixed privacy-safe areas.",
+            )
+        }
+        _ => DiagnosticCheck::failed(
+            "beta-test-session",
+            "Beta Test Session",
+            "The local testing checklist is corrupt or invalid.",
+        ),
+    }
+}
 
 fn recovery_streak_health_check(app: &AppHandle) -> DiagnosticCheck {
     let path = match session_path(app) {
