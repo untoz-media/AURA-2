@@ -41,8 +41,11 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Install JavaScript dependencies
-        run: npm install
+      - name: Resolve npm dependency lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact npm dependencies
+        run: npm ci
 
       - name: Validate Public Beta source
         run: npm run beta:validate
