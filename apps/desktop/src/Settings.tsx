@@ -29,6 +29,7 @@ import type {
   TtsRuntimeStatus,
   VoicePreferences,
   BetaStatus,
+  BetaTestSession,
   DiagnosticsSnapshot,
   SetBetaPreferencesRequest,
 } from "./bridge/types";
@@ -136,7 +137,16 @@ type Props = {
   onAudioTestStop: () => Promise<AudioInputSnapshot>;
   betaStatus: BetaStatus;
   betaDiagnostics: DiagnosticsSnapshot | null;
+  betaTestSession: BetaTestSession;
   onBetaRefresh: () => Promise<BetaStatus>;
+  onBetaTestRefresh: () => Promise<BetaTestSession>;
+  onBetaTestStart: () => Promise<BetaTestSession>;
+  onBetaTestCheckChange: (
+    checkId: string,
+    completed: boolean,
+  ) => Promise<BetaTestSession>;
+  onBetaTestReset: () => Promise<BetaTestSession>;
+  onBetaTestReportExport: () => Promise<string>;
   onBetaPreferencesChange: (
     request: SetBetaPreferencesRequest,
   ) => Promise<BetaStatus>;
@@ -313,7 +323,13 @@ export default function Settings({
   onAudioTestStop,
   betaStatus,
   betaDiagnostics,
+  betaTestSession,
   onBetaRefresh,
+  onBetaTestRefresh,
+  onBetaTestStart,
+  onBetaTestCheckChange,
+  onBetaTestReset,
+  onBetaTestReportExport,
   onBetaPreferencesChange,
   onBetaDiagnosticsRefresh,
   onBetaDiagnosticsExport,
@@ -340,6 +356,7 @@ export default function Settings({
   );
   const [betaBusy, setBetaBusy] = useState<string | null>(null);
   const [betaExportPath, setBetaExportPath] = useState<string | null>(null);
+  const [betaTestExportPath, setBetaTestExportPath] = useState<string | null>(null);
   const betaPrivacyInvariant =
     !betaStatus.telemetryEnabled &&
     !betaStatus.automaticCrashUploads &&
@@ -389,6 +406,14 @@ export default function Settings({
     betaCoreTestingReady === true &&
     betaPlatformCompatible === true &&
     betaBuildTraceable === true;
+  const betaTestCompleted = betaTestSession.checks.filter(
+    (check) => check.completed,
+  ).length;
+  const betaTestTotal = betaTestSession.checks.length;
+  const betaTestComplete =
+    betaTestSession.active &&
+    betaTestTotal > 0 &&
+    betaTestCompleted === betaTestTotal;
   const betaSafeResumeRequired =
     runtimeState.paused &&
     (betaStatus.crashLoopGuardActive ||
@@ -1842,6 +1867,129 @@ export default function Settings({
                 This readiness panel does not replace the real Windows NSIS install/uninstall
                 smoke checklist required before publishing the download.
               </p>
+            </Surface>
+
+            <Surface className="settings-card">
+              <SectionLabel
+                trailing={
+                  <Badge
+                    tone={
+                      betaTestComplete
+                        ? "ready"
+                        : betaTestSession.active
+                          ? "warning"
+                          : "planned"
+                    }
+                  >
+                    {betaTestComplete
+                      ? "Complete"
+                      : betaTestSession.active
+                        ? betaTestCompleted + "/" + betaTestTotal
+                        : "Not started"}
+                  </Badge>
+                }
+              >
+                Beta Test Session
+              </SectionLabel>
+              <p className="settings-helper">
+                Run the first real AURA test pass with a fixed local checklist.
+                This stores only completion state and timestamps — no prompts,
+                file paths, screenshots or free-text notes.
+              </p>
+
+              {!betaTestSession.active ? (
+                <SettingRow
+                  title="Start test session"
+                  description="Creates a fresh local checklist for this testing pass."
+                  trailing={
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-start");
+                        setBetaTestExportPath(null);
+                        void onBetaTestStart().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "test-start" ? "Starting…" : "Start"}
+                    </button>
+                  }
+                />
+              ) : (
+                <>
+                  <div className="beta-test-list">
+                    {betaTestSession.checks.map((check) => (
+                      <label className="beta-test-item" key={check.id}>
+                        <input
+                          type="checkbox"
+                          checked={check.completed}
+                          disabled={betaBusy !== null}
+                          onChange={(event) => {
+                            setBetaBusy("test-" + check.id);
+                            void onBetaTestCheckChange(
+                              check.id,
+                              event.target.checked,
+                            ).finally(() => setBetaBusy(null));
+                          }}
+                        />
+                        <span>{check.label}</span>
+                        <Badge tone={check.completed ? "ready" : "planned"}>
+                          {check.completed ? "Passed" : "Pending"}
+                        </Badge>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="beta-test-actions">
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-refresh");
+                        void onBetaTestRefresh().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        setBetaBusy("test-export");
+                        setBetaTestExportPath(null);
+                        void onBetaTestReportExport()
+                          .then((path) => setBetaTestExportPath(path))
+                          .catch(() => setBetaTestExportPath(null))
+                          .finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      {betaBusy === "test-export" ? "Exporting…" : "Export report"}
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-action-button"
+                      disabled={betaBusy !== null}
+                      onClick={() => {
+                        if (!window.confirm("Reset the local Beta Test Session checklist?")) {
+                          return;
+                        }
+                        setBetaBusy("test-reset");
+                        setBetaTestExportPath(null);
+                        void onBetaTestReset().finally(() => setBetaBusy(null));
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  {betaTestExportPath && (
+                    <p className="beta-diagnostics-path">
+                      Test report saved locally to: {betaTestExportPath}
+                    </p>
+                  )}
+                </>
+              )}
             </Surface>
 
             <Surface className="settings-card">
