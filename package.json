@@ -5,6 +5,10 @@
   "workspaces": [
     "apps/desktop"
   ],
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
+  },
   "scripts": {
     "dev": "npm --workspace @untoz/aura-desktop run tauri:dev",
     "build": "npm --workspace @untoz/aura-desktop run tauri:build",

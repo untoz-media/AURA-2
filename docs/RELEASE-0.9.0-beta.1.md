@@ -96,6 +96,10 @@ These capabilities are implemented in the desktop app. They still need a real Wi
 
 `package-lock.json` is a real npm lockfile (lockfileVersion 3) produced by `npm install`. Windows builds should use that lock instead of generating a floating one at release time. `Cargo.lock` for the desktop crate is committed from the same resolution so the Rust graph is reproducible too.
 
+Node 24 refuses to start `npm.cmd` from `spawnSync` when `shell` is false. `scripts/validate-beta.mjs` launches that shim through `cmd.exe /d /s /c` with the fixed argument list. `cargo.exe`, `node.exe`, and the PowerShell `npm` calls in the Windows build scripts are real executables or shell commands, so they stay as they are.
+
+`package.json` `allowScripts` permits the locked `esbuild@0.28.2` postinstall and the optional macOS `fsevents@2.3.3` install script. Those are the only two packages in the lockfile with install scripts. esbuild's script checks the platform binary that npm already installs as an optional dependency. No other dependency install script is approved.
+
 ## Local validation on Linux
 
 Linux can typecheck the frontend, build the Vite bundle, format-check Rust, syntax-check the embedded Python workers, and cross-compile the Windows GNU target. It cannot execute the Windows test binary or produce the NSIS installer. Host `cargo test` / `cargo clippy` for the Linux target do not compile: `windows-threading` is empty off Windows, so `windows-future` fails before AURA tests start. The Windows GNU target is the compile check used for this candidate.

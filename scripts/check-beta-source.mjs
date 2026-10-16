@@ -117,6 +117,21 @@ requireFragments("apps/desktop/src/bridge/aura.ts", [
   "confirmed",
 ]);
 
+const validator = read("scripts/validate-beta.mjs");
+if (!validator.includes('"/d", "/s", "/c"') || !validator.includes("ComSpec")) {
+  failures.push("validate-beta.mjs must launch Windows .cmd shims through cmd.exe /d /s /c.");
+}
+if (/spawnSync\(\s*(?:npm\.cmd|["']npm\.cmd["'])/.test(validator)) {
+  failures.push("validate-beta.mjs still spawns npm.cmd directly.");
+}
+
+const rootPackage = JSON.parse(read("package.json"));
+for (const dependency of ["esbuild@0.28.2", "fsevents@2.3.3"]) {
+  if (rootPackage.allowScripts?.[dependency] !== true) {
+    failures.push(`package.json allowScripts must permit ${dependency}.`);
+  }
+}
+
 const lock = JSON.parse(read("package-lock.json"));
 if (lock.lockfileVersion < 3) {
   failures.push("package-lock.json must be an npm lockfileVersion 3 lock.");

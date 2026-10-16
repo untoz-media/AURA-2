@@ -5,11 +5,39 @@ const isWindows = process.platform === "win32";
 const npm = isWindows ? "npm.cmd" : "npm";
 const cargo = isWindows ? "cargo.exe" : "cargo";
 
+function quoteCmdArgument(value) {
+  const text = String(value);
+  if (/[\r\n\0]/.test(text)) {
+    throw new Error("Refusing to pass a newline or NUL to cmd.exe.");
+  }
+  if (text.length === 0 || /[\s"&|<>^%]/.test(text)) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+  return text;
+}
+
+function spawnChecked(command, args, options) {
+  // Node 24 refuses to spawn .cmd/.bat directly when shell is false (EINVAL).
+  // Fixed arguments only; nothing here comes from user input.
+  if (isWindows && /\.(cmd|bat)$/i.test(command)) {
+    const comspec = process.env.ComSpec || "cmd.exe";
+    const line = [command, ...args].map(quoteCmdArgument).join(" ");
+    return spawnSync(comspec, ["/d", "/s", "/c", line], {
+      ...options,
+      shell: false,
+    });
+  }
+
+  return spawnSync(command, args, {
+    ...options,
+    shell: false,
+  });
+}
+
 function run(label, command, args) {
   console.log(`\n==> ${label}`);
-  const result = spawnSync(command, args, {
+  const result = spawnChecked(command, args, {
     stdio: "inherit",
-    shell: false,
   });
 
   if (result.error) {
@@ -75,9 +103,8 @@ function runPythonCompile() {
       : [["python3", []], ["python", []]];
 
   for (const [command, prefix] of candidates) {
-    const probe = spawnSync(command, [...prefix, "--version"], {
+    const probe = spawnChecked(command, [...prefix, "--version"], {
       stdio: "ignore",
-      shell: false,
     });
     if (!probe.error && probe.status === 0) {
       run("Python worker syntax", command, [...prefix, "-m", "py_compile", ...files]);
