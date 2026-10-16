@@ -101,7 +101,9 @@ After Drag & Drop Actions V1, the same pre-runner failure reproduced again:
 
 The runs briefly appeared queued, then completed as failures within about two seconds without receiving a runner. Drag & Drop V1 therefore has no hosted compile/test evidence yet.
 
-This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure. The remaining likely class is a GitHub-hosted runner entitlement/billing/budget/account restriction outside repository code.
+This rules out AURA build commands, third-party actions, `actions/checkout`, Node, Python, Rust and NSIS as the cause of the current startup failure.
+
+GitHub has since annotated the failure directly. Windows Build job `111957243513` on run `37367842805` reports: "The job was not started because your account is locked due to a billing issue." The job has an empty runner and zero steps, so it fails before step 1. Static Checks run `37367926466` was cancelled with the same empty-step shape. The latest scheduled Windows Build run `38674062517` (2026-10-15) failed the same way. This is an Untoz organization billing lock, not an AURA source failure. Local validation is the evidence for this candidate until the lock is cleared. Do not tag or publish from a zero-step Actions run.
 
 Before retrying, check the Untoz organization:
 
@@ -145,10 +147,10 @@ The Beta candidate also includes:
 
 M009.3 remains pending until both of these are true:
 
-1. a Windows installer candidate is actually built and smoke-tested on Windows;
+1. a Windows installer candidate is actually built and smoke-tested on Windows with `npm run beta:build:windows` and `npm run beta:verify:artifact`;
 2. the hosted Windows CI can execute real steps and pass again.
 
-A runner failure before step 1 is infrastructure failure and does not count as successful validation.
+A runner failure before step 1 is an account billing lock and does not count as successful validation. `npm run beta:release-gate` is fail-closed for that reason: local source checks can pass, and the publication step still exits 2 while M009.3, M009.6, the billing lock, and the missing Windows artifact remain.
 
 ## Windows Build Doctor
 
@@ -191,6 +193,12 @@ On 5 October 2026 both push and pull-request executions failed before the first 
 The temporary probe was removed after collecting the evidence so it does not remain as an additional permanently red PR check.
 
 Do not weaken the AURA build/release gates to compensate for this platform/account execution failure. Use the local Windows build path for M009.3 testing while hosted execution remains unavailable.
+
+## Linux cross-check limit
+
+Host `cargo test` and `cargo clippy` on Linux fail in the `windows-future` 0.3.2 dependency before any AURA test runs. `windows-threading` is compiled out off Windows, so that crate does not provide `submit`, and the Linux host cannot finish the Windows-only dependency graph.
+
+Cross-compiling for `x86_64-pc-windows-gnu` typechecks and clippy-checks the crate. Linking the test cdylib with the default MinGW linker fails with `export ordinal too large`. Passing `-Wl,--exclude-all-symbols` lets the GNU test executables link. Those executables were not run here. The supported installer toolchain remains MSVC via `npm run beta:build:windows` on Windows.
 
 ## Beta Test Session
 

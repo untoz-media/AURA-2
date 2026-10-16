@@ -75,7 +75,49 @@ Diagnostics stay local. A lightweight health report is generated automatically a
 
 This commit is a Beta Candidate, not yet the published Public Beta.
 
-Public Beta publication is gated on a successful Windows installer CI run with real build steps and a verified NSIS artifact.
+A local Windows build at `7e83a90` passed end to end: Build Doctor reported 0 blockers, `cargo test --locked` passed 239/239, the NSIS installer was produced, and `npm run beta:verify:artifact` accepted it. Installer SHA-256: `e1d35835f652f852f8163a16474798b21e95e7c8e7c979436ef6944f268a7ebf`. Authenticode status: NotSigned. Public Beta publication stays closed: this branch is not tagged or merged, and GitHub-hosted Actions still cannot run while the organization account is locked.
+
+## What 0.9.0-beta.1 actually does
+
+These capabilities are implemented in the desktop app. They still need a real Windows smoke pass before publication.
+
+- **Voice.** Push-to-talk is Ctrl+Shift+F8. Conversation mode listens for one follow-up after a spoken reply. The wake phrase is optional, local, and off by default. Pressing push-to-talk stops speech that is already playing. When the wake phrase is enabled, AURA can also interrupt its own speech: the microphone must be louder than the idle gate, the transcript must start with the phrase, and a transcript that repeats the current spoken text is treated as playback echo and ignored. That louder gate also covers a few seconds after playback. There is no acoustic echo canceller.
+- **Projects.** “Switch to project …”, “Use project …”, and “Ativa o projeto …” select a saved project by name or alias. An unknown name does not create a project.
+- **Agents.** Plans, progress, pause, resume, and cancel are local. Planning needs an installed local model. Background automations run only when that action's permission is already Allow. Ask and Never do not pop a confirmation for a scheduled run.
+- **Saved Actions.** Named actions and aliases are stored locally and can be run again.
+- **Memory.** Explicit memories can be viewed, created, edited, and deleted. They stay on disk and are not uploaded. Chat can see the foreground app, recent file names, and the active project. That metadata is not written into the memory list and does not include file contents, screenshots, or clipboard text.
+- **Vision.** Full-screen, active-window, and region capture use Windows graphics APIs and the Read permission. Read set to Never blocks capture.
+- **Files.** Search looks at personal folder names and metadata, not file contents. Dropped files are copied into a local image/text cache for Vision or inspection. Dropping a file does not open or execute it. Reveal in Explorer is a separate explicit action.
+- **Computer Control and App Skills.** Typed intents call fixed application targets: Brave, Chrome, Notepad, Windows Terminal, Calculator, and File Explorer. Skills send focus-verified shortcuts. Explorer opens known folders only. There is no synthesized PowerShell, cmd, or arbitrary shell command.
+- **OBS / Director.** Chat actions and the Settings/Director controls use the same permission policy. Going live is Sensitive and always asks, including when the saved policy says Allow. Other mutating OBS actions follow Act. Mutating OBS and Director actions are blocked while AURA is paused. The OBS password is kept for the session only and is not written into diagnostics.
+- **Diagnostics.** Export is manual. The JSON export is size-bounded and uses an allowlist. Telemetry and automatic crash uploads are hardcoded off. Session recovery and Crash Loop Guard stay local.
+- **Image generation.** Local text-to-image accepts prompt, negative prompt, steps, seed, and aspect, then previews the PNG. Video generation is planned and has no generate command.
+
+## Dependency lock
+
+`package-lock.json` is a real npm lockfile (lockfileVersion 3) produced by `npm install`. Windows builds should use that lock instead of generating a floating one at release time. `Cargo.lock` for the desktop crate is committed from the same resolution so the Rust graph is reproducible too.
+
+Node 24 refuses to start `npm.cmd` from `spawnSync` when `shell` is false. `scripts/validate-beta.mjs` launches that shim through `cmd.exe /d /s /c` with the fixed argument list. `cargo.exe`, `node.exe`, and the PowerShell `npm` calls in the Windows build scripts are real executables or shell commands, so they stay as they are.
+
+Windows PowerShell 5.1 reads a UTF-8 script without a BOM using the system ANSI code page, so an em dash in `windows-build-doctor.ps1` was parsed as a stray quote. The Windows scripts are ASCII-only and do not use `&&` or `||`. They also do not assign automatic variables such as `$Host`; the Rust target triple is stored in `$rustHost`. The Visual Studio environment import writes a temporary `.cmd` and runs `set` on the next line. `scripts/build-beta-windows.ps1` still runs `cargo test --locked` after the doctor.
+
+`apps/desktop/src-tauri/icons/icon.ico` and the PNG sizes named by `tauri.conf.json` are committed. A fresh checkout can compile and test without running `npm run icons` first. `npm run build` regenerates that set only when `icons/source.sha256` no longer matches `aura-app-icon.svg`. `tauri icon` does not write `icon.icns` deterministically, so an up-to-date build leaves the committed files alone. `apps/desktop/src-tauri/gen/` is build output and is gitignored.
+
+`package.json` `allowScripts` permits the locked `esbuild@0.28.2` postinstall and the optional macOS `fsevents@2.3.3` install script. Those are the only two packages in the lockfile with install scripts. esbuild's script checks the platform binary that npm already installs as an optional dependency. No other dependency install script is approved.
+
+## Local validation on Linux
+
+Linux can typecheck the frontend, build the Vite bundle, format-check Rust, syntax-check the embedded Python workers, and cross-compile the Windows GNU target. It cannot execute the Windows test binary or produce the NSIS installer. Host `cargo test` / `cargo clippy` for the Linux target do not compile: `windows-threading` is empty off Windows, so `windows-future` fails before AURA tests start. The Windows GNU target is the compile check used for this candidate.
+
+Do not treat a green Linux source gate as a substitute for `npm run beta:build:windows` and `npm run beta:verify:artifact`.
+
+## Open tracker
+
+GitHub's open count mixes issues and pull requests. The repository currently has three open issues:
+
+- #56 is addressed by the committed `package-lock.json`. The Windows and static workflows already install with `npm ci`.
+- #55 remains an organization billing lock. Jobs still fail before step 1. No repository change starts a runner.
+- #57 remains a repository admin setting. `SECURITY.md` and the issue template already point at private advisory reports. Application code cannot enable Private vulnerability reporting.
 
 ## Testing Preview release hardening
 

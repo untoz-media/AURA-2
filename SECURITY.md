@@ -17,6 +17,8 @@ Use the repository's private GitHub Security Advisory reporting flow:
 
 `Security → Advisories → Report a vulnerability`
 
+The issue template contact link points at `https://github.com/untoz-media/AURA-2/security/advisories/new`. That page accepts reports only after a repository admin enables **Private vulnerability reporting** in Settings → Security. This repository cannot turn that switch on from application code. Until it is enabled, the advisory form is the intended path and a public issue is not.
+
 Useful reports include the affected AURA version/build provenance, Windows version, component, minimal reproduction steps, expected security boundary, observed behaviour and impact.
 
 Do not include real passwords, tokens, private prompts, personal files or other secrets. Use test data wherever possible.

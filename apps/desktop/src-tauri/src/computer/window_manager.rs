@@ -1,5 +1,9 @@
 use serde::Serialize;
-use std::{path::Path, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    path::Path,
+    sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM},
@@ -63,7 +67,6 @@ impl WindowDisplayAction {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentAppInfo {
@@ -121,14 +124,22 @@ pub enum WindowError {
 impl std::fmt::Display for WindowError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EnumerationFailed => write!(formatter, "Windows could not enumerate top-level windows."),
+            Self::EnumerationFailed => {
+                write!(formatter, "Windows could not enumerate top-level windows.")
+            }
             Self::TargetNotFound(name) => write!(formatter, "No visible {name} window was found."),
             Self::ForegroundDenied(name) => write!(
                 formatter,
                 "Windows did not allow AURA to bring {name} to the foreground."
             ),
-            Self::NoForegroundWindow => write!(formatter, "Windows does not currently report a foreground application."),
-            Self::ProcessUnavailable => write!(formatter, "The foreground application's process information is unavailable."),
+            Self::NoForegroundWindow => write!(
+                formatter,
+                "Windows does not currently report a foreground application."
+            ),
+            Self::ProcessUnavailable => write!(
+                formatter,
+                "The foreground application's process information is unavailable."
+            ),
         }
     }
 }
@@ -150,7 +161,9 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> i
         return 1;
     }
 
-    let title = String::from_utf16_lossy(&buffer[..copied as usize]).trim().to_string();
+    let title = String::from_utf16_lossy(&buffer[..copied as usize])
+        .trim()
+        .to_string();
     if title.is_empty() {
         return 1;
     }
@@ -204,7 +217,7 @@ fn friendly_process_name(process_name: &str) -> String {
         return process_name.to_string();
     }
 
-    stem.replace('-', " ").replace('_', " ")
+    stem.replace(['-', '_'], " ")
 }
 
 pub fn current_app() -> Result<CurrentAppInfo, WindowError> {
@@ -257,12 +270,7 @@ unsafe fn process_name_for_window(hwnd: HWND) -> Option<String> {
     let mut buffer = vec![0u16; 32768];
     let mut size = buffer.len() as u32;
 
-    let result = QueryFullProcessImageNameW(
-        process,
-        0,
-        buffer.as_mut_ptr(),
-        &mut size,
-    );
+    let result = QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut size);
 
     let _ = CloseHandle(process);
 
@@ -290,11 +298,7 @@ pub fn list_windows() -> Result<Vec<WindowInfo>, WindowError> {
         return Err(WindowError::EnumerationFailed);
     }
 
-    windows.sort_by(|left, right| {
-        left.title
-            .to_lowercase()
-            .cmp(&right.title.to_lowercase())
-    });
+    windows.sort_by_key(|window| window.title.to_lowercase());
 
     Ok(windows)
 }
@@ -444,7 +448,10 @@ mod tests {
 
     #[test]
     fn friendly_process_name_removes_exe_and_separators() {
-        assert_eq!(friendly_process_name("Adobe-Premiere_Pro.exe"), "Adobe Premiere Pro");
+        assert_eq!(
+            friendly_process_name("Adobe-Premiere_Pro.exe"),
+            "Adobe Premiere Pro"
+        );
     }
 
     #[test]

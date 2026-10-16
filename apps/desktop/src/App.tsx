@@ -172,6 +172,7 @@ function App() {
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
+    updateMemoryControl,
     deleteMemoryControl,
     saveDirectorPresetControl,
     deleteDirectorPresetControl,
@@ -396,7 +397,7 @@ function App() {
             </div>
             <div>
               <span>Active window</span>
-              <strong title={currentApp?.windowTitle}>
+              <strong title={currentApp?.windowTitle ?? undefined}>
                 {currentApp?.windowTitle ?? "Unavailable"}
               </strong>
             </div>
@@ -609,7 +610,7 @@ function App() {
                     </div>
                     <div>
                       <span>Active window</span>
-                      <strong title={currentApp?.windowTitle}>
+                      <strong title={currentApp?.windowTitle ?? undefined}>
                         {currentApp?.windowTitle ?? "Unavailable"}
                       </strong>
                     </div>
@@ -792,6 +793,7 @@ function App() {
               memory={memory}
               onRefresh={refreshMemories}
               onCreate={createMemoryControl}
+              onUpdate={updateMemoryControl}
               onDelete={deleteMemoryControl}
               projectMemory={projectMemory}
               routines={routines}

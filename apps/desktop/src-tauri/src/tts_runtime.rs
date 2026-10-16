@@ -109,6 +109,44 @@ impl TtsRuntime {
             == "speaking"
     }
 
+    pub fn playback_guard(&self) -> (bool, Option<String>) {
+        let status = self
+            .status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let text = status
+            .last_text
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let age_ms = timestamp_ms().saturating_sub(status.refreshed_at_ms);
+        if playback_needs_echo_guard(&status.state, text.is_some(), age_ms) {
+            (true, text)
+        } else {
+            (false, None)
+        }
+    }
+
+    fn mark_interrupted(&self, model_id: &str) -> TtsRuntimeStatus {
+        let previous = self
+            .status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let status = TtsRuntimeStatus {
+            state: "interrupted".to_string(),
+            model_id: model_id.to_string(),
+            dependency_ready: previous.dependency_ready,
+            voice_installed: previous.voice_installed,
+            sample_rate: previous.sample_rate,
+            last_text: previous.last_text,
+            last_error: None,
+            refreshed_at_ms: timestamp_ms(),
+        };
+        self.set_status(status.clone());
+        status
+    }
+
     pub fn status(&self, app: &AppHandle, manager: &ModelManager) -> TtsRuntimeStatus {
         let mut current = self
             .status
@@ -117,11 +155,9 @@ impl TtsRuntime {
             .clone();
 
         if !current.dependency_ready {
-            current.dependency_ready =
-                python_module_available(app, "piper").unwrap_or(false);
+            current.dependency_ready = python_module_available(app, "piper").unwrap_or(false);
         }
-        current.voice_installed =
-            manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
+        current.voice_installed = manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
         current.refreshed_at_ms = timestamp_ms();
 
         current
@@ -149,13 +185,7 @@ impl TtsRuntime {
             let message =
                 "Piper installation finished but the managed Python runtime cannot import it."
                     .to_string();
-            self.set_error(
-                app,
-                manager,
-                DEFAULT_TTS_MODEL_ID,
-                None,
-                message.clone(),
-            );
+            self.set_error(app, manager, DEFAULT_TTS_MODEL_ID, None, message.clone());
             return Err(message);
         }
 
@@ -246,9 +276,18 @@ impl TtsRuntime {
             let running = process_guard
                 .as_mut()
                 .ok_or_else(|| "TTS runtime failed to start.".to_string())?;
-            writeln!(running.stdin, "{request}")
-                .and_then(|_| running.stdin.flush())
-                .map_err(|error| format!("Could not send text to local TTS runtime: {error}"))?;
+            if let Err(error) =
+                writeln!(running.stdin, "{request}").and_then(|_| running.stdin.flush())
+            {
+                if self.process_id.load(Ordering::Relaxed) == 0 {
+                    return Ok(self.mark_interrupted(model_id));
+                }
+                return Err(format!("Could not send text to local TTS runtime: {error}"));
+            }
+        }
+
+        if self.process_id.load(Ordering::Relaxed) == 0 {
+            return Ok(self.mark_interrupted(model_id));
         }
 
         loop {
@@ -256,7 +295,15 @@ impl TtsRuntime {
                 let running = process_guard
                     .as_mut()
                     .ok_or_else(|| "TTS runtime is no longer available.".to_string())?;
-                read_envelope(&mut running.stdout)?
+                match read_envelope(&mut running.stdout) {
+                    Ok(envelope) => envelope,
+                    Err(error) => {
+                        if self.process_id.load(Ordering::Relaxed) == 0 {
+                            return Ok(self.mark_interrupted(model_id));
+                        }
+                        return Err(error);
+                    }
+                }
             };
 
             if envelope.id.as_deref() != Some(request_id.as_str()) {
@@ -363,8 +410,7 @@ impl TtsRuntime {
         let python = managed_python_path(app)?;
         if !python.exists() {
             return Err(
-                "AURA Managed Runtime is not installed. Install it from Models first."
-                    .to_string(),
+                "AURA Managed Runtime is not installed. Install it from Models first.".to_string(),
             );
         }
 
@@ -493,6 +539,14 @@ fn timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
+const PLAYBACK_ECHO_GUARD_MS: u64 = 4_000;
+
+pub(crate) fn playback_needs_echo_guard(state: &str, has_text: bool, age_ms: u64) -> bool {
+    state == "speaking"
+        || (has_text
+            && age_ms <= PLAYBACK_ECHO_GUARD_MS
+            && matches!(state, "ready" | "interrupted" | "stopped"))
+}
 
 #[cfg(test)]
 mod tests {
@@ -505,5 +559,16 @@ mod tests {
         assert!(voice_relative_path("voice-piper-engb-alan")
             .is_some_and(|path| path.ends_with("en_GB-alan-medium.onnx")));
         assert_eq!(voice_relative_path("unknown"), None);
+    }
+
+    #[test]
+    fn echo_guard_covers_active_speech_and_a_short_tail() {
+        assert!(playback_needs_echo_guard("speaking", false, 0));
+        assert!(playback_needs_echo_guard("ready", true, 2_200));
+        assert!(playback_needs_echo_guard("interrupted", true, 500));
+        assert!(playback_needs_echo_guard("stopped", true, 3_900));
+        assert!(!playback_needs_echo_guard("ready", true, 4_001));
+        assert!(!playback_needs_echo_guard("stopped", false, 0));
+        assert!(!playback_needs_echo_guard("installingDependency", true, 0));
     }
 }

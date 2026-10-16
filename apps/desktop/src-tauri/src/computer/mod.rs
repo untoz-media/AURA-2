@@ -1,6 +1,6 @@
 pub mod app_launcher;
-pub mod app_skills;
 pub mod app_lifecycle;
+pub mod app_skills;
 pub mod audio;
 pub mod clipboard;
 pub mod drop_intake;

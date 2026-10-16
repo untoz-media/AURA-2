@@ -154,6 +154,7 @@ impl TerminalSkill {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum CalculatorSkillAction {
     StandardMode,
     ScientificMode,
@@ -447,11 +448,7 @@ pub fn app_skill_catalog(context: Option<AppTarget>) -> AppSkillCatalog {
             BrowserSkillAction::ReopenClosedTab,
         ] {
             skills.push(AppSkillDescriptor {
-                id: format!(
-                    "browser.{}.{}",
-                    target_id,
-                    action.id()
-                ),
+                id: format!("browser.{}.{}", target_id, action.id()),
                 group: "Browser".to_string(),
                 app_name: target.display_name().to_string(),
                 name: action.display_name().to_string(),
@@ -569,8 +566,7 @@ fn execute_focus_verified_shortcut(
         ));
     }
 
-    let shortcut = KeyboardShortcut::parse(shortcut_value)
-        .map_err(|error| error.to_string())?;
+    let shortcut = KeyboardShortcut::parse(shortcut_value).map_err(|error| error.to_string())?;
     press_shortcut(&shortcut).map_err(|error| error.to_string())?;
 
     Ok(format!(
@@ -685,7 +681,9 @@ mod tests {
             .filter(|skill| skill.app_name == "File Explorer")
             .collect::<Vec<_>>();
         assert_eq!(explorer.len(), 6);
-        assert!(explorer.iter().all(|skill| skill.available && !skill.contextual));
+        assert!(explorer
+            .iter()
+            .all(|skill| skill.available && !skill.contextual));
 
         let notepad = catalog
             .skills
@@ -738,9 +736,15 @@ mod tests {
     #[test]
     fn terminal_skill_shortcuts_match_windows_terminal_defaults() {
         assert_eq!(TerminalSkillAction::NewTab.shortcut(), "Ctrl+Shift+T");
-        assert_eq!(TerminalSkillAction::CommandPalette.shortcut(), "Ctrl+Shift+P");
+        assert_eq!(
+            TerminalSkillAction::CommandPalette.shortcut(),
+            "Ctrl+Shift+P"
+        );
         assert_eq!(TerminalSkillAction::Find.shortcut(), "Ctrl+Shift+F");
-        assert_eq!(TerminalSkillAction::OpenTabDropdown.shortcut(), "Ctrl+Shift+Space");
+        assert_eq!(
+            TerminalSkillAction::OpenTabDropdown.shortcut(),
+            "Ctrl+Shift+Space"
+        );
     }
 
     #[test]
@@ -748,16 +752,28 @@ mod tests {
         assert_eq!(CalculatorSkillAction::StandardMode.shortcut(), "Alt+1");
         assert_eq!(CalculatorSkillAction::ScientificMode.shortcut(), "Alt+2");
         assert_eq!(CalculatorSkillAction::ProgrammerMode.shortcut(), "Alt+3");
-        assert_eq!(CalculatorSkillAction::DateCalculationMode.shortcut(), "Alt+4");
+        assert_eq!(
+            CalculatorSkillAction::DateCalculationMode.shortcut(),
+            "Alt+4"
+        );
         assert_eq!(CalculatorSkillAction::GraphingMode.shortcut(), "Alt+5");
     }
 
     #[test]
     fn notepad_skill_permissions_keep_edits_guarded() {
-        assert_eq!(NotepadSkillAction::NewNote.permission(), PermissionClass::Act);
+        assert_eq!(
+            NotepadSkillAction::NewNote.permission(),
+            PermissionClass::Act
+        );
         assert_eq!(NotepadSkillAction::Find.permission(), PermissionClass::Act);
-        assert_eq!(NotepadSkillAction::Undo.permission(), PermissionClass::Modify);
-        assert_eq!(NotepadSkillAction::Redo.permission(), PermissionClass::Modify);
+        assert_eq!(
+            NotepadSkillAction::Undo.permission(),
+            PermissionClass::Modify
+        );
+        assert_eq!(
+            NotepadSkillAction::Redo.permission(),
+            PermissionClass::Modify
+        );
     }
 
     #[test]
@@ -769,25 +785,13 @@ mod tests {
 
     #[test]
     fn browser_skill_rejects_non_browser_targets() {
-        assert!(BrowserSkill::new(
-            AppTarget::Notepad,
-            BrowserSkillAction::NewTab
-        )
-        .is_err());
+        assert!(BrowserSkill::new(AppTarget::Notepad, BrowserSkillAction::NewTab).is_err());
     }
 
     #[test]
     fn browser_skill_accepts_brave_and_chrome() {
-        assert!(BrowserSkill::new(
-            AppTarget::Brave,
-            BrowserSkillAction::Reload
-        )
-        .is_ok());
-        assert!(BrowserSkill::new(
-            AppTarget::Chrome,
-            BrowserSkillAction::FocusAddressBar
-        )
-        .is_ok());
+        assert!(BrowserSkill::new(AppTarget::Brave, BrowserSkillAction::Reload).is_ok());
+        assert!(BrowserSkill::new(AppTarget::Chrome, BrowserSkillAction::FocusAddressBar).is_ok());
     }
 
     #[test]

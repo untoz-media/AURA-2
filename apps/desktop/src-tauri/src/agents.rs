@@ -5,8 +5,8 @@ use crate::{
     },
     integrations::{
         director::{
-            find_director_preset_by_id, load_director_presets, preset_requires_sensitive_permission,
-            run_director_preset,
+            find_director_preset_by_id, load_director_presets,
+            preset_requires_sensitive_permission, run_director_preset,
         },
         obs::ObsController,
     },
@@ -43,7 +43,11 @@ const AGENT_EVENT: &str = "aura:agent-event";
 const AUTOMATION_EVENT: &str = "aura:automation-event";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AgentStep {
     LaunchApp { app: String },
     SwitchToApp { app: String },
@@ -132,7 +136,11 @@ pub struct SaveAuraActionRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AutomationTrigger {
     Startup,
     Interval { every_minutes: u64 },
@@ -333,7 +341,7 @@ impl AgentEngine {
         }
 
         let mut runs = by_id.into_values().collect::<Vec<_>>();
-        runs.sort_by(|left, right| right.started_at_ms.cmp(&left.started_at_ms));
+        runs.sort_by_key(|run| std::cmp::Reverse(run.started_at_ms));
         runs.truncate(MAX_HISTORY);
 
         Ok(AgentSnapshot {
@@ -403,12 +411,7 @@ impl AgentEngine {
         Ok(run)
     }
 
-    pub fn pause(
-        &self,
-        app: &AppHandle,
-        run_id: &str,
-        paused: bool,
-    ) -> Result<AgentRun, String> {
+    pub fn pause(&self, app: &AppHandle, run_id: &str, paused: bool) -> Result<AgentRun, String> {
         let controls = self
             .controls
             .lock()
@@ -437,7 +440,11 @@ impl AgentEngine {
         emit_agent_event(
             app,
             &snapshot,
-            if paused { "Agent paused." } else { "Agent resumed." },
+            if paused {
+                "Agent paused."
+            } else {
+                "Agent resumed."
+            },
         );
         Ok(snapshot)
     }
@@ -469,7 +476,11 @@ impl AgentEngine {
         };
 
         let _ = append_run_history(app, &snapshot);
-        emit_agent_event(app, &snapshot, "Cancelling Agent after the current safe boundary.");
+        emit_agent_event(
+            app,
+            &snapshot,
+            "Cancelling Agent after the current safe boundary.",
+        );
         Ok(snapshot)
     }
 
@@ -581,9 +592,9 @@ impl AutomationScheduler {
         }
 
         let now = timestamp_ms();
-        let foreground = current_app().ok().filter(|context| {
-            context.process_id != std::process::id()
-        });
+        let foreground = current_app()
+            .ok()
+            .filter(|context| context.process_id != std::process::id());
         let current_process = foreground
             .as_ref()
             .map(|context| context.process_name.to_lowercase());
@@ -598,8 +609,7 @@ impl AutomationScheduler {
             *self
                 .last_external_process
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                current_process.clone();
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = current_process.clone();
         }
 
         let mut changed = false;
@@ -625,9 +635,9 @@ impl AutomationScheduler {
                 }
                 AutomationTrigger::AppFocused { app: target } => {
                     app_changed
-                        && foreground
-                            .as_ref()
-                            .is_some_and(|context| app_matches_context(target, &context.process_name))
+                        && foreground.as_ref().is_some_and(|context| {
+                            app_matches_context(target, &context.process_name)
+                        })
                 }
             };
 
@@ -643,9 +653,7 @@ impl AutomationScheduler {
                 .clone();
 
             let result = match permission {
-                Ok(permission)
-                    if policy.decision_for(permission) == PermissionDecision::Allow =>
-                {
+                Ok(permission) if policy.decision_for(permission) == PermissionDecision::Allow => {
                     execute_saved_action(app, &automation.action_id, true)
                 }
                 Ok(permission) => Err(format!(
@@ -664,16 +672,13 @@ impl AutomationScheduler {
 
             match &automation.trigger {
                 AutomationTrigger::Interval { every_minutes } => {
-                    automation.next_run_at_ms = Some(
-                        now.saturating_add(every_minutes.saturating_mul(60_000)),
-                    );
+                    automation.next_run_at_ms =
+                        Some(now.saturating_add(every_minutes.saturating_mul(60_000)));
                 }
                 AutomationTrigger::AtTime {
-                    repeat_daily: true,
-                    ..
+                    repeat_daily: true, ..
                 } => {
-                    automation.next_run_at_ms =
-                        Some(now.saturating_add(24 * 60 * 60 * 1000));
+                    automation.next_run_at_ms = Some(now.saturating_add(24 * 60 * 60 * 1000));
                 }
                 AutomationTrigger::AtTime {
                     repeat_daily: false,
@@ -720,7 +725,9 @@ pub fn save_action(
 ) -> Result<SavedAuraAction, String> {
     let mut actions = read_actions(app)?;
     if request.id.is_none() && actions.len() >= MAX_SAVED_ACTIONS {
-        return Err(format!("AURA supports at most {MAX_SAVED_ACTIONS} saved Actions."));
+        return Err(format!(
+            "AURA supports at most {MAX_SAVED_ACTIONS} saved Actions."
+        ));
     }
 
     let name = validate_text(&request.name, "Action name", 80)?;
@@ -770,14 +777,17 @@ pub fn save_action(
         actions.push(saved.clone());
     }
 
-    actions.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    actions.sort_by_key(|action| action.name.to_lowercase());
     write_actions(app, &actions)?;
     Ok(saved)
 }
 
 pub fn delete_action(app: &AppHandle, action_id: &str) -> Result<(), String> {
     let automations = read_automations(app)?;
-    if automations.iter().any(|automation| automation.action_id == action_id) {
+    if automations
+        .iter()
+        .any(|automation| automation.action_id == action_id)
+    {
         return Err("This AURA Action is still used by an automation.".to_string());
     }
 
@@ -831,7 +841,9 @@ pub fn save_automation(
 ) -> Result<AuraAutomation, String> {
     let mut automations = read_automations(app)?;
     if request.id.is_none() && automations.len() >= MAX_AUTOMATIONS {
-        return Err(format!("AURA supports at most {MAX_AUTOMATIONS} automations."));
+        return Err(format!(
+            "AURA supports at most {MAX_AUTOMATIONS} automations."
+        ));
     }
 
     let name = validate_text(&request.name, "Automation name", 80)?;
@@ -881,13 +893,16 @@ pub fn save_automation(
         updated_at_ms: now,
     };
 
-    if let Some(index) = automations.iter().position(|automation| automation.id == id) {
+    if let Some(index) = automations
+        .iter()
+        .position(|automation| automation.id == id)
+    {
         automations[index] = saved.clone();
     } else {
         automations.push(saved.clone());
     }
 
-    automations.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    automations.sort_by_key(|automation| automation.name.to_lowercase());
     write_automations(app, &automations)?;
     Ok(saved)
 }
@@ -933,14 +948,18 @@ fn execute_agent_plan(
     plan: &AgentPlan,
     control: &RunControl,
 ) {
-    update_run(app, runs, run_id, |run| {
-        run.state = "running".to_string();
-    }, "Agent started.");
+    update_run(
+        app,
+        runs,
+        run_id,
+        |run| {
+            run.state = "running".to_string();
+        },
+        "Agent started.",
+    );
 
     for (index, step) in plan.steps.iter().enumerate() {
-        while control.paused.load(Ordering::SeqCst)
-            || global_paused.load(Ordering::SeqCst)
-        {
+        while control.paused.load(Ordering::SeqCst) || global_paused.load(Ordering::SeqCst) {
             if control.cancelled.load(Ordering::SeqCst) {
                 break;
             }
@@ -952,9 +971,20 @@ fn execute_agent_plan(
             return;
         }
 
-        update_run(app, runs, run_id, |run| {
-            run.current_step = Some(index);
-        }, &format!("Running step {} of {}: {}", index + 1, plan.steps.len(), step_label(step)));
+        update_run(
+            app,
+            runs,
+            run_id,
+            |run| {
+                run.current_step = Some(index);
+            },
+            &format!(
+                "Running step {} of {}: {}",
+                index + 1,
+                plan.steps.len(),
+                step_label(step)
+            ),
+        );
 
         let max_attempts = if step_is_retryable(step) { 2 } else { 1 };
         let started_at_ms = timestamp_ms();
@@ -964,11 +994,9 @@ fn execute_agent_plan(
         while attempts < max_attempts {
             attempts += 1;
             outcome = match step {
-                AgentStep::Wait { milliseconds } => execute_agent_wait(
-                    *milliseconds,
-                    control,
-                    global_paused,
-                ),
+                AgentStep::Wait { milliseconds } => {
+                    execute_agent_wait(*milliseconds, control, global_paused)
+                }
                 _ => execute_step(app, step, false),
             };
 
@@ -1002,11 +1030,17 @@ fn execute_agent_plan(
                     started_at_ms,
                     completed_at_ms,
                 };
-                update_run(app, runs, run_id, |run| {
-                    run.steps.push(result);
-                    run.completed_steps += 1;
-                    run.current_step = None;
-                }, &format!("Completed step {}.", index + 1));
+                update_run(
+                    app,
+                    runs,
+                    run_id,
+                    |run| {
+                        run.steps.push(result);
+                        run.completed_steps += 1;
+                        run.current_step = None;
+                    },
+                    &format!("Completed step {}.", index + 1),
+                );
             }
             Err(error) => {
                 let result = AgentStepResult {
@@ -1018,11 +1052,17 @@ fn execute_agent_plan(
                     started_at_ms,
                     completed_at_ms,
                 };
-                update_run(app, runs, run_id, |run| {
-                    run.steps.push(result);
-                    run.current_step = None;
-                    run.error = Some(error.clone());
-                }, &format!("Agent failed at step {}: {error}", index + 1));
+                update_run(
+                    app,
+                    runs,
+                    run_id,
+                    |run| {
+                        run.steps.push(result);
+                        run.current_step = None;
+                        run.error = Some(error.clone());
+                    },
+                    &format!("Agent failed at step {}: {error}", index + 1),
+                );
                 finish_run(app, runs, controls, run_id, "failed", Some(error));
                 return;
             }
@@ -1050,9 +1090,7 @@ fn execute_agent_wait(
             return Err("Agent wait cancelled.".to_string());
         }
 
-        while control.paused.load(Ordering::SeqCst)
-            || global_paused.load(Ordering::SeqCst)
-        {
+        while control.paused.load(Ordering::SeqCst) || global_paused.load(Ordering::SeqCst) {
             if control.cancelled.load(Ordering::SeqCst) {
                 return Err("Agent wait cancelled.".to_string());
             }
@@ -1093,7 +1131,10 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
                 .or_else(|| {
                     list_routines(app).ok()?.into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+                            || item
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(routine))
                     })
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
@@ -1110,7 +1151,9 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
                     result.routine_name, result.completed_steps
                 ))
             } else {
-                Err(result.error.unwrap_or_else(|| "Routine failed.".to_string()))
+                Err(result
+                    .error
+                    .unwrap_or_else(|| "Routine failed.".to_string()))
             }
         }
         AgentStep::DirectorPreset { preset } => {
@@ -1118,7 +1161,10 @@ fn execute_step(app: &AppHandle, step: &AgentStep, background: bool) -> Result<S
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(preset)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
+                            || item
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(preset))
                     })
                 })
                 .ok_or_else(|| format!("Director preset “{preset}” was not found."))?;
@@ -1190,15 +1236,14 @@ fn validate_plan_permission(
             PermissionDecision::Never => {
                 return Err(format!(
                     "Agent step “{}” is blocked by the current {:?} permission policy.",
-                    step_label(step), permission
+                    step_label(step),
+                    permission
                 ))
             }
-            PermissionDecision::Ask if !approved => {
-                return Err(
-                    "This Agent plan requires confirmation. Review the plan and run it with approval."
-                        .to_string(),
-                )
-            }
+            PermissionDecision::Ask if !approved => return Err(
+                "This Agent plan requires confirmation. Review the plan and run it with approval."
+                    .to_string(),
+            ),
             _ => {}
         }
     }
@@ -1214,7 +1259,10 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
                 .or_else(|| {
                     list_routines(app).ok()?.into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+                            || item
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(routine))
                     })
                 })
                 .ok_or_else(|| format!("Routine “{routine}” was not found."))?;
@@ -1229,7 +1277,10 @@ fn permission_for_step(app: &AppHandle, step: &AgentStep) -> Result<PermissionCl
                 .or_else(|| {
                     load_director_presets(app).into_iter().find(|item| {
                         item.name.eq_ignore_ascii_case(preset)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
+                            || item
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(preset))
                     })
                 })
                 .ok_or_else(|| format!("Director preset “{preset}” was not found."))?;
@@ -1276,7 +1327,9 @@ fn validate_plan_steps(app: &AppHandle, steps: &[AgentStep]) -> Result<(), Strin
         return Err("Agent plan has no executable steps.".to_string());
     }
     if steps.len() > MAX_PLAN_STEPS {
-        return Err(format!("Agent plans can contain at most {MAX_PLAN_STEPS} steps."));
+        return Err(format!(
+            "Agent plans can contain at most {MAX_PLAN_STEPS} steps."
+        ));
     }
 
     for step in steps {
@@ -1295,7 +1348,10 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
                 || list_routines(app).ok().is_some_and(|items| {
                     items.iter().any(|item| {
                         item.name.eq_ignore_ascii_case(routine)
-                            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(routine))
+                            || item
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(routine))
                     })
                 });
             if exists {
@@ -1308,7 +1364,10 @@ fn validate_action_step(app: &AppHandle, step: &AgentStep) -> Result<(), String>
             let exists = find_director_preset_by_id(app, preset).is_some()
                 || load_director_presets(app).iter().any(|item| {
                     item.name.eq_ignore_ascii_case(preset)
-                        || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(preset))
+                        || item
+                            .aliases
+                            .iter()
+                            .any(|alias| alias.eq_ignore_ascii_case(preset))
                 });
             if exists {
                 Ok(())
@@ -1381,8 +1440,7 @@ fn app_matches_context(target: &str, process_name: &str) -> bool {
 
 fn resolve_app(value: &str) -> Result<AppTarget, String> {
     let normalized = normalize_phrase(value);
-    AppTarget::from_alias(&normalized)
-        .ok_or_else(|| format!("Unsupported application: {value}."))
+    AppTarget::from_alias(&normalized).ok_or_else(|| format!("Unsupported application: {value}."))
 }
 
 fn resolve_saved_action(app: &AppHandle, value: &str) -> Option<SavedAuraAction> {
@@ -1434,9 +1492,7 @@ fn update_run<F>(
     F: FnOnce(&mut AgentRun),
 {
     let snapshot = {
-        let mut runs = runs
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut runs = runs.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let Some(run) = runs.get_mut(run_id) else {
             return;
         };
@@ -1456,9 +1512,7 @@ fn finish_run(
     error: Option<String>,
 ) {
     let snapshot = {
-        let mut runs = runs
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut runs = runs.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let Some(run) = runs.get_mut(run_id) else {
             return;
         };
@@ -1521,9 +1575,8 @@ pub fn recover_interrupted_runs(app: &AppHandle) -> Result<(), String> {
             run.state = "interrupted".to_string();
             run.current_step = None;
             run.completed_at_ms = Some(now);
-            run.error = Some(
-                "AURA closed before this Agent run reached a terminal state.".to_string(),
-            );
+            run.error =
+                Some("AURA closed before this Agent run reached a terminal state.".to_string());
             changed = true;
         }
     }
@@ -1558,8 +1611,8 @@ where
     if !path.exists() {
         return Ok(T::default());
     }
-    let content = fs::read_to_string(&path)
-        .map_err(|error| format!("Could not read {filename}: {error}"))?;
+    let content =
+        fs::read_to_string(&path).map_err(|error| format!("Could not read {filename}: {error}"))?;
     serde_json::from_str(&content)
         .map_err(|error| format!("{filename} is invalid and was left unchanged: {error}"))
 }
@@ -1595,11 +1648,7 @@ fn validate_text(value: &str, label: &str, max_chars: usize) -> Result<String, S
     Ok(value.to_string())
 }
 
-fn sanitize_aliases(
-    aliases: &[String],
-    name: &str,
-    limit: usize,
-) -> Result<Vec<String>, String> {
+fn sanitize_aliases(aliases: &[String], name: &str, limit: usize) -> Result<Vec<String>, String> {
     let mut sanitized = Vec::<String>::new();
     for alias in aliases {
         let alias = validate_text(alias, "Alias", 80)?;
@@ -1619,11 +1668,7 @@ fn sanitize_aliases(
     Ok(sanitized)
 }
 
-fn action_name_conflicts(
-    existing: &SavedAuraAction,
-    name: &str,
-    aliases: &[String],
-) -> bool {
+fn action_name_conflicts(existing: &SavedAuraAction, name: &str, aliases: &[String]) -> bool {
     let mut requested = vec![normalize_phrase(name)];
     requested.extend(aliases.iter().map(|alias| normalize_phrase(alias)));
 
@@ -1657,7 +1702,13 @@ fn normalize_phrase(value: &str) -> String {
 fn slugify(value: &str) -> String {
     normalize_phrase(value)
         .chars()
-        .map(|character| if character.is_ascii_alphanumeric() { character } else { '-' })
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .split('-')
         .filter(|part| !part.is_empty())
@@ -1689,24 +1740,23 @@ mod tests {
 
     #[test]
     fn permission_order_keeps_destructive_highest() {
-        assert!(permission_rank(PermissionClass::Destructive)
-            > permission_rank(PermissionClass::Sensitive));
-        assert!(permission_rank(PermissionClass::Sensitive)
-            > permission_rank(PermissionClass::Act));
+        assert!(
+            permission_rank(PermissionClass::Destructive)
+                > permission_rank(PermissionClass::Sensitive)
+        );
+        assert!(
+            permission_rank(PermissionClass::Sensitive) > permission_rank(PermissionClass::Act)
+        );
     }
 
     #[test]
     fn interval_next_run_is_relative_to_now() {
         assert_eq!(
-            initial_next_run(
-                &AutomationTrigger::Interval { every_minutes: 5 },
-                1_000,
-            ),
+            initial_next_run(&AutomationTrigger::Interval { every_minutes: 5 }, 1_000,),
             Some(301_000),
         );
     }
 
-    #[test]
     #[test]
     fn only_idempotent_app_steps_are_retried() {
         assert!(step_is_retryable(&AgentStep::LaunchApp {
@@ -1725,12 +1775,10 @@ mod tests {
 
     #[test]
     fn startup_trigger_has_no_clock_schedule() {
-        assert_eq!(
-            initial_next_run(&AutomationTrigger::Startup, 123_000),
-            None
-        );
+        assert_eq!(initial_next_run(&AutomationTrigger::Startup, 123_000), None);
     }
 
+    #[test]
     fn action_alias_conflicts_are_case_insensitive() {
         let existing = SavedAuraAction {
             id: "action-1".to_string(),

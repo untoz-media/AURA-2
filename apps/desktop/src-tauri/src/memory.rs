@@ -33,6 +33,13 @@ pub struct CreateMemoryRequest {
     pub content: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateMemoryRequest {
+    pub id: String,
+    pub content: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryCreateResult {
@@ -48,7 +55,10 @@ fn timestamp_ms() -> u64 {
 }
 
 fn memory_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join(MEMORY_FILENAME))
 }
 
@@ -98,13 +108,9 @@ fn read_records(app: &AppHandle) -> Result<Vec<MemoryRecord>, String> {
         .map_err(|error| format!("Could not read local memory file: {error}"))?;
 
     let mut records = serde_json::from_str::<Vec<MemoryRecord>>(&content)
-        .map_err(|error| {
-            format!(
-                "Local memory file is invalid and was left unchanged: {error}"
-            )
-        })?;
+        .map_err(|error| format!("Local memory file is invalid and was left unchanged: {error}"))?;
 
-    records.sort_by(|left, right| right.updated_at_ms.cmp(&left.updated_at_ms));
+    records.sort_by_key(|record| std::cmp::Reverse(record.updated_at_ms));
     Ok(records)
 }
 
@@ -155,13 +161,39 @@ pub fn create_memory(
     };
 
     records.push(record.clone());
-    records.sort_by(|left, right| right.updated_at_ms.cmp(&left.updated_at_ms));
+    records.sort_by_key(|record| std::cmp::Reverse(record.updated_at_ms));
     write_records(app, &records)?;
 
     Ok(MemoryCreateResult {
         record,
         created: true,
     })
+}
+
+pub fn update_memory(
+    app: &AppHandle,
+    request: UpdateMemoryRequest,
+) -> Result<MemoryRecord, String> {
+    let content = validate_content(&request.content)?;
+    let normalized = normalize_content(&content);
+    let mut records = read_records(app)?;
+    let index = records
+        .iter()
+        .position(|record| record.id == request.id)
+        .ok_or_else(|| "Memory no longer exists.".to_string())?;
+
+    if records.iter().enumerate().any(|(other_index, record)| {
+        other_index != index && normalize_content(&record.content) == normalized
+    }) {
+        return Err("Another saved memory already uses that text.".to_string());
+    }
+
+    records[index].content = content;
+    records[index].updated_at_ms = timestamp_ms();
+    let record = records[index].clone();
+    records.sort_by_key(|record| std::cmp::Reverse(record.updated_at_ms));
+    write_records(app, &records)?;
+    Ok(record)
 }
 
 pub fn delete_memory(app: &AppHandle, memory_id: &str) -> Result<MemoryRecord, String> {
@@ -176,10 +208,7 @@ pub fn delete_memory(app: &AppHandle, memory_id: &str) -> Result<MemoryRecord, S
     Ok(removed)
 }
 
-pub fn delete_memory_by_content(
-    app: &AppHandle,
-    content: &str,
-) -> Result<MemoryRecord, String> {
+pub fn delete_memory_by_content(app: &AppHandle, content: &str) -> Result<MemoryRecord, String> {
     let requested = validate_content(content)?;
     let normalized = normalize_content(&requested);
     let records = read_records(app)?;

@@ -833,6 +833,11 @@ export default function Settings({
                 trailing={<Badge tone="ready">Permission-gated</Badge>}
               />
               <SettingRow
+                title="Chat context"
+                description="A model reply can include the foreground app, recent file names, and the active project for that turn. File contents, screenshots, clipboard text, and explicit memories are not attached unless you ask."
+                trailing={<Badge tone="ready">Metadata only</Badge>}
+              />
+              <SettingRow
                 title="Usage telemetry"
                 description="AURA-2 Beta does not upload product analytics or usage telemetry."
                 trailing={<Badge tone="ready">Off</Badge>}
@@ -1222,7 +1227,7 @@ export default function Settings({
 
               <SettingRow
                 title="Wake Phrase (experimental)"
-                description="Continuously checks short local audio windows with Whisper. More private than cloud wake-word services, but uses noticeably more CPU/GPU."
+                description="When enabled, AURA listens locally for the wake phrase, including while it is speaking. During speech, and for a few seconds after, it requires a louder level and rejects audio that matches its own playback. Off by default."
                 trailing={
                   <Toggle
                     checked={voicePreferences.wakeWordEnabled}
@@ -1263,8 +1268,8 @@ export default function Settings({
                 title="Push to talk"
                 description={
                   voiceCapture?.phase === "captured"
-                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Ready for M006.3 STT.`
-                    : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released."
+                    ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Local speech-to-text runs after you release push-to-talk.`
+                    : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released. Pressing push-to-talk stops speech that is already playing. With the wake phrase enabled, a louder matching phrase during speech also stops playback."
                 }
                 trailing={
                   audioInput.pushToTalk ? (
@@ -2287,7 +2292,7 @@ export default function Settings({
               <SectionLabel>OBS Control</SectionLabel>
               <SettingRow
                 title="OBS Studio"
-                description="Connect AURA directly to the built-in OBS WebSocket server."
+                description="Connect AURA directly to an OBS WebSocket server. The password is used only for that session, is cleared after connect, and is never written into diagnostics or uploaded."
                 trailing={
                   <Badge
                     tone={
@@ -2442,7 +2447,7 @@ export default function Settings({
                       <span>
                         {obsRuntime.streaming
                           ? `LIVE for ${formatObsDuration(obsStreamClockMs)}.`
-                          : "The OBS stream is offline."}
+                          : "The OBS stream is offline. Going live is Sensitive and always asks before it starts. It is blocked while AURA is paused."}
                       </span>
                     </div>
 

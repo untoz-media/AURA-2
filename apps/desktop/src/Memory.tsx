@@ -12,6 +12,7 @@ type Props = {
   memory: MemorySnapshot;
   onRefresh: () => Promise<MemorySnapshot>;
   onCreate: (content: string) => Promise<MemoryCreateResult>;
+  onUpdate: (memoryId: string, content: string) => Promise<MemoryRecord>;
   onDelete: (memoryId: string) => Promise<MemoryRecord>;
   projectMemory: ProjectMemorySnapshot;
   routines: UserRoutine[];
@@ -34,6 +35,7 @@ export default function Memory({
   memory,
   onRefresh,
   onCreate,
+  onUpdate,
   onDelete,
   projectMemory,
   routines,
@@ -46,6 +48,8 @@ export default function Memory({
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -73,6 +77,23 @@ export default function Memory({
     }
   }
 
+  async function handleUpdate(record: MemoryRecord) {
+    const content = editDraft.trim();
+    if (!content) return;
+
+    setSaving(true);
+    setLocalError(null);
+    try {
+      await onUpdate(record.id, content);
+      setEditingId(null);
+      setEditDraft("");
+    } catch (error) {
+      setLocalError(String(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete(record: MemoryRecord) {
     if (!window.confirm(`Forget “${record.content}”?`)) return;
 
@@ -91,11 +112,11 @@ export default function Memory({
     <section className="memory-page">
       <div className="memory-hero">
         <div>
-          <span className="memory-kicker">M005 · LOCAL CONTEXT</span>
+          <span className="memory-kicker">LOCAL MEMORY</span>
           <h2>Memory</h2>
           <p>
-            Explicit memories stored locally on this PC. AURA only saves entries
-            here when you ask it to remember something or add it manually.
+            Explicit memories stored locally on this PC. AURA only writes this
+            list when you ask it to remember something or add it manually.
           </p>
         </div>
         <div className="memory-count">
@@ -136,7 +157,7 @@ export default function Memory({
         <div>
           <strong>Saved memories</strong>
           <span>
-            Search, inspect and remove anything AURA has stored explicitly.
+            Search, edit and remove anything AURA has stored explicitly.
           </span>
         </div>
         <div className="memory-toolbar-actions">
@@ -162,23 +183,71 @@ export default function Memory({
           {filtered.map((record) => (
             <article className="memory-record" key={record.id}>
               <div className="memory-record-main">
-                <p>{record.content}</p>
+                {editingId === record.id ? (
+                  <textarea
+                    value={editDraft}
+                    maxLength={2000}
+                    rows={3}
+                    aria-label="Edit memory"
+                    onChange={(event) => setEditDraft(event.target.value)}
+                  />
+                ) : (
+                  <p>{record.content}</p>
+                )}
                 <div className="memory-record-meta">
-                  <span>{record.source === "command" ? "Command" : "Manual"}</span>
+                  <span>{record.source === "command" ? "Command" : record.source === "ui" ? "Manual" : record.source}</span>
                   <span>Updated {formatMemoryDate(record.updatedAtMs)}</span>
                   {record.createdAtMs !== record.updatedAtMs && (
                     <span>Created {formatMemoryDate(record.createdAtMs)}</span>
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                className="memory-delete-button"
-                disabled={deletingId !== null}
-                onClick={() => void handleDelete(record)}
-              >
-                {deletingId === record.id ? "Forgetting…" : "Forget"}
-              </button>
+              <div className="memory-record-actions">
+                {editingId === record.id ? (
+                  <>
+                    <button
+                      type="button"
+                      className="memory-primary-button"
+                      disabled={saving || !editDraft.trim()}
+                      onClick={() => void handleUpdate(record)}
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      className="memory-secondary-button"
+                      disabled={saving}
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditDraft("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="memory-secondary-button"
+                    disabled={deletingId !== null || saving}
+                    onClick={() => {
+                      setEditingId(record.id);
+                      setEditDraft(record.content);
+                      setLocalError(null);
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="memory-delete-button"
+                  disabled={deletingId !== null || saving}
+                  onClick={() => void handleDelete(record)}
+                >
+                  {deletingId === record.id ? "Forgetting…" : "Forget"}
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -202,8 +271,11 @@ export default function Memory({
       <div className="memory-privacy-note">
         <strong>Local-first</strong>
         <span>
-          M005.1 stores explicit memory in AURA&apos;s local app configuration.
-          Automatic context capture is not enabled in this milestone.
+          Explicit memories stay in AURA&apos;s local configuration and are not
+          uploaded. Chat can also see metadata for the current turn: the
+          foreground app, recent file names, and the active project. That
+          context is not written into this list and does not include file
+          contents, screenshots, or clipboard text.
         </span>
       </div>
 

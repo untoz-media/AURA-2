@@ -34,6 +34,7 @@ import type {
   DirectorPresetRunResult,
   MemorySnapshot,
   CreateMemoryRequest,
+  UpdateMemoryRequest,
   MemoryCreateResult,
   MemoryRecord,
   CurrentAppInfo,
@@ -233,40 +234,54 @@ export async function getObsScenes(): Promise<ObsSceneList> {
 
 export async function setObsProgramScene(
   request: ObsSceneSwitchRequest,
+  confirmed = false,
 ): Promise<ObsSceneSwitchResult> {
-  return invoke<ObsSceneSwitchResult>("set_obs_program_scene", { request });
+  return invoke<ObsSceneSwitchResult>("set_obs_program_scene", { request, confirmed });
 }
 
 export async function setObsPreviewScene(
   request: ObsSceneSwitchRequest,
+  confirmed = false,
 ): Promise<ObsSceneSwitchResult> {
-  return invoke<ObsSceneSwitchResult>("set_obs_preview_scene", { request });
+  return invoke<ObsSceneSwitchResult>("set_obs_preview_scene", { request, confirmed });
 }
 
 
-export async function startObsRecording(): Promise<ObsRecordingActionResult> {
-  return invoke<ObsRecordingActionResult>("start_obs_recording");
+export async function startObsRecording(
+  confirmed = false,
+): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("start_obs_recording", { confirmed });
 }
 
-export async function stopObsRecording(): Promise<ObsRecordingActionResult> {
-  return invoke<ObsRecordingActionResult>("stop_obs_recording");
+export async function stopObsRecording(
+  confirmed = false,
+): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("stop_obs_recording", { confirmed });
 }
 
-export async function pauseObsRecording(): Promise<ObsRecordingActionResult> {
-  return invoke<ObsRecordingActionResult>("pause_obs_recording");
+export async function pauseObsRecording(
+  confirmed = false,
+): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("pause_obs_recording", { confirmed });
 }
 
-export async function resumeObsRecording(): Promise<ObsRecordingActionResult> {
-  return invoke<ObsRecordingActionResult>("resume_obs_recording");
+export async function resumeObsRecording(
+  confirmed = false,
+): Promise<ObsRecordingActionResult> {
+  return invoke<ObsRecordingActionResult>("resume_obs_recording", { confirmed });
 }
 
 
-export async function startObsStreaming(): Promise<ObsStreamingActionResult> {
-  return invoke<ObsStreamingActionResult>("start_obs_streaming");
+export async function startObsStreaming(
+  confirmed = false,
+): Promise<ObsStreamingActionResult> {
+  return invoke<ObsStreamingActionResult>("start_obs_streaming", { confirmed });
 }
 
-export async function stopObsStreaming(): Promise<ObsStreamingActionResult> {
-  return invoke<ObsStreamingActionResult>("stop_obs_streaming");
+export async function stopObsStreaming(
+  confirmed = false,
+): Promise<ObsStreamingActionResult> {
+  return invoke<ObsStreamingActionResult>("stop_obs_streaming", { confirmed });
 }
 
 
@@ -281,8 +296,12 @@ export async function getObsSourceItems(): Promise<ObsSourceItemList> {
 
 export async function setObsSourceVisibility(
   request: ObsSourceVisibilityRequest,
+  confirmed = false,
 ): Promise<ObsSourceVisibilityResult> {
-  return invoke<ObsSourceVisibilityResult>("set_obs_source_visibility", { request });
+  return invoke<ObsSourceVisibilityResult>("set_obs_source_visibility", {
+    request,
+    confirmed,
+  });
 }
 
 
@@ -292,14 +311,16 @@ export async function getObsAudioInputs(): Promise<ObsAudioInputList> {
 
 export async function setObsAudioMuted(
   request: ObsAudioMuteRequest,
+  confirmed = false,
 ): Promise<ObsAudioControlResult> {
-  return invoke<ObsAudioControlResult>("set_obs_audio_muted", { request });
+  return invoke<ObsAudioControlResult>("set_obs_audio_muted", { request, confirmed });
 }
 
 export async function setObsAudioVolume(
   request: ObsAudioVolumeRequest,
+  confirmed = false,
 ): Promise<ObsAudioControlResult> {
-  return invoke<ObsAudioControlResult>("set_obs_audio_volume", { request });
+  return invoke<ObsAudioControlResult>("set_obs_audio_volume", { request, confirmed });
 }
 
 
@@ -324,8 +345,12 @@ export async function deleteDirectorPreset(presetId: string): Promise<void> {
 
 export async function runDirectorPreset(
   presetId: string,
+  confirmed = false,
 ): Promise<DirectorPresetRunResult> {
-  return invoke<DirectorPresetRunResult>("run_director_preset_command", { presetId });
+  return invoke<DirectorPresetRunResult>("run_director_preset_command", {
+    presetId,
+    confirmed,
+  });
 }
 
 
@@ -337,6 +362,12 @@ export async function createMemory(
   request: CreateMemoryRequest,
 ): Promise<MemoryCreateResult> {
   return invoke<MemoryCreateResult>("create_memory_command", { request });
+}
+
+export async function updateMemory(
+  request: UpdateMemoryRequest,
+): Promise<MemoryRecord> {
+  return invoke<MemoryRecord>("update_memory_command", { request });
 }
 
 export async function deleteMemory(memoryId: string): Promise<MemoryRecord> {

@@ -63,9 +63,7 @@ impl PermissionPolicy {
                 PermissionDecision::Allow
             )
         ) {
-            return Err(
-                "Sensitive and destructive permissions cannot be permanently allowed.",
-            );
+            return Err("Sensitive and destructive permissions cannot be permanently allowed.");
         }
 
         match class {

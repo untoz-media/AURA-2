@@ -1,11 +1,9 @@
 use std::{mem::size_of, process::Command};
 
-use windows_sys::Win32::{
-    System::{
-        Power::{GetSystemPowerStatus, SetSuspendState, SYSTEM_POWER_STATUS},
-        Shutdown::LockWorkStation,
-        SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX},
-    },
+use windows_sys::Win32::System::{
+    Power::{GetSystemPowerStatus, SetSuspendState, SYSTEM_POWER_STATUS},
+    Shutdown::LockWorkStation,
+    SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX},
 };
 
 use super::keyboard::{press_shortcut, KeyboardShortcut};
@@ -182,9 +180,7 @@ pub fn execute_system_action(
     action: SystemAction,
 ) -> Result<Option<SystemSnapshot>, SystemCommandError> {
     match action {
-        SystemAction::GetStatus | SystemAction::GetBattery => {
-            read_system_snapshot().map(Some)
-        }
+        SystemAction::GetStatus | SystemAction::GetBattery => read_system_snapshot().map(Some),
         SystemAction::ShowDesktop => {
             let shortcut = KeyboardShortcut::parse("Win+D")
                 .map_err(|error| SystemCommandError::Keyboard(error.to_string()))?;
@@ -230,7 +226,10 @@ mod tests {
     #[test]
     fn settings_pages_use_fixed_uris() {
         assert_eq!(settings_uri(SettingsPage::Display), "ms-settings:display");
-        assert_eq!(settings_uri(SettingsPage::Bluetooth), "ms-settings:bluetooth");
+        assert_eq!(
+            settings_uri(SettingsPage::Bluetooth),
+            "ms-settings:bluetooth"
+        );
     }
 
     #[test]

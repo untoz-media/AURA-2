@@ -21,4 +21,4 @@ This allows natural interruption instead of waiting for AURA to finish speaking.
 
 ## Wake safety
 
-Wake monitoring is suspended while TTS is speaking so AURA cannot activate from its own synthetic voice.
+When the optional wake phrase is enabled, AURA keeps listening during its own speech so the phrase can interrupt playback. That path uses a louder energy floor than idle listening and rejects a transcript that is contained in the text AURA is speaking, including a few seconds after playback ends. There is no acoustic echo canceller. Quiet speaker bleed is ignored; a phrase that merely repeats the spoken reply does not stop playback. Wake Phrase stays off by default. Push-to-talk still interrupts speech immediately.

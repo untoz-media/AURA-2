@@ -89,8 +89,7 @@ pub fn save_preferences(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let content =
-        serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
     fs::write(path, content).map_err(|error| error.to_string())?;
 
     if !preferences.retain_images {
@@ -187,11 +186,10 @@ fn load_history(app: &AppHandle) -> Result<Vec<VisionHistoryItem>, String> {
         return Ok(Vec::new());
     }
 
-    let content =
-        fs::read_to_string(path).map_err(|error| format!("Could not read Vision history: {error}"))?;
+    let content = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read Vision history: {error}"))?;
 
-    serde_json::from_str(&content)
-        .map_err(|error| format!("Vision history is invalid: {error}"))
+    serde_json::from_str(&content).map_err(|error| format!("Vision history is invalid: {error}"))
 }
 
 fn write_history(app: &AppHandle, items: &[VisionHistoryItem]) -> Result<(), String> {

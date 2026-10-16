@@ -47,9 +47,18 @@ pub enum ActionIntent {
     ObsRecording(ObsRecordingAction),
     ObsStreaming(ObsStreamingAction),
     ObsStreamDuration,
-    ObsSourceVisibility { source_name: String, enabled: bool },
-    ObsAudioMute { input_name: String, muted: bool },
-    ObsAudioVolume { input_name: String, percent: u8 },
+    ObsSourceVisibility {
+        source_name: String,
+        enabled: bool,
+    },
+    ObsAudioMute {
+        input_name: String,
+        muted: bool,
+    },
+    ObsAudioVolume {
+        input_name: String,
+        percent: u8,
+    },
     ObsProductionHealth,
     DirectorPreset(String),
     MemoryRemember(String),
@@ -70,6 +79,7 @@ pub enum ActionIntent {
     CalculatorSkill(CalculatorSkill),
     OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
+    ActivateProject(String),
 }
 
 #[derive(Debug, Clone)]
@@ -105,56 +115,69 @@ fn system_request(input: &str) -> Option<SystemAction> {
     let normalized = input.trim().to_lowercase();
 
     match normalized.as_str() {
-        "system status" | "pc status" | "computer status"
-        | "estado do sistema" | "estado do pc" => Some(SystemAction::GetStatus),
+        "system status" | "pc status" | "computer status" | "estado do sistema"
+        | "estado do pc" => Some(SystemAction::GetStatus),
 
-        "battery status" | "battery" | "estado da bateria"
-        | "qual é a bateria" | "qual e a bateria" => Some(SystemAction::GetBattery),
+        "battery status" | "battery" | "estado da bateria" | "qual é a bateria"
+        | "qual e a bateria" => Some(SystemAction::GetBattery),
 
-        "show desktop" | "show the desktop" | "mostrar ambiente de trabalho"
+        "show desktop"
+        | "show the desktop"
+        | "mostrar ambiente de trabalho"
         | "mostra o ambiente de trabalho" => Some(SystemAction::ShowDesktop),
 
-        "open task manager" | "abre o gestor de tarefas" | "abrir gestor de tarefas"
+        "open task manager"
+        | "abre o gestor de tarefas"
+        | "abrir gestor de tarefas"
         | "abre o task manager" => Some(SystemAction::OpenTaskManager),
 
-        "open settings" | "open windows settings" | "abre as definições"
-        | "abre as definicoes" | "abrir definições" | "abrir definicoes" => {
-            Some(SystemAction::OpenSettings(SettingsPage::Home))
-        }
+        "open settings"
+        | "open windows settings"
+        | "abre as definições"
+        | "abre as definicoes"
+        | "abrir definições"
+        | "abrir definicoes" => Some(SystemAction::OpenSettings(SettingsPage::Home)),
 
-        "open display settings" | "abre as definições de ecrã"
-        | "abre as definicoes de ecra" | "abre as definições de display"
+        "open display settings"
+        | "abre as definições de ecrã"
+        | "abre as definicoes de ecra"
+        | "abre as definições de display"
         | "abre as definicoes de display" => {
             Some(SystemAction::OpenSettings(SettingsPage::Display))
         }
 
-        "open bluetooth settings" | "abre as definições de bluetooth"
+        "open bluetooth settings"
+        | "abre as definições de bluetooth"
         | "abre as definicoes de bluetooth" => {
             Some(SystemAction::OpenSettings(SettingsPage::Bluetooth))
         }
 
-        "open network settings" | "abre as definições de rede"
-        | "abre as definicoes de rede" => {
+        "open network settings" | "abre as definições de rede" | "abre as definicoes de rede" => {
             Some(SystemAction::OpenSettings(SettingsPage::Network))
         }
 
-        "open sound settings" | "open audio settings"
-        | "abre as definições de som" | "abre as definicoes de som"
-        | "abre as definições de áudio" | "abre as definicoes de audio" => {
-            Some(SystemAction::OpenSettings(SettingsPage::Sound))
+        "open sound settings"
+        | "open audio settings"
+        | "abre as definições de som"
+        | "abre as definicoes de som"
+        | "abre as definições de áudio"
+        | "abre as definicoes de audio" => Some(SystemAction::OpenSettings(SettingsPage::Sound)),
+
+        "lock pc" | "lock computer" | "lock windows" | "bloqueia o pc" | "bloquear o pc" => {
+            Some(SystemAction::Lock)
         }
 
-        "lock pc" | "lock computer" | "lock windows"
-        | "bloqueia o pc" | "bloquear o pc" => Some(SystemAction::Lock),
+        "sleep pc" | "sleep computer" | "put pc to sleep" | "suspende o pc" | "suspender o pc" => {
+            Some(SystemAction::Sleep)
+        }
 
-        "sleep pc" | "sleep computer" | "put pc to sleep"
-        | "suspende o pc" | "suspender o pc" => Some(SystemAction::Sleep),
+        "restart pc" | "restart computer" | "reinicia o pc" | "reiniciar o pc" => {
+            Some(SystemAction::Restart)
+        }
 
-        "restart pc" | "restart computer" | "reinicia o pc"
-        | "reiniciar o pc" => Some(SystemAction::Restart),
-
-        "shutdown pc" | "shut down pc" | "turn off pc"
-        | "desliga o pc" | "desligar o pc" => Some(SystemAction::Shutdown),
+        "shutdown pc" | "shut down pc" | "turn off pc" | "desliga o pc" | "desligar o pc" => {
+            Some(SystemAction::Shutdown)
+        }
 
         _ => None,
     }
@@ -208,9 +231,8 @@ fn unwrap_text_quotes(value: &str) -> &str {
 
     if trimmed.len() >= 2 {
         let bytes = trimmed.as_bytes();
-        let matching_quotes =
-            (bytes[0] == b'"' && bytes[trimmed.len() - 1] == b'"')
-                || (bytes[0] == b'\'' && bytes[trimmed.len() - 1] == b'\'');
+        let matching_quotes = (bytes[0] == b'"' && bytes[trimmed.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[trimmed.len() - 1] == b'\'');
 
         if matching_quotes {
             return &trimmed[1..trimmed.len() - 1];
@@ -221,10 +243,7 @@ fn unwrap_text_quotes(value: &str) -> &str {
 }
 
 fn parse_percent(value: &str) -> Result<u8, String> {
-    let cleaned = value
-        .trim()
-        .trim_end_matches('%')
-        .trim();
+    let cleaned = value.trim().trim_end_matches('%').trim();
 
     let percent = cleaned
         .parse::<u16>()
@@ -383,6 +402,32 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     None
 }
 
+fn project_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "switch to project ",
+        "switch project to ",
+        "activate project ",
+        "use project ",
+        "open project ",
+        "set active project ",
+        "set project ",
+        "muda para o projeto ",
+        "mudar para o projeto ",
+        "ativa o projeto ",
+        "ativar o projeto ",
+        "usa o projeto ",
+        "usar o projeto ",
+        "abre o projeto ",
+        "abrir o projeto ",
+        "define o projeto ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let name = unwrap_text_quotes(value).trim();
+        (!name.is_empty()).then(|| ActionIntent::ActivateProject(name.to_string()))
+    })
+}
+
 fn terminal_skill_request(input: &str) -> Option<ActionIntent> {
     let normalized = normalize_command(input);
 
@@ -514,26 +559,37 @@ fn personal_folder_skill_request(input: &str) -> Option<ActionIntent> {
     let normalized = normalize_command(input);
 
     let skill = match normalized.as_str() {
-        "open desktop" | "open desktop folder" | "abre o ambiente de trabalho"
-        | "abre a área de trabalho" | "abre a area de trabalho" => {
-            Some(PersonalFolderSkill::Desktop)
-        }
-        "open documents" | "open documents folder" | "abre os documentos"
+        "open desktop"
+        | "open desktop folder"
+        | "abre o ambiente de trabalho"
+        | "abre a área de trabalho"
+        | "abre a area de trabalho" => Some(PersonalFolderSkill::Desktop),
+        "open documents"
+        | "open documents folder"
+        | "abre os documentos"
         | "abre a pasta documentos" => Some(PersonalFolderSkill::Documents),
-        "open downloads" | "open downloads folder" | "abre os downloads"
+        "open downloads"
+        | "open downloads folder"
+        | "abre os downloads"
         | "abre a pasta downloads" => Some(PersonalFolderSkill::Downloads),
-        "open pictures" | "open pictures folder" | "open photos"
-        | "abre as imagens" | "abre as fotografias" | "abre a pasta imagens" => {
-            Some(PersonalFolderSkill::Pictures)
-        }
-        "open videos" | "open videos folder" | "abre os vídeos" | "abre os videos"
-        | "abre a pasta vídeos" | "abre a pasta videos" => {
-            Some(PersonalFolderSkill::Videos)
-        }
-        "open music" | "open music folder" | "abre a música" | "abre a musica"
-        | "abre a pasta música" | "abre a pasta musica" => {
-            Some(PersonalFolderSkill::Music)
-        }
+        "open pictures"
+        | "open pictures folder"
+        | "open photos"
+        | "abre as imagens"
+        | "abre as fotografias"
+        | "abre a pasta imagens" => Some(PersonalFolderSkill::Pictures),
+        "open videos"
+        | "open videos folder"
+        | "abre os vídeos"
+        | "abre os videos"
+        | "abre a pasta vídeos"
+        | "abre a pasta videos" => Some(PersonalFolderSkill::Videos),
+        "open music"
+        | "open music folder"
+        | "abre a música"
+        | "abre a musica"
+        | "abre a pasta música"
+        | "abre a pasta musica" => Some(PersonalFolderSkill::Music),
         _ => None,
     };
 
@@ -591,8 +647,7 @@ fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
             ));
         };
 
-        BrowserSkill::new(target, action)
-            .map(ActionIntent::BrowserSkill)
+        BrowserSkill::new(target, action).map(ActionIntent::BrowserSkill)
     }
 
     for (prefixes, action) in [
@@ -623,140 +678,269 @@ fn browser_skill_request(input: &str) -> Option<Result<ActionIntent, String>> {
     None
 }
 
+fn personal_root_phrase(normalized: &str) -> Option<(PersonalRootFilter, &'static str)> {
+    const PHRASES: &[(PersonalRootFilter, &str)] = &[
+        (PersonalRootFilter::Desktop, " on the desktop"),
+        (PersonalRootFilter::Desktop, " on desktop"),
+        (PersonalRootFilter::Desktop, " no ambiente de trabalho"),
+        (PersonalRootFilter::Desktop, " no desktop"),
+        (PersonalRootFilter::Documents, " in my documents"),
+        (PersonalRootFilter::Documents, " in documents"),
+        (PersonalRootFilter::Documents, " nos documentos"),
+        (PersonalRootFilter::Documents, " em documentos"),
+        (PersonalRootFilter::Pictures, " in my pictures"),
+        (PersonalRootFilter::Pictures, " in pictures"),
+        (PersonalRootFilter::Pictures, " nas imagens"),
+        (PersonalRootFilter::Pictures, " em imagens"),
+        (PersonalRootFilter::Videos, " in my videos"),
+        (PersonalRootFilter::Videos, " in videos"),
+        (PersonalRootFilter::Videos, " nos vídeos"),
+        (PersonalRootFilter::Videos, " nos videos"),
+        (PersonalRootFilter::Videos, " em vídeos"),
+        (PersonalRootFilter::Videos, " em videos"),
+        (PersonalRootFilter::Music, " in my music"),
+        (PersonalRootFilter::Music, " in music"),
+        (PersonalRootFilter::Music, " na música"),
+        (PersonalRootFilter::Music, " na musica"),
+        (PersonalRootFilter::Music, " em música"),
+        (PersonalRootFilter::Music, " em musica"),
+    ];
+
+    PHRASES
+        .iter()
+        .find_map(|(root, phrase)| normalized.contains(phrase).then_some((*root, *phrase)))
+}
+
+fn recent_limit(normalized: &str) -> Option<usize> {
+    let recency = [
+        "latest ",
+        "last ",
+        "most recent ",
+        "newest ",
+        "recent ",
+        "último ",
+        "ultima ",
+        "ultimo ",
+        "últimas ",
+        "ultimas ",
+        "últimos ",
+        "ultimos ",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix));
+    if !recency {
+        return None;
+    }
+
+    let plural = normalized.starts_with("recent ")
+        || normalized.contains(" files")
+        || normalized.contains(" videos")
+        || normalized.contains(" images")
+        || normalized.contains(" pictures")
+        || normalized.contains(" documents")
+        || normalized.contains(" archives")
+        || normalized.contains(" recentes")
+        || normalized.contains(" ficheiros");
+    Some(if plural { 10 } else { 1 })
+}
+
+fn category_before_location(normalized: &str, location_phrase: &str) -> FileCategory {
+    let subject = normalized
+        .split(location_phrase)
+        .next()
+        .unwrap_or(normalized);
+    if subject.contains("video") || subject.contains("vídeo") {
+        FileCategory::Video
+    } else if subject.contains("image")
+        || subject.contains("picture")
+        || subject.contains("imagem")
+        || subject.contains("fotografia")
+    {
+        FileCategory::Image
+    } else if subject.contains("audio") || subject.contains("áudio") {
+        FileCategory::Audio
+    } else if subject.contains("document") || subject.contains("documento") {
+        FileCategory::Document
+    } else if subject.contains("archive")
+        || subject.contains("arquivo")
+        || subject.contains("comprimid")
+    {
+        FileCategory::Archive
+    } else {
+        FileCategory::Any
+    }
+}
+
+fn location_scoped_recent_files(normalized: &str) -> Option<RecentFileQuery> {
+    let (root, phrase) = personal_root_phrase(normalized)?;
+    let limit = recent_limit(normalized)?;
+    Some(RecentFileQuery::bounded(
+        category_before_location(normalized, phrase),
+        root,
+        limit,
+    ))
+}
+
 fn recent_file_request(input: &str) -> Option<ActionIntent> {
     let normalized = normalize_command(input);
 
     let request = match normalized.as_str() {
-        "latest file" | "last file" | "most recent file" | "newest file"
-        | "último ficheiro" | "ultimo ficheiro" | "ficheiro mais recente" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Any,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent files" | "latest files" | "newest files"
-        | "ficheiros recentes" | "últimos ficheiros" | "ultimos ficheiros" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Any,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        "latest file"
+        | "last file"
+        | "most recent file"
+        | "newest file"
+        | "último ficheiro"
+        | "ultimo ficheiro"
+        | "ficheiro mais recente" => Some(RecentFileQuery::bounded(
+            FileCategory::Any,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent files" | "latest files" | "newest files" | "ficheiros recentes"
+        | "últimos ficheiros" | "ultimos ficheiros" => Some(RecentFileQuery::bounded(
+            FileCategory::Any,
+            PersonalRootFilter::All,
+            10,
+        )),
 
-        "latest video" | "last video" | "most recent video" | "newest video"
-        | "latest video i exported" | "last video i exported"
+        "latest video"
+        | "last video"
+        | "most recent video"
+        | "newest video"
+        | "latest video i exported"
+        | "last video i exported"
         | "most recent video i exported"
-        | "último vídeo" | "ultimo video" | "vídeo mais recente" | "video mais recente"
-        | "último vídeo que exportei" | "ultimo video que exportei" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Video,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent videos" | "latest videos" | "newest videos"
-        | "vídeos recentes" | "videos recentes" | "últimos vídeos" | "ultimos videos" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Video,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        | "último vídeo"
+        | "ultimo video"
+        | "vídeo mais recente"
+        | "video mais recente"
+        | "último vídeo que exportei"
+        | "ultimo video que exportei" => Some(RecentFileQuery::bounded(
+            FileCategory::Video,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent videos" | "latest videos" | "newest videos" | "vídeos recentes"
+        | "videos recentes" | "últimos vídeos" | "ultimos videos" => Some(
+            RecentFileQuery::bounded(FileCategory::Video, PersonalRootFilter::All, 10),
+        ),
 
-        "latest image" | "last image" | "most recent image" | "newest image"
-        | "latest picture" | "last picture"
-        | "última imagem" | "ultima imagem" | "imagem mais recente"
-        | "última fotografia" | "ultima fotografia" | "fotografia mais recente" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Image,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent images" | "latest images" | "newest images"
-        | "recent pictures" | "latest pictures"
-        | "imagens recentes" | "últimas imagens" | "ultimas imagens"
-        | "fotografias recentes" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Image,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        "latest image"
+        | "last image"
+        | "most recent image"
+        | "newest image"
+        | "latest picture"
+        | "last picture"
+        | "última imagem"
+        | "ultima imagem"
+        | "imagem mais recente"
+        | "última fotografia"
+        | "ultima fotografia"
+        | "fotografia mais recente" => Some(RecentFileQuery::bounded(
+            FileCategory::Image,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent images"
+        | "latest images"
+        | "newest images"
+        | "recent pictures"
+        | "latest pictures"
+        | "imagens recentes"
+        | "últimas imagens"
+        | "ultimas imagens"
+        | "fotografias recentes" => Some(RecentFileQuery::bounded(
+            FileCategory::Image,
+            PersonalRootFilter::All,
+            10,
+        )),
 
-        "latest audio" | "last audio" | "most recent audio"
-        | "latest audio file" | "last audio file"
-        | "último áudio" | "ultimo audio" | "áudio mais recente" | "audio mais recente" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Audio,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent audio" | "recent audio files" | "latest audio files"
-        | "áudios recentes" | "audios recentes" | "ficheiros de áudio recentes"
-        | "ficheiros de audio recentes" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Audio,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        "latest audio"
+        | "last audio"
+        | "most recent audio"
+        | "latest audio file"
+        | "last audio file"
+        | "último áudio"
+        | "ultimo audio"
+        | "áudio mais recente"
+        | "audio mais recente" => Some(RecentFileQuery::bounded(
+            FileCategory::Audio,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent audio"
+        | "recent audio files"
+        | "latest audio files"
+        | "áudios recentes"
+        | "audios recentes"
+        | "ficheiros de áudio recentes"
+        | "ficheiros de audio recentes" => Some(RecentFileQuery::bounded(
+            FileCategory::Audio,
+            PersonalRootFilter::All,
+            10,
+        )),
 
-        "latest document" | "last document" | "most recent document"
-        | "último documento" | "ultimo documento" | "documento mais recente" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Document,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent documents" | "latest documents" | "newest documents"
-        | "documentos recentes" | "últimos documentos" | "ultimos documentos" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Document,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        "latest document"
+        | "last document"
+        | "most recent document"
+        | "último documento"
+        | "ultimo documento"
+        | "documento mais recente" => Some(RecentFileQuery::bounded(
+            FileCategory::Document,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent documents"
+        | "latest documents"
+        | "newest documents"
+        | "documentos recentes"
+        | "últimos documentos"
+        | "ultimos documentos" => Some(RecentFileQuery::bounded(
+            FileCategory::Document,
+            PersonalRootFilter::All,
+            10,
+        )),
 
-        "latest archive" | "last archive" | "most recent archive"
-        | "último arquivo" | "ultimo arquivo" | "arquivo mais recente"
-        | "último ficheiro comprimido" | "ultimo ficheiro comprimido" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Archive,
-                PersonalRootFilter::All,
-                1,
-            ))
-        }
-        "recent archives" | "latest archives"
-        | "arquivos recentes" | "ficheiros comprimidos recentes" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Archive,
-                PersonalRootFilter::All,
-                10,
-            ))
-        }
+        "latest archive"
+        | "last archive"
+        | "most recent archive"
+        | "último arquivo"
+        | "ultimo arquivo"
+        | "arquivo mais recente"
+        | "último ficheiro comprimido"
+        | "ultimo ficheiro comprimido" => Some(RecentFileQuery::bounded(
+            FileCategory::Archive,
+            PersonalRootFilter::All,
+            1,
+        )),
+        "recent archives"
+        | "latest archives"
+        | "arquivos recentes"
+        | "ficheiros comprimidos recentes" => Some(RecentFileQuery::bounded(
+            FileCategory::Archive,
+            PersonalRootFilter::All,
+            10,
+        )),
 
-        "latest download" | "last download" | "most recent download" | "newest download"
-        | "último download" | "ultimo download" | "download mais recente" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Any,
-                PersonalRootFilter::Downloads,
-                1,
-            ))
-        }
-        "recent downloads" | "latest downloads" | "newest downloads"
-        | "downloads recentes" | "últimos downloads" | "ultimos downloads" => {
-            Some(RecentFileQuery::bounded(
-                FileCategory::Any,
-                PersonalRootFilter::Downloads,
-                10,
-            ))
-        }
+        "latest download"
+        | "last download"
+        | "most recent download"
+        | "newest download"
+        | "último download"
+        | "ultimo download"
+        | "download mais recente" => Some(RecentFileQuery::bounded(
+            FileCategory::Any,
+            PersonalRootFilter::Downloads,
+            1,
+        )),
+        "recent downloads" | "latest downloads" | "newest downloads" | "downloads recentes"
+        | "últimos downloads" | "ultimos downloads" => Some(RecentFileQuery::bounded(
+            FileCategory::Any,
+            PersonalRootFilter::Downloads,
+            10,
+        )),
 
-        _ => None,
+        _ => location_scoped_recent_files(&normalized),
     };
 
     request.map(ActionIntent::FindRecentPersonalFiles)
@@ -906,22 +1090,18 @@ fn media_request(input: &str) -> Option<Result<ActionIntent, String>> {
         "volume down" | "decrease volume" | "baixa o volume" | "baixar o volume" => {
             Some(MediaAction::VolumeDown)
         }
-        "mute" | "mute volume" | "silencia" | "silenciar" | "sem som" => {
-            Some(MediaAction::Mute)
-        }
+        "mute" | "mute volume" | "silencia" | "silenciar" | "sem som" => Some(MediaAction::Mute),
         "unmute" | "tira o mute" | "tirar o mute" | "repõe o som" | "repoe o som" => {
             Some(MediaAction::Unmute)
         }
-        "play pause" | "play/pause" | "pause music" | "resume music"
-        | "pausa a música" | "pausa a musica" | "retoma a música" | "retoma a musica" => {
-            Some(MediaAction::PlayPause)
-        }
-        "next track" | "next song" | "próxima música" | "proxima musica"
-        | "próxima faixa" | "proxima faixa" => Some(MediaAction::NextTrack),
+        "play pause" | "play/pause" | "pause music" | "resume music" | "pausa a música"
+        | "pausa a musica" | "retoma a música" | "retoma a musica" => Some(MediaAction::PlayPause),
+        "next track" | "next song" | "próxima música" | "proxima musica" | "próxima faixa"
+        | "proxima faixa" => Some(MediaAction::NextTrack),
         "previous track" | "previous song" | "música anterior" | "musica anterior"
         | "faixa anterior" => Some(MediaAction::PreviousTrack),
-        "stop media" | "stop music" | "para a música" | "para a musica"
-        | "parar a música" | "parar a musica" => Some(MediaAction::Stop),
+        "stop media" | "stop music" | "para a música" | "para a musica" | "parar a música"
+        | "parar a musica" => Some(MediaAction::Stop),
         _ => None,
     };
 
@@ -971,8 +1151,7 @@ fn parse_scroll_amount(value: &str, direction: i32) -> Result<MouseAction, Strin
             .map_err(|_| "Scroll amount must be a whole number.".to_string())?
     };
 
-    let signed = validate_scroll_notches(direction * amount)
-        .map_err(|error| error.to_string())?;
+    let signed = validate_scroll_notches(direction * amount).map_err(|error| error.to_string())?;
 
     Ok(MouseAction::Scroll { notches: signed })
 }
@@ -996,11 +1175,7 @@ fn mouse_request(input: &str) -> Option<Result<ActionIntent, String>> {
         "clica com o botao direito em ",
     ];
 
-    const CLICK_AT_PREFIXES: &[&str] = &[
-        "click at ",
-        "clica em ",
-        "clique em ",
-    ];
+    const CLICK_AT_PREFIXES: &[&str] = &["click at ", "clica em ", "clique em "];
 
     if let Some(value) = value_after_prefix(input, MOVE_PREFIXES) {
         return Some(
@@ -1075,7 +1250,9 @@ fn mouse_request(input: &str) -> Option<Result<ActionIntent, String>> {
         "click" | "left click" | "clica" | "clique" => Some(MouseAction::Click {
             button: MouseButton::Left,
         }),
-        "right click" | "clique direito" | "clica com o botão direito"
+        "right click"
+        | "clique direito"
+        | "clica com o botão direito"
         | "clica com o botao direito" => Some(MouseAction::Click {
             button: MouseButton::Right,
         }),
@@ -1091,9 +1268,9 @@ fn mouse_request(input: &str) -> Option<Result<ActionIntent, String>> {
 fn permission_for_mouse(action: MouseAction) -> PermissionClass {
     match action {
         MouseAction::MoveTo(_) | MouseAction::Scroll { .. } => PermissionClass::Act,
-        MouseAction::Click { .. }
-        | MouseAction::DoubleClick
-        | MouseAction::ClickAt { .. } => PermissionClass::Modify,
+        MouseAction::Click { .. } | MouseAction::DoubleClick | MouseAction::ClickAt { .. } => {
+            PermissionClass::Modify
+        }
     }
 }
 
@@ -1141,9 +1318,7 @@ fn permission_for_keyboard(intent: &ActionIntent) -> Option<PermissionClass> {
         ActionIntent::PressShortcut(shortcut) if shortcut.is_navigation_only() => {
             Some(PermissionClass::Act)
         }
-        ActionIntent::PressShortcut(_) | ActionIntent::TypeText(_) => {
-            Some(PermissionClass::Modify)
-        }
+        ActionIntent::PressShortcut(_) | ActionIntent::TypeText(_) => Some(PermissionClass::Modify),
         _ => None,
     }
 }
@@ -1205,10 +1380,12 @@ fn obs_audio_request(input: &str) -> Option<Result<ActionIntent, String>> {
             return Some(Err("OBS audio input name cannot be empty.".to_string()));
         }
 
-        Some(parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
-            input_name: input_name.to_string(),
-            percent,
-        }))
+        Some(
+            parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
+                input_name: input_name.to_string(),
+                percent,
+            }),
+        )
     }
 
     let normalized = input.trim().to_lowercase();
@@ -1254,10 +1431,12 @@ fn obs_audio_request(input: &str) -> Option<Result<ActionIntent, String>> {
                     return Some(Err("OBS audio input name cannot be empty.".to_string()));
                 }
 
-                return Some(parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
-                    input_name: input_name.to_string(),
-                    percent,
-                }));
+                return Some(
+                    parse_percent(value).map(|percent| ActionIntent::ObsAudioVolume {
+                        input_name: input_name.to_string(),
+                        percent,
+                    }),
+                );
             }
         }
     }
@@ -1513,34 +1692,14 @@ fn is_list_windows_command(input: &str) -> bool {
 }
 
 fn app_request(input: &str) -> Option<(AppOperation, &str)> {
-    const MINIMIZE_PREFIXES: &[&str] = &[
-        "minimize ",
-        "minimise ",
-        "minimiza ",
-        "minimizar ",
-    ];
+    const MINIMIZE_PREFIXES: &[&str] = &["minimize ", "minimise ", "minimiza ", "minimizar "];
 
-    const MAXIMIZE_PREFIXES: &[&str] = &[
-        "maximize ",
-        "maximise ",
-        "maximiza ",
-        "maximizar ",
-    ];
+    const MAXIMIZE_PREFIXES: &[&str] = &["maximize ", "maximise ", "maximiza ", "maximizar "];
 
-    const RESTORE_PREFIXES: &[&str] = &[
-        "restore ",
-        "restaura ",
-        "restaurar ",
-    ];
+    const RESTORE_PREFIXES: &[&str] = &["restore ", "restaura ", "restaurar "];
 
     const LAUNCH_PREFIXES: &[&str] = &[
-        "open ",
-        "launch ",
-        "start ",
-        "abre ",
-        "abrir ",
-        "inicia ",
-        "iniciar ",
+        "open ", "launch ", "start ", "abre ", "abrir ", "inicia ", "iniciar ",
     ];
 
     const CLOSE_PREFIXES: &[&str] = &[
@@ -1623,6 +1782,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             }
         };
 
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
+    if let Some(intent) = project_request(input) {
+        let ActionIntent::ActivateProject(_) = &intent else {
+            return RouteResult::InternalError(
+                "Project parser returned a non-project intent.".to_string(),
+            );
+        };
+        let permission = PermissionClass::Act;
         return RouteResult::Action(RoutedAction {
             intent,
             permission,
@@ -1745,9 +1918,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => RouteResult::InternalError(
-                "Media parser returned a non-media intent.".to_string(),
-            ),
+            Ok(_) => {
+                RouteResult::InternalError("Media parser returned a non-media intent.".to_string())
+            }
             Err(message) => RouteResult::InvalidMedia(message),
         };
     }
@@ -1762,9 +1935,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
                     decision: policy.decision_for(permission),
                 })
             }
-            Ok(_) => RouteResult::InternalError(
-                "Mouse parser returned a non-mouse intent.".to_string(),
-            ),
+            Ok(_) => {
+                RouteResult::InternalError("Mouse parser returned a non-mouse intent.".to_string())
+            }
             Err(message) => RouteResult::InvalidMouse(message),
         };
     }
@@ -1774,7 +1947,8 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
             Ok(intent) => {
                 let Some(permission) = permission_for_keyboard(&intent) else {
                     return RouteResult::InternalError(
-                        "Keyboard parser returned an intent without a permission class.".to_string(),
+                        "Keyboard parser returned an intent without a permission class."
+                            .to_string(),
                     );
                 };
 
@@ -1889,18 +2063,9 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
     };
 
     let (intent, permission) = match operation {
-        AppOperation::Launch => (
-            ActionIntent::LaunchApp(target),
-            PermissionClass::Act,
-        ),
-        AppOperation::Close => (
-            ActionIntent::CloseApp(target),
-            PermissionClass::Modify,
-        ),
-        AppOperation::Switch => (
-            ActionIntent::SwitchToApp(target),
-            PermissionClass::Act,
-        ),
+        AppOperation::Launch => (ActionIntent::LaunchApp(target), PermissionClass::Act),
+        AppOperation::Close => (ActionIntent::CloseApp(target), PermissionClass::Modify),
+        AppOperation::Switch => (ActionIntent::SwitchToApp(target), PermissionClass::Act),
         AppOperation::Minimize => (
             ActionIntent::SetAppWindowState {
                 target,
@@ -1934,10 +2099,7 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::computer::{
-        keyboard::{KeyCode, ModifierKey},
-        mouse::{MouseAction, MouseButton, ScreenPoint},
-    };
+    use crate::computer::mouse::{MouseAction, MouseButton, ScreenPoint};
 
     #[test]
     fn routes_named_window_state_controls_as_act() {
@@ -2223,6 +2385,40 @@ mod tests {
     }
 
     #[test]
+    fn latest_file_on_desktop_uses_the_desktop_root() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Latest file on the desktop", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Any,
+                    root: PersonalRootFilter::Desktop,
+                    limit: 1,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn recent_documents_in_documents_stay_in_that_folder() {
+        let policy = PermissionPolicy::default();
+        assert!(matches!(
+            route_command("Recent documents in documents", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::FindRecentPersonalFiles(RecentFileQuery {
+                    category: FileCategory::Document,
+                    root: PersonalRootFilter::Documents,
+                    limit: 10,
+                }),
+                permission: PermissionClass::Read,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn latest_download_is_scoped_to_downloads() {
         let policy = PermissionPolicy::default();
         assert!(matches!(
@@ -2322,14 +2518,8 @@ mod tests {
 
     #[test]
     fn parser_permission_helpers_fail_closed_for_unrelated_intents() {
-        assert_eq!(
-            permission_for_clipboard(&ActionIntent::CurrentApp),
-            None
-        );
-        assert_eq!(
-            permission_for_keyboard(&ActionIntent::CurrentApp),
-            None
-        );
+        assert_eq!(permission_for_clipboard(&ActionIntent::CurrentApp), None);
+        assert_eq!(permission_for_keyboard(&ActionIntent::CurrentApp), None);
     }
 
     #[test]
@@ -2451,7 +2641,9 @@ mod tests {
         assert!(matches!(
             route_command("Click", &policy),
             RouteResult::Action(RoutedAction {
-                intent: ActionIntent::Mouse(MouseAction::Click { button: MouseButton::Left }),
+                intent: ActionIntent::Mouse(MouseAction::Click {
+                    button: MouseButton::Left
+                }),
                 permission: PermissionClass::Modify,
                 decision: PermissionDecision::Ask,
             })
@@ -2483,7 +2675,6 @@ mod tests {
             }) if text == "Hello AURA"
         ));
     }
-
 
     #[test]
     fn source_visibility_does_not_override_window_discovery() {
@@ -2613,6 +2804,35 @@ mod tests {
                 })
             ));
         }
+    }
+
+    #[test]
+    fn routes_project_activation_by_name() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Switch to project Artemis", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(name),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if name == "Artemis"
+        ));
+        assert!(matches!(
+            route_command("Ativa o projeto \"Match Day\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(name),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if name == "Match Day"
+        ));
+        assert!(!matches!(
+            route_command("Open Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(_),
+                ..
+            })
+        ));
     }
 
     #[test]

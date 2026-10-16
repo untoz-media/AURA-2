@@ -8,9 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "icons": "tauri icon src-tauri/aura-app-icon.svg",
+    "icons": "node ../../scripts/ensure-app-icons.mjs --force",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm run icons && tauri build"
+    "tauri:build": "node ../../scripts/ensure-app-icons.mjs && tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

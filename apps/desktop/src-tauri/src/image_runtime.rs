@@ -1,7 +1,4 @@
-use crate::{
-    managed_runtime::managed_python_path,
-    model_manager::ModelManager,
-};
+use crate::{managed_runtime::managed_python_path, model_manager::ModelManager};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -278,9 +275,9 @@ impl ImageRuntime {
                                 .as_ref()
                                 .and_then(|running| running.device.clone())
                         }),
-                        cuda: envelope.cuda.or_else(|| {
-                            process_guard.as_ref().and_then(|running| running.cuda)
-                        }),
+                        cuda: envelope
+                            .cuda
+                            .or_else(|| process_guard.as_ref().and_then(|running| running.cuda)),
                         last_error: None,
                         refreshed_at_ms: timestamp_ms(),
                     });

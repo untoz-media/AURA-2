@@ -1,4 +1,7 @@
-use obws::{requests::{inputs::Volume, scene_items::SetEnabled}, Client};
+use obws::{
+    requests::{inputs::Volume, scene_items::SetEnabled},
+    Client,
+};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
@@ -15,7 +18,6 @@ pub struct ObsConnectRequest {
     pub password: Option<String>,
 }
 
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsSceneSwitchRequest {
@@ -31,7 +33,6 @@ pub struct ObsSceneSwitchResult {
     pub changed_at_ms: u64,
 }
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsRecordingActionResult {
@@ -42,7 +43,6 @@ pub struct ObsRecordingActionResult {
     pub changed_at_ms: u64,
 }
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsStreamingActionResult {
@@ -50,7 +50,6 @@ pub struct ObsStreamingActionResult {
     pub streaming: bool,
     pub changed_at_ms: u64,
 }
-
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +59,6 @@ pub struct ObsStreamDuration {
     pub timecode: String,
     pub refreshed_at_ms: u64,
 }
-
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,7 +98,6 @@ pub struct ObsSourceVisibilityResult {
     pub enabled: bool,
     pub changed_at_ms: u64,
 }
-
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -148,7 +145,6 @@ pub struct ObsAudioControlResult {
     pub changed_at_ms: u64,
 }
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsProductionHealth {
@@ -195,7 +191,6 @@ pub struct ObsConnectionState {
     pub last_error: Option<String>,
 }
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObsRuntimeState {
@@ -229,7 +224,6 @@ impl Default for ObsRuntimeState {
         }
     }
 }
-
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -299,7 +293,6 @@ impl ObsController {
         self.state.lock().await.clone()
     }
 
-
     pub async fn runtime_state(&self) -> ObsRuntimeState {
         let client_guard = self.client.lock().await;
         let Some(client) = client_guard.as_ref() else {
@@ -340,7 +333,9 @@ impl ObsController {
             Ok(scene) => Some(scene.id.name),
             Err(error) => {
                 return self
-                    .runtime_failure(format!("Could not read the current OBS program scene: {error}"))
+                    .runtime_failure(format!(
+                        "Could not read the current OBS program scene: {error}"
+                    ))
                     .await;
             }
         };
@@ -393,7 +388,6 @@ impl ObsController {
             ..ObsRuntimeState::default()
         }
     }
-
 
     pub async fn scene_list(&self) -> ObsSceneList {
         let client_guard = self.client.lock().await;
@@ -457,7 +451,6 @@ impl ObsController {
         }
     }
 
-
     pub async fn set_program_scene(
         &self,
         request: ObsSceneSwitchRequest,
@@ -468,11 +461,10 @@ impl ObsController {
             .as_ref()
             .ok_or_else(|| "OBS Studio is not connected.".to_string())?;
 
-        let scene_list = client
-            .scenes()
-            .list()
-            .await
-            .map_err(|error| format!("Could not validate OBS scenes before switching: {error}"))?;
+        let scene_list =
+            client.scenes().list().await.map_err(|error| {
+                format!("Could not validate OBS scenes before switching: {error}")
+            })?;
 
         let scene = scene_list
             .scenes
@@ -530,11 +522,10 @@ impl ObsController {
             );
         }
 
-        let scene_list = client
-            .scenes()
-            .list()
-            .await
-            .map_err(|error| format!("Could not validate OBS scenes before switching: {error}"))?;
+        let scene_list =
+            client.scenes().list().await.map_err(|error| {
+                format!("Could not validate OBS scenes before switching: {error}")
+            })?;
 
         let scene = scene_list
             .scenes
@@ -569,7 +560,6 @@ impl ObsController {
             changed_at_ms: timestamp_ms(),
         })
     }
-
 
     pub async fn set_program_scene_by_name(
         &self,
@@ -857,7 +847,9 @@ impl ObsController {
             .scenes()
             .current_program_scene()
             .await
-            .map_err(|error| format!("Could not validate the current OBS Program scene: {error}"))?;
+            .map_err(|error| {
+                format!("Could not validate the current OBS Program scene: {error}")
+            })?;
 
         if !current.id.name.eq_ignore_ascii_case(&scene_name) {
             return Err(format!(
@@ -875,7 +867,9 @@ impl ObsController {
         let item = items
             .into_iter()
             .find(|item| item.id == request.item_id)
-            .ok_or_else(|| "The requested OBS source item no longer exists in that scene.".to_string())?;
+            .ok_or_else(|| {
+                "The requested OBS source item no longer exists in that scene.".to_string()
+            })?;
 
         client
             .scene_items()
@@ -891,7 +885,9 @@ impl ObsController {
             .scene_items()
             .enabled(scene_name.as_str().into(), item.id)
             .await
-            .map_err(|error| format!("OBS changed source visibility, but verification failed: {error}"))?;
+            .map_err(|error| {
+                format!("OBS changed source visibility, but verification failed: {error}")
+            })?;
 
         if enabled != request.enabled {
             return Err("OBS did not confirm the requested source visibility state.".to_string());
@@ -934,9 +930,9 @@ impl ObsController {
             .into_iter()
             .filter(|item| item.source_name.eq_ignore_ascii_case(&requested));
 
-        let item = matches
-            .next()
-            .ok_or_else(|| format!("No OBS source named “{requested}” exists in Program scene “{scene_name}”."))?;
+        let item = matches.next().ok_or_else(|| {
+            format!("No OBS source named “{requested}” exists in Program scene “{scene_name}”.")
+        })?;
 
         if matches.next().is_some() {
             return Err(format!(
@@ -958,7 +954,9 @@ impl ObsController {
             .scene_items()
             .enabled(scene_name.as_str().into(), item.id)
             .await
-            .map_err(|error| format!("OBS changed source visibility, but verification failed: {error}"))?;
+            .map_err(|error| {
+                format!("OBS changed source visibility, but verification failed: {error}")
+            })?;
 
         if confirmed != enabled {
             return Err("OBS did not confirm the requested source visibility state.".to_string());
@@ -1038,7 +1036,9 @@ impl ObsController {
             .inputs()
             .volume((&input.id).into())
             .await
-            .map_err(|error| format!("OBS changed input volume, but verification failed: {error}"))?;
+            .map_err(|error| {
+                format!("OBS changed input volume, but verification failed: {error}")
+            })?;
 
         if (volume.mul - requested_mul).abs() > 0.02 {
             return Err("OBS did not confirm the requested input volume.".to_string());
@@ -1118,7 +1118,9 @@ impl ObsController {
             .inputs()
             .volume((&input.id).into())
             .await
-            .map_err(|error| format!("OBS changed input volume, but verification failed: {error}"))?;
+            .map_err(|error| {
+                format!("OBS changed input volume, but verification failed: {error}")
+            })?;
 
         if (volume.mul - requested_mul).abs() > 0.02 {
             return Err("OBS did not confirm the requested input volume.".to_string());
@@ -1226,9 +1228,7 @@ impl ObsController {
                     let bitrate = sample.as_ref().and_then(|previous| {
                         let elapsed_ms = checked_at_ms.saturating_sub(previous.sampled_at_ms);
                         let byte_delta = bytes.checked_sub(previous.output_bytes)?;
-                        (elapsed_ms > 0).then_some(
-                            (byte_delta as f64 * 8.0) / elapsed_ms as f64
-                        )
+                        (elapsed_ms > 0).then_some((byte_delta as f64 * 8.0) / elapsed_ms as f64)
                     });
                     *sample = Some(ObsHealthSample {
                         output_bytes: bytes,
@@ -1243,17 +1243,19 @@ impl ObsController {
             None
         };
 
-        let render_skipped_percent =
-            frame_loss_percent(stats.render_skipped_frames as u64, stats.render_total_frames as u64);
-        let output_skipped_percent =
-            frame_loss_percent(stats.output_skipped_frames as u64, stats.output_total_frames as u64);
-        let stream_dropped_percent = match (
-            stream_output_skipped_frames,
-            stream_output_total_frames,
-        ) {
-            (Some(skipped), Some(total)) => Some(frame_loss_percent(skipped, total)),
-            _ => None,
-        };
+        let render_skipped_percent = frame_loss_percent(
+            stats.render_skipped_frames as u64,
+            stats.render_total_frames as u64,
+        );
+        let output_skipped_percent = frame_loss_percent(
+            stats.output_skipped_frames as u64,
+            stats.output_total_frames as u64,
+        );
+        let stream_dropped_percent =
+            match (stream_output_skipped_frames, stream_output_total_frames) {
+                (Some(skipped), Some(total)) => Some(frame_loss_percent(skipped, total)),
+                _ => None,
+            };
 
         let (status, summary, issues) = evaluate_production_health(
             stats.cpu_usage,
@@ -1293,10 +1295,7 @@ impl ObsController {
         })
     }
 
-    pub async fn connect(
-        &self,
-        request: ObsConnectRequest,
-    ) -> Result<ObsConnectionState, String> {
+    pub async fn connect(&self, request: ObsConnectRequest) -> Result<ObsConnectionState, String> {
         let host = request
             .host
             .unwrap_or_else(|| DEFAULT_OBS_HOST.to_string())
@@ -1408,6 +1407,7 @@ fn frame_loss_percent(skipped: u64, total: u64) -> f64 {
     skipped as f64 * 100.0 / total as f64
 }
 
+#[allow(clippy::too_many_arguments)]
 fn evaluate_production_health(
     cpu_usage_percent: f64,
     available_disk_space_mb: f64,
@@ -1457,7 +1457,9 @@ fn evaluate_production_health(
     }
 
     if cpu_usage_percent >= 95.0 {
-        critical.push(format!("OBS CPU usage is very high ({cpu_usage_percent:.1}%)."));
+        critical.push(format!(
+            "OBS CPU usage is very high ({cpu_usage_percent:.1}%)."
+        ));
     } else if cpu_usage_percent >= 80.0 {
         warnings.push(format!("OBS CPU usage is high ({cpu_usage_percent:.1}%)."));
     }
@@ -1610,7 +1612,12 @@ async fn find_input_by_name(
         .inputs()
         .volume((&input.id).into())
         .await
-        .map_err(|_| format!("OBS input “{}” does not expose audio volume control.", input.id.name))?;
+        .map_err(|_| {
+            format!(
+                "OBS input “{}” does not expose audio volume control.",
+                input.id.name
+            )
+        })?;
 
     Ok(input)
 }
@@ -1720,10 +1727,7 @@ async fn read_streaming_active(client: &Client) -> Result<bool, String> {
     Ok(json_bool(&value, "outputActive"))
 }
 
-async fn wait_for_streaming_state(
-    client: &Client,
-    expected_active: bool,
-) -> Result<bool, String> {
+async fn wait_for_streaming_state(client: &Client, expected_active: bool) -> Result<bool, String> {
     for _ in 0..8 {
         let active = read_streaming_active(client).await?;
         if active == expected_active {
@@ -1770,9 +1774,11 @@ async fn read_recording_flags(client: &Client) -> Result<(bool, bool), String> {
 }
 
 fn json_bool(value: &serde_json::Value, key: &str) -> bool {
-    value.get(key).and_then(serde_json::Value::as_bool).unwrap_or(false)
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
 }
-
 
 fn json_u64(value: &serde_json::Value, key: &str) -> Option<u64> {
     value.get(key).and_then(serde_json::Value::as_u64)
@@ -1802,7 +1808,6 @@ fn validate_scene_uuid(value: &str) -> Result<String, String> {
 
     Ok(trimmed.to_string())
 }
-
 
 fn validate_source_name(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
@@ -1878,7 +1883,6 @@ mod tests {
         assert!(validate_target("127.0.0.1", 0).is_err());
     }
 
-
     #[test]
     fn runtime_state_defaults_to_unavailable() {
         let state = ObsRuntimeState::default();
@@ -1905,7 +1909,6 @@ mod tests {
         assert!(!json_bool(&value, "missing"));
     }
 
-
     #[test]
     fn reads_stream_duration_fields_safely() {
         let value = serde_json::json!({
@@ -1922,7 +1925,6 @@ mod tests {
         assert_eq!(json_u64(&value, "missing"), None);
     }
 
-
     #[test]
     fn scene_list_defaults_to_empty() {
         let scenes = ObsSceneList::default();
@@ -1931,7 +1933,6 @@ mod tests {
         assert!(scenes.current_preview_scene.is_none());
         assert!(scenes.last_error.is_none());
     }
-
 
     #[test]
     fn validates_scene_uuid_input() {
@@ -1943,7 +1944,6 @@ mod tests {
         assert!(validate_scene_uuid(&"x".repeat(65)).is_err());
     }
 
-
     #[test]
     fn validates_scene_name_input() {
         assert_eq!(validate_scene_name("  Camera 2  ").unwrap(), "Camera 2");
@@ -1951,10 +1951,12 @@ mod tests {
         assert!(validate_scene_name(&"x".repeat(257)).is_err());
     }
 
-
     #[test]
     fn validates_source_name_input() {
-        assert_eq!(validate_source_name("  Scoreboard  ").unwrap(), "Scoreboard");
+        assert_eq!(
+            validate_source_name("  Scoreboard  ").unwrap(),
+            "Scoreboard"
+        );
         assert!(validate_source_name("").is_err());
         assert!(validate_source_name(&"x".repeat(257)).is_err());
     }
@@ -1976,7 +1978,6 @@ mod tests {
         assert_eq!(value["enabled"], true);
     }
 
-
     #[test]
     fn converts_audio_multiplier_to_percent() {
         assert_eq!(volume_mul_to_percent(0.0), 0);
@@ -1995,24 +1996,47 @@ mod tests {
     #[test]
     fn production_health_grades_good_warning_and_critical() {
         let good = evaluate_production_health(
-            20.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+            20.0,
+            50_000.0,
+            4.0,
+            0.0,
+            0.0,
+            true,
+            false,
+            Some(0.0),
+            Some(0.0),
         );
         assert_eq!(good.0, "good");
         assert!(good.2.is_empty());
 
         let warning = evaluate_production_health(
-            85.0, 50_000.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+            85.0,
+            50_000.0,
+            4.0,
+            0.0,
+            0.0,
+            true,
+            false,
+            Some(0.0),
+            Some(0.0),
         );
         assert_eq!(warning.0, "warning");
         assert!(!warning.2.is_empty());
 
         let critical = evaluate_production_health(
-            20.0, 500.0, 4.0, 0.0, 0.0, true, false, Some(0.0), Some(0.0),
+            20.0,
+            500.0,
+            4.0,
+            0.0,
+            0.0,
+            true,
+            false,
+            Some(0.0),
+            Some(0.0),
         );
         assert_eq!(critical.0, "critical");
         assert!(!critical.2.is_empty());
     }
-
 
     #[test]
     fn production_health_flags_stream_drops() {
@@ -2029,7 +2053,10 @@ mod tests {
         );
 
         assert_eq!(health.0, "critical");
-        assert!(health.2.iter().any(|issue| issue.contains("Stream dropped")));
+        assert!(health
+            .2
+            .iter()
+            .any(|issue| issue.contains("Stream dropped")));
     }
 
     #[test]
@@ -2057,7 +2084,6 @@ mod tests {
         assert_eq!(value["muted"], false);
     }
 
-
     #[test]
     fn recording_action_result_serializes_expected_state() {
         let result = ObsRecordingActionResult {
@@ -2074,7 +2100,6 @@ mod tests {
         assert_eq!(value["paused"], false);
         assert_eq!(value["outputPath"], "C:\\Videos\\capture.mkv");
     }
-
 
     #[test]
     fn streaming_action_result_serializes_expected_state() {

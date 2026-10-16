@@ -12,9 +12,9 @@ The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, 
 
 > **Current stage:** M009 Beta Candidate · AURA-2 0.9.0-beta.1 · Windows installer validation pending
 
-A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate; the current hosted-runner outage does not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest.
+A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate. GitHub-hosted jobs currently fail before step 1 because the organization account is locked for billing, so they do not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest. The npm dependency lock is committed as `package-lock.json`.
 
-For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance.
+For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance. The doctor and the other Windows scripts are ASCII, parse in Windows PowerShell 5.1, and do not assign automatic variables such as `$Host`. The Tauri icon set, including `icons/icon.ico`, is committed, so `cargo test` does not need a prior `npm run icons`. A build skips icon regeneration when that set still matches `aura-app-icon.svg`.
 
 ---
 
@@ -137,7 +137,7 @@ OBS WebSocket v5 connection, live state detection, scene/source/audio control, r
 Persistent local memory, app/window/recent-file context, user routines and project-scoped memory.
 
 ### M006 — Voice ✅
-Local microphone capture, Push-to-Talk, Whisper STT, Piper TTS, Conversation Mode, interruption and wake phrase support.
+Local microphone capture, Push-to-Talk (Ctrl+Shift+F8), Whisper STT, Piper TTS, and Conversation Mode. Push-to-talk stops speech that is already playing. The optional wake phrase is local and off by default. When it is enabled, a louder matching phrase during speech, and for a few seconds after, also stops playback, and a transcript that repeats AURA's own spoken text is ignored.
 
 ### M007 — Vision ✅
 Explicit Windows screenshot/region capture, active-window understanding, local multimodal UI analysis and privacy-first history.
@@ -167,7 +167,9 @@ https://github.com/untoz-media/AURA-1
 
 AURA-2 is now at **M009 — Beta Candidate** as **0.9.0-beta.1**. The candidate combines deterministic Windows control, named window state control, OBS Director Mode, persistent local memory and context, local Voice, local Vision, local image generation through AURA Create, bounded local Agent planning, reusable AURA Actions, event/scheduled automations, recovery-aware background execution, first-run Beta onboarding, local health diagnostics and an explicit zero-telemetry policy.
 
-The remaining Public Beta gates are stability validation of a real Windows installer and restoration of GitHub-hosted runner execution. Drag & Drop intake is now included in the candidate and remains subject to the same Windows smoke gate. APIs, architecture and product behaviour may still change during the Beta cycle.
+Video generation is still planned. The Create screen says so and does not offer a fake generate action.
+
+The remaining Public Beta gates are a real Windows NSIS installer (`npm run beta:build:windows`, then `npm run beta:verify:artifact`) and restoration of GitHub-hosted runner execution. Hosted jobs fail before step 1 with the annotation "The job was not started because your account is locked due to a billing issue" (Windows Build job 111957243513, run 37367842805). A later scheduled run, 38674062517 on 2026-10-15, failed the same way with zero steps. Drag and drop, memory editing, and the OBS permission gate are in this candidate and still need that Windows smoke pass. M009.3 and M009.6 stay open. APIs, architecture and product behaviour may still change during the Beta cycle.
 
 ---
 

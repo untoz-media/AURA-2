@@ -101,12 +101,7 @@ pub fn active_window_rect() -> Result<(CaptureRect, Option<String>), String> {
 }
 
 pub fn capture_full_screen(app: &AppHandle) -> Result<VisionCapture, String> {
-    capture_rect(
-        app,
-        validate_rect(virtual_desktop_rect())?,
-        "screen",
-        None,
-    )
+    capture_rect(app, validate_rect(virtual_desktop_rect())?, "screen", None)
 }
 
 pub fn capture_active_window(app: &AppHandle) -> Result<VisionCapture, String> {
@@ -162,10 +157,7 @@ pub fn capture_region(
     )
 }
 
-pub fn region_from_points(
-    first: (i32, i32),
-    second: (i32, i32),
-) -> Result<CaptureRect, String> {
+pub fn region_from_points(first: (i32, i32), second: (i32, i32)) -> Result<CaptureRect, String> {
     let left = first.0.min(second.0);
     let top = first.1.min(second.1);
     let right = first.0.max(second.0);
@@ -184,10 +176,7 @@ pub fn remove_capture(path: &str) {
     let _ = fs::remove_file(path);
 }
 
-pub fn import_local_image(
-    app: &AppHandle,
-    source: &Path,
-) -> Result<VisionCapture, String> {
+pub fn import_local_image(app: &AppHandle, source: &Path) -> Result<VisionCapture, String> {
     const MAX_IMPORT_BYTES: u64 = 40 * 1024 * 1024;
 
     if !source.exists() || !source.is_file() {
@@ -216,8 +205,7 @@ pub fn import_local_image(
     let pixels = i64::from(width) * i64::from(height);
     if width < 8 || height < 8 || pixels <= 0 || pixels > MAX_CAPTURE_PIXELS {
         return Err(
-            "Dropped image dimensions are outside AURA Vision's safe local limits."
-                .to_string(),
+            "Dropped image dimensions are outside AURA Vision's safe local limits.".to_string(),
         );
     }
 
@@ -227,9 +215,9 @@ pub fn import_local_image(
             .map_err(|error| format!("Could not create Vision capture cache: {error}"))?;
     }
 
-    image
-        .save(&output)
-        .map_err(|error| format!("Could not normalize the dropped image to Vision cache: {error}"))?;
+    image.save(&output).map_err(|error| {
+        format!("Could not normalize the dropped image to Vision cache: {error}")
+    })?;
 
     Ok(VisionCapture {
         id: output
@@ -344,7 +332,7 @@ fn capture_rect(
         return Err("Windows could not read screenshot pixels.".to_string());
     }
 
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
         pixel[3] = 255;
     }
@@ -399,10 +387,7 @@ fn validate_rect(rect: CaptureRect) -> Result<CaptureRect, String> {
     let desktop_right = desktop.x.saturating_add(desktop.width);
     let desktop_bottom = desktop.y.saturating_add(desktop.height);
 
-    if rect.x < desktop.x
-        || rect.y < desktop.y
-        || right > desktop_right
-        || bottom > desktop_bottom
+    if rect.x < desktop.x || rect.y < desktop.y || right > desktop_right || bottom > desktop_bottom
     {
         return Err("Vision capture region is outside the Windows virtual desktop.".to_string());
     }
@@ -432,7 +417,7 @@ mod tests {
 
     #[test]
     fn dropped_image_pixel_limit_matches_capture_limit() {
-        assert!(MAX_CAPTURE_PIXELS >= 512 * 512);
+        const { assert!(MAX_CAPTURE_PIXELS >= 512 * 512) };
         assert!(MAX_CAPTURE_PIXELS < i64::from(i32::MAX));
     }
 

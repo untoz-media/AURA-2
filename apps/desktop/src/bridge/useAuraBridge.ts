@@ -90,6 +90,7 @@ import {
   deleteDirectorPreset,
   runDirectorPreset,
   createMemory,
+  updateMemory,
   deleteMemory,
   getUserRoutines,
   saveUserRoutine,
@@ -1987,6 +1988,28 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const updateMemoryControl = useCallback(async (
+    id: string,
+    content: string,
+  ) => {
+    try {
+      setBridgeError(null);
+      const record = await updateMemory({ id, content });
+      const snapshot = await getMemories();
+      setMemory(snapshot);
+      setActivity(`Updated memory: ${record.content}`);
+      return record;
+    } catch (error) {
+      const message = String(error);
+      setBridgeError({
+        code: "memory.update_failed",
+        message,
+      });
+      setActivity(message);
+      throw error;
+    }
+  }, []);
+
   const deleteMemoryControl = useCallback(async (
     memoryId: string,
   ) => {
@@ -2058,12 +2081,54 @@ export function useAuraBridge() {
     }
   }, []);
 
+  const requireDesktopConfirmation = useCallback((
+    permission: "act" | "sensitive",
+    message: string,
+  ) => {
+    const decision = permission === "sensitive"
+      ? permissionPolicy.sensitive === "never"
+        ? "never"
+        : "ask"
+      : permissionPolicy[permission];
+
+    if (decision === "never") {
+      const error = `This action is blocked because ${permission} permission is Never.`;
+      setBridgeError({ code: "permissions.blocked", message: error });
+      setActivity(error);
+      throw new Error(error);
+    }
+
+    if (decision === "ask") {
+      if (!window.confirm(message)) {
+        const error = "Cancelled before confirmation. Nothing was changed.";
+        setActivity(error);
+        throw new Error(error);
+      }
+      return true;
+    }
+
+    return false;
+  }, [permissionPolicy]);
+
   const runDirectorPresetControl = useCallback(async (
     presetId: string,
   ): Promise<DirectorPresetRunResult> => {
+    const preset = directorPresets.find((item) => item.id === presetId);
+    const sensitive = preset
+      ? preset.actions.some(
+          (action) => action.type === "streaming" && action.action === "start",
+        )
+      : true;
+    const confirmed = requireDesktopConfirmation(
+      sensitive ? "sensitive" : "act",
+      sensitive
+        ? "This Director Mode preset can go live. Start it only if you mean to publish the OBS stream?"
+        : "Run this Director Mode preset?",
+    );
+
     try {
       setBridgeError(null);
-      const result = await runDirectorPreset(presetId);
+      const result = await runDirectorPreset(presetId, confirmed);
       setDirectorLastRun(result);
 
       const refreshes = await Promise.allSettled([
@@ -2104,7 +2169,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [directorPresets, requireDesktopConfirmation]);
 
 
   const switchObsProgramScene = useCallback(async (
@@ -2112,7 +2177,11 @@ export function useAuraBridge() {
   ): Promise<ObsSceneSwitchResult> => {
     try {
       setBridgeError(null);
-      const result = await setObsProgramScene({ sceneUuid });
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        "Switch the OBS Program scene?",
+      );
+      const result = await setObsProgramScene({ sceneUuid }, confirmed);
       const [runtime, scenes, sources, audio] = await Promise.all([
         getObsRuntimeState(),
         getObsScenes(),
@@ -2134,14 +2203,18 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
   const switchObsPreviewScene = useCallback(async (
     sceneUuid: string,
   ): Promise<ObsSceneSwitchResult> => {
     try {
       setBridgeError(null);
-      const result = await setObsPreviewScene({ sceneUuid });
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        "Switch the OBS Preview scene?",
+      );
+      const result = await setObsPreviewScene({ sceneUuid }, confirmed);
       const [runtime, scenes, sources] = await Promise.all([
         getObsRuntimeState(),
         getObsScenes(),
@@ -2161,7 +2234,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
 
   const controlObsRecording = useCallback(async (
@@ -2169,15 +2242,25 @@ export function useAuraBridge() {
   ): Promise<ObsRecordingActionResult> => {
     try {
       setBridgeError(null);
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        action === "start"
+          ? "Start OBS recording?"
+          : action === "stop"
+            ? "Stop OBS recording?"
+            : action === "pause"
+              ? "Pause OBS recording?"
+              : "Resume OBS recording?",
+      );
 
       const result = await (
         action === "start"
-          ? startObsRecording()
+          ? startObsRecording(confirmed)
           : action === "stop"
-            ? stopObsRecording()
+            ? stopObsRecording(confirmed)
             : action === "pause"
-              ? pauseObsRecording()
-              : resumeObsRecording()
+              ? pauseObsRecording(confirmed)
+              : resumeObsRecording(confirmed)
       );
 
       const runtime = await getObsRuntimeState();
@@ -2204,7 +2287,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
 
   const controlObsStreaming = useCallback(async (
@@ -2212,11 +2295,17 @@ export function useAuraBridge() {
   ): Promise<ObsStreamingActionResult> => {
     try {
       setBridgeError(null);
+      const confirmed = requireDesktopConfirmation(
+        action === "start" ? "sensitive" : "act",
+        action === "start"
+          ? "Going live can publish audio and video outside this PC. Start the OBS stream?"
+          : "Stop the OBS stream?",
+      );
 
       const result = await (
         action === "start"
-          ? startObsStreaming()
-          : stopObsStreaming()
+          ? startObsStreaming(confirmed)
+          : stopObsStreaming(confirmed)
       );
 
       const runtime = await getObsRuntimeState();
@@ -2238,7 +2327,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
 
   const controlObsSourceVisibility = useCallback(async (
@@ -2248,12 +2337,16 @@ export function useAuraBridge() {
   ): Promise<ObsSourceVisibilityResult> => {
     try {
       setBridgeError(null);
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        enabled ? "Show this OBS source?" : "Hide this OBS source?",
+      );
 
       const result = await setObsSourceVisibility({
         sceneName,
         itemId,
         enabled,
-      });
+      }, confirmed);
 
       const sources = await getObsSourceItems();
       setObsSources(sources);
@@ -2271,7 +2364,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
 
   const controlObsAudioMute = useCallback(async (
@@ -2280,8 +2373,12 @@ export function useAuraBridge() {
   ): Promise<ObsAudioControlResult> => {
     try {
       setBridgeError(null);
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        muted ? "Mute this OBS input?" : "Unmute this OBS input?",
+      );
 
-      const result = await setObsAudioMuted({ inputUuid, muted });
+      const result = await setObsAudioMuted({ inputUuid, muted }, confirmed);
       const audio = await getObsAudioInputs();
       setObsAudio(audio);
       setActivity(
@@ -2298,7 +2395,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
   const controlObsAudioVolume = useCallback(async (
     inputUuid: string,
@@ -2306,8 +2403,12 @@ export function useAuraBridge() {
   ): Promise<ObsAudioControlResult> => {
     try {
       setBridgeError(null);
+      const confirmed = requireDesktopConfirmation(
+        "act",
+        `Set this OBS input to ${percent}%?`,
+      );
 
-      const result = await setObsAudioVolume({ inputUuid, percent });
+      const result = await setObsAudioVolume({ inputUuid, percent }, confirmed);
       const audio = await getObsAudioInputs();
       setObsAudio(audio);
       setActivity(
@@ -2324,7 +2425,7 @@ export function useAuraBridge() {
       setActivity(message);
       throw error;
     }
-  }, []);
+  }, [requireDesktopConfirmation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2839,6 +2940,7 @@ export function useAuraBridge() {
     clearConversationControl,
     runModelOperation,
     createMemoryControl,
+    updateMemoryControl,
     deleteMemoryControl,
     saveDirectorPresetControl,
     deleteDirectorPresetControl,

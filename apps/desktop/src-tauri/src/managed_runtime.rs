@@ -19,9 +19,17 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const MANAGED_RUNTIME_EVENT: &str = "aura:managed-runtime";
 const PYTHON_VERSION: &str = "3.12.10";
-const PYTHON_INSTALLER_NAME: &str = "python-3.12.10-amd64.exe";
-const PYTHON_INSTALLER_URL: &str =
-    "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe";
+
+fn python_installer_name() -> String {
+    format!("python-{PYTHON_VERSION}-amd64.exe")
+}
+
+fn python_installer_url() -> String {
+    format!(
+        "https://www.python.org/ftp/python/{PYTHON_VERSION}/{}",
+        python_installer_name()
+    )
+}
 const MIN_PYTHON_INSTALLER_BYTES: u64 = 20_000_000;
 const MIN_RUNTIME_FREE_SPACE_BYTES: u64 = 10_000_000_000;
 const RUNTIME_MARKER: &str = "managed-runtime.json";
@@ -214,10 +222,12 @@ impl ManagedRuntimeSetup {
             let python_dir = runtime_python_dir(app)?;
 
             if let Some(parent) = root.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|error| format!("Could not create runtime parent directory: {error}"))?;
-                let free = fs2::available_space(parent)
-                    .map_err(|error| format!("Could not read available runtime disk space: {error}"))?;
+                fs::create_dir_all(parent).map_err(|error| {
+                    format!("Could not create runtime parent directory: {error}")
+                })?;
+                let free = fs2::available_space(parent).map_err(|error| {
+                    format!("Could not read available runtime disk space: {error}")
+                })?;
                 let reclaimable = if repair && root.exists() {
                     directory_size(&root).unwrap_or(0)
                 } else {
@@ -271,7 +281,8 @@ impl ManagedRuntimeSetup {
 
                 if !python_exe.exists() {
                     return Err(
-                        "Python installer completed but AURA could not find python.exe.".to_string(),
+                        "Python installer completed but AURA could not find python.exe."
+                            .to_string(),
                     );
                 }
             }
@@ -347,12 +358,7 @@ impl ManagedRuntimeSetup {
             args.extend(RUNTIME_PACKAGES.iter().copied());
             run_python(&python_exe, &args)?;
 
-            self.update_phase(
-                app,
-                "verifying",
-                94.0,
-                "Verifying the managed AI runtime…",
-            );
+            self.update_phase(app, "verifying", 94.0, "Verifying the managed AI runtime…");
 
             let verification = verify_python_runtime(&python_exe)?;
             let marker = RuntimeMarker {
@@ -383,7 +389,7 @@ impl ManagedRuntimeSetup {
         let cache_dir = runtime_cache_dir(app)?;
         fs::create_dir_all(&cache_dir)
             .map_err(|error| format!("Could not create runtime download cache: {error}"))?;
-        let installer = cache_dir.join(PYTHON_INSTALLER_NAME);
+        let installer = cache_dir.join(python_installer_name());
 
         if installer.exists() {
             let size = fs::metadata(&installer)
@@ -401,7 +407,7 @@ impl ManagedRuntimeSetup {
             .map_err(|error| format!("Could not initialize runtime downloader: {error}"))?;
 
         let mut response = client
-            .get(PYTHON_INSTALLER_URL)
+            .get(python_installer_url())
             .send()
             .map_err(|error| format!("Could not download Python runtime: {error}"))?
             .error_for_status()
@@ -480,13 +486,7 @@ impl ManagedRuntimeSetup {
         Ok(installer)
     }
 
-    fn update_phase(
-        &self,
-        app: &AppHandle,
-        state: &str,
-        progress_percent: f64,
-        message: &str,
-    ) {
+    fn update_phase(&self, app: &AppHandle, state: &str, progress_percent: f64, message: &str) {
         let current = self
             .status
             .lock()
@@ -591,9 +591,7 @@ fn status_from_marker(python: &Path, marker: RuntimeMarker) -> ManagedRuntimeSta
 
 #[cfg(windows)]
 fn verify_authenticode(installer: &Path) -> Result<(), String> {
-    let path = installer
-        .to_string_lossy()
-        .replace('\'', "''");
+    let path = installer.to_string_lossy().replace('\'', "''");
     let script = format!(
         "$sig = Get-AuthenticodeSignature -LiteralPath '{}'; if ($sig.Status -ne 'Valid') {{ Write-Error $sig.StatusMessage; exit 2 }}",
         path
@@ -767,10 +765,7 @@ pub(crate) fn managed_python_path(app: &AppHandle) -> Result<PathBuf, String> {
     runtime_python_path(app)
 }
 
-pub(crate) fn python_module_available(
-    app: &AppHandle,
-    module: &str,
-) -> Result<bool, String> {
+pub(crate) fn python_module_available(app: &AppHandle, module: &str) -> Result<bool, String> {
     let python = runtime_python_path(app)?;
     if !python.exists() {
         return Ok(false);
@@ -790,10 +785,10 @@ pub(crate) fn python_module_available(
             .stderr(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW);
 
-        return command
+        command
             .status()
             .map(|status| status.success())
-            .map_err(|error| format!("Could not inspect managed Python module {module}: {error}"));
+            .map_err(|error| format!("Could not inspect managed Python module {module}: {error}"))
     }
 
     #[cfg(not(windows))]
@@ -803,13 +798,12 @@ pub(crate) fn python_module_available(
     }
 }
 
-pub(crate) fn install_managed_python_package(
-    app: &AppHandle,
-    package: &str,
-) -> Result<(), String> {
+pub(crate) fn install_managed_python_package(app: &AppHandle, package: &str) -> Result<(), String> {
     let python = runtime_python_path(app)?;
     if !python.exists() {
-        return Err("AURA Managed Runtime is not installed. Install it from Models first.".to_string());
+        return Err(
+            "AURA Managed Runtime is not installed. Install it from Models first.".to_string(),
+        );
     }
 
     #[cfg(windows)]
@@ -883,9 +877,10 @@ mod tests {
     #[test]
     fn pinned_python_installer_matches_expected_release() {
         assert_eq!(PYTHON_VERSION, "3.12.10");
-        assert!(PYTHON_INSTALLER_URL.ends_with("python-3.12.10-amd64.exe"));
-        assert!(MIN_PYTHON_INSTALLER_BYTES >= 20_000_000);
-        assert!(MIN_RUNTIME_FREE_SPACE_BYTES >= 10_000_000_000);
+        assert!(python_installer_url().ends_with(&python_installer_name()));
+        assert!(python_installer_name().contains(PYTHON_VERSION));
+        const { assert!(MIN_PYTHON_INSTALLER_BYTES >= 20_000_000) };
+        const { assert!(MIN_RUNTIME_FREE_SPACE_BYTES >= 10_000_000_000) };
     }
 
     #[test]

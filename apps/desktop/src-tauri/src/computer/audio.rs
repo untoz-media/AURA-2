@@ -1,19 +1,16 @@
 use std::{mem::size_of, ptr};
 
 use windows::Win32::{
-        Media::Audio::{
-            eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
-            Endpoints::IAudioEndpointVolume,
-        },
-        System::Com::{
-            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL,
-            COINIT_MULTITHREADED,
-        },
-    };
+    Media::Audio::{
+        eConsole, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator, MMDeviceEnumerator,
+    },
+    System::Com::{
+        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
+    },
+};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
-    VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
-    VK_MEDIA_STOP,
+    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_MEDIA_NEXT_TRACK,
+    VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK, VK_MEDIA_STOP,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +46,10 @@ impl std::fmt::Display for AudioError {
         match self {
             Self::InvalidVolume => write!(formatter, "Volume must be between 0 and 100 percent."),
             Self::ComInitialization(message) => {
-                write!(formatter, "Windows audio COM initialization failed: {message}")
+                write!(
+                    formatter,
+                    "Windows audio COM initialization failed: {message}"
+                )
             }
             Self::CoreAudio(message) => write!(formatter, "Windows Core Audio failed: {message}"),
             Self::MediaKeyInjection { expected, sent } => write!(
@@ -188,19 +188,10 @@ fn key_input(vk: u16, flags: u32) -> INPUT {
 }
 
 fn send_media_key(vk: u16) -> Result<(), AudioError> {
-    let inputs = [
-        key_input(vk, 0),
-        key_input(vk, KEYEVENTF_KEYUP),
-    ];
+    let inputs = [key_input(vk, 0), key_input(vk, KEYEVENTF_KEYUP)];
 
     let expected = inputs.len() as u32;
-    let sent = unsafe {
-        SendInput(
-            expected,
-            inputs.as_ptr(),
-            size_of::<INPUT>() as i32,
-        )
-    };
+    let sent = unsafe { SendInput(expected, inputs.as_ptr(), size_of::<INPUT>() as i32) };
 
     if sent == expected {
         Ok(())
@@ -242,8 +233,14 @@ mod tests {
 
     #[test]
     fn volume_percent_bounds_are_valid() {
-        assert!(matches!(MediaAction::SetVolume(0), MediaAction::SetVolume(0)));
-        assert!(matches!(MediaAction::SetVolume(100), MediaAction::SetVolume(100)));
+        assert!(matches!(
+            MediaAction::SetVolume(0),
+            MediaAction::SetVolume(0)
+        ));
+        assert!(matches!(
+            MediaAction::SetVolume(100),
+            MediaAction::SetVolume(100)
+        ));
     }
 
     #[test]

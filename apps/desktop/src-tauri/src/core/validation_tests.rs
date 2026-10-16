@@ -1,4 +1,6 @@
-use super::action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction};
+use super::action_router::{
+    route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction,
+};
 use crate::{
     computer::{
         app_launcher::AppTarget,
@@ -22,7 +24,10 @@ fn assert_action(
             permission: actual_permission,
             decision: actual_decision,
         }) => {
-            assert_eq!(actual_permission, permission, "permission mismatch for {command}");
+            assert_eq!(
+                actual_permission, permission,
+                "permission mismatch for {command}"
+            );
             assert_eq!(actual_decision, decision, "decision mismatch for {command}");
             intent
         }

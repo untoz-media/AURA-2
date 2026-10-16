@@ -1,14 +1,11 @@
 use windows::Win32::{
-        Foundation::{HANDLE, HGLOBAL},
-        System::{
-            DataExchange::{
-                CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
-            },
-            Memory::{
-                GlobalAlloc, GlobalFree, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
-            },
-            Ole::CF_UNICODETEXT,
+    Foundation::{GlobalFree, HANDLE, HGLOBAL},
+    System::{
+        DataExchange::{
+            CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
         },
+        Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE},
+        Ole::CF_UNICODETEXT,
     },
 };
 
@@ -58,7 +55,7 @@ impl Drop for GlobalMemoryGuard {
     fn drop(&mut self) {
         if let Some(handle) = self.handle.take() {
             unsafe {
-                let _ = GlobalFree(handle);
+                let _ = GlobalFree(Some(handle));
             }
         }
     }
@@ -112,9 +109,11 @@ pub fn read_text() -> Result<String, String> {
         return Ok(String::new());
     }
 
-    let words =
-        unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u16, words_len) };
-    let actual_len = words.iter().position(|&value| value == 0).unwrap_or(words_len);
+    let words = unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u16, words_len) };
+    let actual_len = words
+        .iter()
+        .position(|&value| value == 0)
+        .unwrap_or(words_len);
 
     Ok(String::from_utf16_lossy(&words[..actual_len]))
 }
@@ -136,13 +135,12 @@ pub fn write_text(text: &str) -> Result<usize, String> {
         .collect::<Vec<_>>();
 
     let _guard = ClipboardGuard::open()?;
-    unsafe { EmptyClipboard() }
-        .map_err(|error| format!("Windows could not clear the clipboard before writing: {error}"))?;
+    unsafe { EmptyClipboard() }.map_err(|error| {
+        format!("Windows could not clear the clipboard before writing: {error}")
+    })?;
 
     unsafe {
-        let global = GlobalMemoryGuard::allocate(
-            wide.len() * std::mem::size_of::<u16>(),
-        )?;
+        let global = GlobalMemoryGuard::allocate(wide.len() * std::mem::size_of::<u16>())?;
         let handle = global.handle()?;
 
         let ptr = GlobalLock(handle);
@@ -175,7 +173,10 @@ pub fn summarize_text(text: &str) -> String {
         return "Clipboard text is empty.".to_string();
     }
 
-    let visible = text.chars().take(MAX_CLIPBOARD_READ_CHARS).collect::<String>();
+    let visible = text
+        .chars()
+        .take(MAX_CLIPBOARD_READ_CHARS)
+        .collect::<String>();
     if total > MAX_CLIPBOARD_READ_CHARS {
         format!(
             "Clipboard text ({total} characters; showing the first {MAX_CLIPBOARD_READ_CHARS}):\n\n{visible}"
@@ -201,7 +202,12 @@ mod tests {
     fn clipboard_summary_truncates_large_text() {
         let text = "x".repeat(MAX_CLIPBOARD_READ_CHARS + 25);
         let summary = summarize_text(&text);
-        assert!(summary.contains("showing the first 4000"));
-        assert_eq!(summary.matches('x').count(), MAX_CLIPBOARD_READ_CHARS);
+        let Some((header, visible)) = summary.split_once("\n\n") else {
+            panic!("clipboard summary should separate its header from the visible text");
+        };
+        assert!(header.contains("showing the first 4000"));
+        assert!(header.contains("4025 characters"));
+        assert_eq!(visible.chars().count(), MAX_CLIPBOARD_READ_CHARS);
+        assert!(visible.chars().all(|character| character == 'x'));
     }
 }

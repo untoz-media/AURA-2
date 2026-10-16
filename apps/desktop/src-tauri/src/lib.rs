@@ -3,8 +3,8 @@ mod audio_input;
 mod beta;
 mod computer;
 mod core;
-mod integrations;
 mod image_runtime;
+mod integrations;
 mod managed_runtime;
 mod memory;
 mod model_manager;
@@ -20,25 +20,21 @@ mod vision_runtime;
 
 use agents::{
     delete_action, delete_automation, list_automations, list_saved_actions, plan_goal,
-    recover_interrupted_runs,
-    run_saved_action, save_action, save_automation, set_automation_enabled, AgentEngine,
-    AgentPlan, AgentRun, AgentSnapshot, AuraAutomation, AutomationScheduler,
-    SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
+    recover_interrupted_runs, run_saved_action, save_action, save_automation,
+    set_automation_enabled, AgentEngine, AgentPlan, AgentRun, AgentSnapshot, AuraAutomation,
+    AutomationScheduler, SaveAuraActionRequest, SaveAutomationRequest, SavedAuraAction,
 };
 use audio_input::{AudioInputManager, AudioInputSnapshot, CapturedAudio};
 use beta::{
     begin_session as begin_beta_session, export_diagnostics as export_beta_diagnostics_file,
     export_test_report as export_beta_test_report_file,
-    local_health_checks as beta_local_health_checks,
-    mark_session_clean as mark_beta_session_clean,
+    local_health_checks as beta_local_health_checks, mark_session_clean as mark_beta_session_clean,
     repair_recovery_state as repair_beta_recovery_state_store,
-    reset_test_session as reset_beta_test_session_store,
-    save_preferences as save_beta_preferences,
+    reset_test_session as reset_beta_test_session_store, save_preferences as save_beta_preferences,
     set_test_check as set_beta_test_check_store,
-    start_test_session as start_beta_test_session_store,
-    status as beta_status, test_session as beta_test_session,
-    BetaSessionRuntime, BetaStatus, BetaTestSession, DiagnosticCheck, DiagnosticsSnapshot,
-    SetBetaPreferencesRequest,
+    start_test_session as start_beta_test_session_store, status as beta_status,
+    test_session as beta_test_session, BetaSessionRuntime, BetaStatus, BetaTestSession,
+    DiagnosticCheck, DiagnosticsSnapshot, SetBetaPreferencesRequest,
 };
 use computer::app_launcher::{launch_app, AppTarget};
 use computer::app_lifecycle::close_app;
@@ -56,8 +52,8 @@ use computer::drop_intake::{
     DropIntakeSnapshot, DropIntakeState, DroppedFileInspection,
 };
 use computer::file_intelligence::{
-    recent_personal_files, reveal_personal_path, search_personal_files,
-    summarize_file_search, summarize_recent_files as summarize_recent_file_search,
+    recent_personal_files, reveal_personal_path, search_personal_files, summarize_file_search,
+    summarize_recent_files as summarize_recent_file_search,
 };
 use computer::keyboard::{press_shortcut, type_text};
 use computer::mouse::{execute_mouse_action, MouseAction};
@@ -71,49 +67,48 @@ use computer::window_manager::{
     CurrentAppInfo,
 };
 use core::{
-    action_router::{route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult, RoutedAction},
-    confirmation::{
-        validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS,
+    action_router::{
+        route_command, ActionIntent, ObsRecordingAction, ObsStreamingAction, RouteResult,
+        RoutedAction,
     },
+    confirmation::{validate_pending_confirmation, PendingConfirmation, CONFIRMATION_TTL_MS},
+};
+use image_runtime::{
+    ImageGenerationRequest, ImageGenerationResult, ImageRuntime, ImageRuntimeStatus,
 };
 use integrations::director::{
     delete_director_preset, find_director_preset_by_id, load_director_presets,
     preset_requires_sensitive_permission, resolve_director_preset_command, run_director_preset,
     save_director_preset, DirectorPreset, DirectorPresetRunResult, SaveDirectorPresetRequest,
 };
-use integrations::obs::{ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest, ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth, ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest, ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult, ObsStreamDuration, ObsStreamingActionResult};
-use image_runtime::{ImageGenerationRequest, ImageGenerationResult, ImageRuntime, ImageRuntimeStatus};
-use memory::{
-    create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
-    CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
+use integrations::obs::{
+    ObsAudioControlResult, ObsAudioInputList, ObsAudioMuteRequest, ObsAudioVolumeRequest,
+    ObsConnectRequest, ObsConnectionState, ObsController, ObsProductionHealth,
+    ObsRecordingActionResult, ObsRuntimeState, ObsSceneList, ObsSceneSwitchRequest,
+    ObsSceneSwitchResult, ObsSourceItemList, ObsSourceVisibilityRequest, ObsSourceVisibilityResult,
+    ObsStreamDuration, ObsStreamingActionResult,
 };
 use managed_runtime::{ManagedRuntimeSetup, ManagedRuntimeStatus};
+use memory::{
+    create_memory, delete_memory, delete_memory_by_content, memory_snapshot, summarize_memories,
+    update_memory, CreateMemoryRequest, MemoryCreateResult, MemoryRecord, MemorySnapshot,
+    UpdateMemoryRequest,
+};
 use model_manager::{ModelCatalog, ModelManager};
 use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use project_memory::{
-    active_project, delete_project, project_snapshot, save_project, set_active_project,
-    summarize_active_project, ProjectMemory, ProjectMemorySnapshot, SaveProjectRequest,
+    delete_project, find_project_by_name_or_alias, project_snapshot, save_project,
+    set_active_project, summarize_active_project, ProjectMemory, ProjectMemorySnapshot,
+    SaveProjectRequest,
 };
 use routines::{
     delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
     routine_requires_sensitive_permission, run_routine, save_routine, RoutineRunResult,
     SaveRoutineRequest, UserRoutine,
 };
-use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
-use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
-use vision_capture::{
-    capture_active_window, capture_full_screen, capture_region, capture_window_handle,
-    cursor_position, import_local_image, region_from_points, remove_capture, CaptureRect,
-    VisionCapture,
-};
-use vision_history::{
-    clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
-    save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
-    VisionHistorySnapshot, VisionPreferences,
-};
-use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
 use serde::{Deserialize, Serialize};
+use speech_runtime::{SpeechRuntime, SpeechRuntimeStatus};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -132,9 +127,18 @@ use tauri::{
     AppHandle, Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tauri_plugin_global_shortcut::{
-    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tts_runtime::{TtsRuntime, TtsRuntimeStatus};
+use vision_capture::{
+    capture_active_window, capture_full_screen, capture_region, capture_window_handle,
+    cursor_position, import_local_image, region_from_points, remove_capture, VisionCapture,
 };
+use vision_history::{
+    clear_history as clear_vision_history_store, record_analysis as record_vision_analysis,
+    save_preferences as save_vision_preferences, snapshot as vision_history_snapshot,
+    VisionHistorySnapshot, VisionPreferences,
+};
+use vision_runtime::{VisionAnalysisResult, VisionRuntime, VisionRuntimeStatus};
 
 static COMMAND_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -177,6 +181,9 @@ impl Default for RuntimeState {
 #[derive(Clone, Serialize)]
 enum AuraRuntimeStatus {
     Idle,
+    /// Voice events set Listening in the desktop UI. The variant stays in the
+    /// serialized status vocabulary so Core and the shell agree on the label.
+    #[allow(dead_code)]
     Listening,
     Thinking,
     Working,
@@ -229,8 +236,7 @@ impl Default for VoicePreferences {
 impl VoicePreferences {
     fn sanitized(mut self) -> Self {
         self.tts_speed = self.tts_speed.clamp(0.6, 1.5);
-        self.conversation_timeout_seconds =
-            self.conversation_timeout_seconds.clamp(3, 20);
+        self.conversation_timeout_seconds = self.conversation_timeout_seconds.clamp(3, 20);
         self.wake_phrase = self.wake_phrase.trim().to_string();
         if self.wake_phrase.is_empty() {
             self.wake_phrase = "AURA".to_string();
@@ -358,7 +364,6 @@ fn unix_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
-
 fn format_duration_ms(duration_ms: u64) -> String {
     let total_seconds = duration_ms / 1_000;
     let hours = total_seconds / 3_600;
@@ -371,9 +376,7 @@ fn format_duration_ms(duration_ms: u64) -> String {
 fn should_prefer_director_preset(text: &str, base_route: &RouteResult) -> bool {
     let normalized = text
         .trim()
-        .trim_matches(|character: char| {
-            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
-        })
+        .trim_matches(|character: char| matches!(character, '.' | ',' | '!' | '?' | ';' | ':'))
         .to_lowercase();
 
     let explicit_preset = [
@@ -439,8 +442,7 @@ fn normalize_voice_command(text: &str) -> String {
                 .chars()
                 .nth(prefix.chars().count())
                 .is_some_and(|character| {
-                    character.is_whitespace()
-                        || matches!(character, ',' | ':' | ';' | '-' | '—')
+                    character.is_whitespace() || matches!(character, ',' | ':' | ';' | '-' | '—')
                 });
 
             if boundary {
@@ -461,9 +463,7 @@ fn normalize_voice_command(text: &str) -> String {
 fn should_prefer_user_routine(text: &str, base_route: &RouteResult) -> bool {
     let normalized = text
         .trim()
-        .trim_matches(|character: char| {
-            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
-        })
+        .trim_matches(|character: char| matches!(character, '.' | ',' | '!' | '?' | ';' | ':'))
         .to_lowercase();
 
     let explicit_routine = [
@@ -567,9 +567,18 @@ mod voice_command_tests {
 
     #[test]
     fn removes_aura_wake_prefix_without_changing_command() {
-        assert_eq!(normalize_voice_command("AURA, abre o Brave"), "abre o Brave");
-        assert_eq!(normalize_voice_command("Hey AURA: open Brave"), "open Brave");
-        assert_eq!(normalize_voice_command("Olá AURA — abre o OBS"), "abre o OBS");
+        assert_eq!(
+            normalize_voice_command("AURA, abre o Brave"),
+            "abre o Brave"
+        );
+        assert_eq!(
+            normalize_voice_command("Hey AURA: open Brave"),
+            "open Brave"
+        );
+        assert_eq!(
+            normalize_voice_command("Olá AURA — abre o OBS"),
+            "abre o OBS"
+        );
     }
 
     #[test]
@@ -583,19 +592,54 @@ mod voice_command_tests {
     }
 
     #[test]
+    fn wake_phrase_stays_off_by_default() {
+        assert!(!VoicePreferences::default().wake_word_enabled);
+    }
+
+    #[test]
+    fn wake_barge_in_needs_a_louder_phrase_and_ignores_playback_echo() {
+        assert_eq!(
+            accept_wake_phrase(
+                "AURA, open Brave",
+                "AURA",
+                0.03,
+                true,
+                Some("I can help you edit the timeline")
+            )
+            .as_deref(),
+            Some("open Brave")
+        );
+        assert!(accept_wake_phrase(
+            "AURA stop",
+            "AURA",
+            0.005,
+            true,
+            Some("I can help you edit")
+        )
+        .is_none());
+        assert!(accept_wake_phrase(
+            "AURA can help you edit",
+            "AURA",
+            0.08,
+            true,
+            Some("AURA can help you edit")
+        )
+        .is_none());
+        assert_eq!(
+            accept_wake_phrase("AURA, open Brave", "AURA", 0.01, false, None).as_deref(),
+            Some("open Brave")
+        );
+        assert!(accept_wake_phrase("AURA", "AURA", 0.001, false, None).is_none());
+    }
+
+    #[test]
     fn extracts_configured_wake_phrase_and_followup() {
         assert_eq!(
             extract_wake_command("AURA, abre o Brave", "AURA"),
             Some("abre o Brave".to_string())
         );
-        assert_eq!(
-            extract_wake_command("AURA", "AURA"),
-            Some(String::new())
-        );
-        assert_eq!(
-            extract_wake_command("abre o Brave", "AURA"),
-            None
-        );
+        assert_eq!(extract_wake_command("AURA", "AURA"), Some(String::new()));
+        assert_eq!(extract_wake_command("abre o Brave", "AURA"), None);
     }
 
     #[test]
@@ -659,7 +703,10 @@ fn next_command_id() -> String {
 }
 
 fn permission_policy_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join("permission-policy.json"))
 }
 
@@ -677,10 +724,7 @@ fn load_permission_policy(app: &tauri::AppHandle) -> PermissionPolicy {
         .sanitized()
 }
 
-fn save_permission_policy(
-    app: &tauri::AppHandle,
-    policy: &PermissionPolicy,
-) -> Result<(), String> {
+fn save_permission_policy(app: &tauri::AppHandle, policy: &PermissionPolicy) -> Result<(), String> {
     let path = permission_policy_path(app)?;
 
     if let Some(parent) = path.parent() {
@@ -692,7 +736,10 @@ fn save_permission_policy(
 }
 
 fn voice_preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join("voice-preferences.json"))
 }
 
@@ -716,8 +763,7 @@ fn save_voice_preferences(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
     fs::write(path, content).map_err(|error| error.to_string())
 }
 
@@ -766,7 +812,10 @@ fn set_voice_preferences(
 }
 
 fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join("desktop-preferences.json"))
 }
 
@@ -792,8 +841,7 @@ fn save_preferences(
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
 
-    let content =
-        serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(preferences).map_err(|error| error.to_string())?;
 
     fs::write(path, content).map_err(|error| error.to_string())
 }
@@ -861,7 +909,6 @@ fn set_paused_state(app: &tauri::AppHandle, paused: bool) -> RuntimeSnapshot {
     emit_runtime_state(app)
 }
 
-
 fn set_paused_state_guarded(
     app: &tauri::AppHandle,
     beta: &BetaSessionRuntime,
@@ -897,12 +944,7 @@ fn set_background_state(
     app: &tauri::AppHandle,
     background_enabled: bool,
 ) -> Result<RuntimeSnapshot, String> {
-    save_preferences(
-        app,
-        &DesktopPreferences {
-            background_enabled,
-        },
-    )?;
+    save_preferences(app, &DesktopPreferences { background_enabled })?;
 
     let state = app.state::<RuntimeState>();
     {
@@ -959,7 +1001,11 @@ fn set_autostart_state(
 
     emit_lifecycle_event(
         app,
-        if actual { "autostart.enabled" } else { "autostart.disabled" },
+        if actual {
+            "autostart.enabled"
+        } else {
+            "autostart.disabled"
+        },
         if actual {
             "AURA will start silently with Windows."
         } else {
@@ -1003,9 +1049,7 @@ fn store_last_vision_capture(app: &tauri::AppHandle, capture: VisionCapture) -> 
 fn vision_query_target(text: &str) -> Option<VisionQueryTarget> {
     let normalized = text
         .trim()
-        .trim_matches(|character: char| {
-            matches!(character, '.' | ',' | '!' | '?' | ';' | ':')
-        })
+        .trim_matches(|character: char| matches!(character, '.' | ',' | '!' | '?' | ';' | ':'))
         .to_lowercase();
 
     let active_window_phrases = [
@@ -1188,38 +1232,29 @@ fn capture_for_vision_query(
                     items
                         .iter()
                         .find(|window| {
-                            window
-                                .process_name
-                                .as_deref()
-                                .is_some_and(|name| name.eq_ignore_ascii_case(&context.process_name))
-                                && preferred_title
-                                    .is_some_and(|title| window.title.eq_ignore_ascii_case(title))
+                            window.process_name.as_deref().is_some_and(|name| {
+                                name.eq_ignore_ascii_case(&context.process_name)
+                            }) && preferred_title
+                                .is_some_and(|title| window.title.eq_ignore_ascii_case(title))
                         })
                         .or_else(|| {
                             items.iter().find(|window| {
-                                window
-                                    .process_name
-                                    .as_deref()
-                                    .is_some_and(|name| {
-                                        name.eq_ignore_ascii_case(&context.process_name)
-                                    })
+                                window.process_name.as_deref().is_some_and(|name| {
+                                    name.eq_ignore_ascii_case(&context.process_name)
+                                })
                             })
                         })
                 });
 
                 if let Some(window) = candidate {
-                    capture_window_handle(
-                        app,
-                        window.handle,
-                        Some(window.title.clone()),
-                    )
+                    capture_window_handle(app, window.handle, Some(window.title.clone()))
                 } else {
                     capture_active_window(app)
                 }
             } else {
                 capture_active_window(app)
             }
-        },
+        }
     }?;
 
     let capture = store_last_vision_capture(app, capture);
@@ -1243,7 +1278,9 @@ fn process_voice_capture(
 ) {
     thread::spawn(move || {
         let sample_count = capture.samples.len();
-        let duration_ms = capture.completed_at_ms.saturating_sub(capture.started_at_ms);
+        let duration_ms = capture
+            .completed_at_ms
+            .saturating_sub(capture.started_at_ms);
 
         emit_voice_capture_event(
             &app,
@@ -1277,7 +1314,8 @@ fn process_voice_capture(
                             duration_ms: result.duration_ms,
                             sample_rate: Some(16_000),
                             channels: Some(1),
-                            message: "Voice capture was too short or too quiet to execute safely.".to_string(),
+                            message: "Voice capture was too short or too quiet to execute safely."
+                                .to_string(),
                             text: Some(transcript),
                             timestamp_ms: unix_timestamp_ms(),
                         },
@@ -1311,7 +1349,8 @@ fn process_voice_capture(
                             duration_ms: result.duration_ms,
                             sample_rate: Some(16_000),
                             channels: Some(1),
-                            message: "AURA heard the wake name but no command followed it.".to_string(),
+                            message: "AURA heard the wake name but no command followed it."
+                                .to_string(),
                             text: Some(transcript),
                             timestamp_ms: unix_timestamp_ms(),
                         },
@@ -1385,10 +1424,7 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
             return;
         }
 
-        if runtime
-            .conversation_active
-            .swap(true, Ordering::Relaxed)
-        {
+        if runtime.conversation_active.swap(true, Ordering::Relaxed) {
             return;
         }
 
@@ -1521,6 +1557,58 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     });
 }
 
+const WAKE_IDLE_RMS: f32 = 0.004;
+const WAKE_BARGE_IN_RMS: f32 = 0.02;
+
+fn wake_rms_floor(speaking: bool) -> f32 {
+    if speaking {
+        WAKE_BARGE_IN_RMS
+    } else {
+        WAKE_IDLE_RMS
+    }
+}
+
+fn normalize_echo_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn wake_transcript_is_playback_echo(transcript: &str, spoken_text: Option<&str>) -> bool {
+    let Some(spoken) = spoken_text.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    let transcript_norm = normalize_echo_text(transcript);
+    let spoken_norm = normalize_echo_text(spoken);
+    transcript_norm.chars().count() >= 4 && spoken_norm.contains(&transcript_norm)
+}
+
+fn accept_wake_phrase(
+    transcript: &str,
+    wake_phrase: &str,
+    rms: f32,
+    speaking: bool,
+    spoken_text: Option<&str>,
+) -> Option<String> {
+    if rms < wake_rms_floor(speaking) {
+        return None;
+    }
+    if speaking && wake_transcript_is_playback_echo(transcript, spoken_text) {
+        return None;
+    }
+    extract_wake_command(transcript, wake_phrase)
+}
+
 fn extract_wake_command(transcript: &str, wake_phrase: &str) -> Option<String> {
     let transcript = transcript.trim();
     let wake_phrase = wake_phrase.trim();
@@ -1568,124 +1656,129 @@ fn resume_wake_monitor_if_enabled(app: tauri::AppHandle) {
 }
 
 fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
-    thread::spawn(move || {
-        loop {
+    thread::spawn(move || loop {
+        let state = app.state::<RuntimeState>();
+        if state.wake_monitor_generation.load(Ordering::Relaxed) != generation {
+            break;
+        }
+
+        let preferences = state
+            .voice_preferences
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+
+        if state.conversation_active.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+
+        let voice_busy = !state
+            .voice_command_ids
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_empty();
+
+        if voice_busy {
+            thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+
+        if !preferences.wake_word_enabled || runtime_snapshot(&state).paused {
+            thread::sleep(Duration::from_millis(750));
+            continue;
+        }
+
+        let audio = app.state::<AudioInputManager>();
+        if audio.capture_active() {
+            thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+
+        if audio.start_push_to_talk().is_err() {
+            thread::sleep(Duration::from_secs(2));
+            continue;
+        }
+
+        thread::sleep(Duration::from_millis(2200));
+
+        if app
+            .state::<RuntimeState>()
+            .wake_monitor_generation
+            .load(Ordering::Relaxed)
+            != generation
+        {
+            break;
+        }
+
+        let _ = audio.stop_push_to_talk();
+
+        let Some(capture) = audio.take_last_capture() else {
+            thread::sleep(Duration::from_millis(600));
+            continue;
+        };
+
+        let level = capture.rms();
+        let (speaking, spoken_text) = app.state::<TtsRuntime>().playback_guard();
+        if level < wake_rms_floor(speaking) {
+            thread::sleep(Duration::from_millis(600));
+            continue;
+        }
+
+        let manager = app.state::<ModelManager>();
+        let speech = app.state::<SpeechRuntime>();
+        let Ok(result) = speech.transcribe(&app, &manager, capture) else {
+            thread::sleep(Duration::from_secs(3));
+            continue;
+        };
+
+        let Some(command) = accept_wake_phrase(
+            &result.text,
+            &preferences.wake_phrase,
+            level,
+            speaking,
+            spoken_text.as_deref(),
+        ) else {
+            thread::sleep(Duration::from_millis(600));
+            continue;
+        };
+
+        if app.state::<TtsRuntime>().is_speaking() {
+            let _ = app.state::<TtsRuntime>().interrupt();
+        }
+
+        emit_voice_capture_event(
+            &app,
+            VoiceCaptureEvent {
+                phase: "wakeDetected",
+                shortcut: "wakePhrase",
+                sample_count: result.input_samples_16khz,
+                duration_ms: result.duration_ms,
+                sample_rate: Some(16_000),
+                channels: Some(1),
+                message: format!("Wake phrase “{}” detected.", preferences.wake_phrase),
+                text: Some(result.text.clone()),
+                timestamp_ms: unix_timestamp_ms(),
+            },
+        );
+
+        if command.is_empty() {
+            start_conversation_follow_up(app.clone(), true);
+        } else {
             let state = app.state::<RuntimeState>();
-            if state.wake_monitor_generation.load(Ordering::Relaxed) != generation {
-                break;
-            }
-
-            let preferences = state
-                .voice_preferences
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .clone();
-
-            if state.conversation_active.load(Ordering::Relaxed) {
-                thread::sleep(Duration::from_millis(500));
-                continue;
-            }
-
-            let voice_busy = !state
-                .voice_command_ids
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .is_empty();
-
-            if voice_busy {
-                thread::sleep(Duration::from_millis(500));
-                continue;
-            }
-
-            if !preferences.wake_word_enabled || runtime_snapshot(&state).paused {
-                thread::sleep(Duration::from_millis(750));
-                continue;
-            }
-
-            if app.state::<TtsRuntime>().is_speaking() {
-                thread::sleep(Duration::from_millis(500));
-                continue;
-            }
-
-            let audio = app.state::<AudioInputManager>();
-            if audio.capture_active() {
-                thread::sleep(Duration::from_millis(500));
-                continue;
-            }
-
-            if audio.start_push_to_talk().is_err() {
-                thread::sleep(Duration::from_secs(2));
-                continue;
-            }
-
-            thread::sleep(Duration::from_millis(2200));
-
-            if app
-                .state::<RuntimeState>()
-                .wake_monitor_generation
-                .load(Ordering::Relaxed)
-                != generation
-            {
-                break;
-            }
-
-            let _ = audio.stop_push_to_talk();
-
-            let Some(capture) = audio.take_last_capture() else {
-                thread::sleep(Duration::from_millis(600));
-                continue;
-            };
-
-            if capture.rms() < 0.004 {
-                thread::sleep(Duration::from_millis(600));
-                continue;
-            }
-
-            let manager = app.state::<ModelManager>();
-            let speech = app.state::<SpeechRuntime>();
-            let Ok(result) = speech.transcribe(&app, &manager, capture) else {
-                thread::sleep(Duration::from_secs(3));
-                continue;
-            };
-
-            let Some(command) = extract_wake_command(&result.text, &preferences.wake_phrase) else {
-                thread::sleep(Duration::from_millis(600));
-                continue;
-            };
-
-            emit_voice_capture_event(
-                &app,
-                VoiceCaptureEvent {
-                    phase: "wakeDetected",
-                    shortcut: "wakePhrase",
-                    sample_count: result.input_samples_16khz,
-                    duration_ms: result.duration_ms,
-                    sample_rate: Some(16_000),
-                    channels: Some(1),
-                    message: format!("Wake phrase “{}” detected.", preferences.wake_phrase),
-                    text: Some(result.text.clone()),
-                    timestamp_ms: unix_timestamp_ms(),
+            let _ = process_user_command(
+                app.clone(),
+                state,
+                CommandRequest {
+                    text: command,
+                    source: "voice".to_string(),
+                    approval_id: None,
+                    drop_ids: Vec::new(),
                 },
             );
-
-            if command.is_empty() {
-                start_conversation_follow_up(app.clone(), true);
-            } else {
-                let state = app.state::<RuntimeState>();
-                let _ = process_user_command(
-                    app.clone(),
-                    state,
-                    CommandRequest {
-                        text: command,
-                        source: "voice".to_string(),
-                        approval_id: None,
-                        drop_ids: Vec::new(),
-                    },
-                );
-            }
-
-            thread::sleep(Duration::from_secs(1));
         }
+
+        thread::sleep(Duration::from_secs(1));
     });
 }
 
@@ -1736,17 +1829,20 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
 
-            if should_speak && preferences.auto_speak {
-                let _ = tts.speak(
+            let interrupted = if should_speak && preferences.auto_speak {
+                tts.speak(
                     &app_for_tts,
                     &manager,
                     &text,
                     preferences.tts_speed,
                     &preferences.tts_voice_id,
-                );
-            }
+                )
+                .is_ok_and(|status| status.state == "interrupted")
+            } else {
+                false
+            };
 
-            if !cancelled && preferences.conversation_mode {
+            if !cancelled && !interrupted && preferences.conversation_mode {
                 start_conversation_follow_up(app_for_tts.clone(), false);
             } else {
                 resume_wake_monitor_if_enabled(app_for_tts.clone());
@@ -1770,7 +1866,11 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        emit_lifecycle_event(app, "foreground.entered", "AURA returned to the foreground.");
+        emit_lifecycle_event(
+            app,
+            "foreground.entered",
+            "AURA returned to the foreground.",
+        );
     }
 }
 
@@ -1950,7 +2050,10 @@ fn build_beta_diagnostics(
 
     let (automations, enabled_automations) = match list_automations(app) {
         Ok(automations) => {
-            let enabled = automations.iter().filter(|automation| automation.enabled).count();
+            let enabled = automations
+                .iter()
+                .filter(|automation| automation.enabled)
+                .count();
             health_checks.push(DiagnosticCheck::passed(
                 "automation-store",
                 "Automation store",
@@ -2188,12 +2291,7 @@ fn set_runtime_paused(
     paused: bool,
     recovery_override: Option<bool>,
 ) -> Result<RuntimeSnapshot, String> {
-    set_paused_state_guarded(
-        &app,
-        &beta,
-        paused,
-        recovery_override.unwrap_or(false),
-    )
+    set_paused_state_guarded(&app, &beta, paused, recovery_override.unwrap_or(false))
 }
 
 #[tauri::command]
@@ -2441,7 +2539,8 @@ fn process_user_command(
         let error = CoreError {
             id: None,
             code: "drop.context_invalid_source",
-            message: "Dropped-file context can only be attached from the main desktop UI.".to_string(),
+            message: "Dropped-file context can only be attached from the main desktop UI."
+                .to_string(),
         };
         emit_core_error(&app, error);
         return Err("Dropped-file context is only available from the desktop UI.".to_string());
@@ -2473,13 +2572,8 @@ fn process_user_command(
         };
 
         Some(
-            validate_pending_confirmation(
-                &pending,
-                &text,
-                &source,
-                unix_timestamp_ms(),
-            )
-            .map_err(str::to_string)?,
+            validate_pending_confirmation(&pending, &text, &source, unix_timestamp_ms())
+                .map_err(str::to_string)?,
         )
     } else {
         None
@@ -2519,7 +2613,8 @@ fn process_user_command(
         let error = CoreError {
             id: Some(id.clone()),
             code: "drop.context_blocked",
-            message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+            message: "Dropped-file context is blocked by AURA's Read permission policy."
+                .to_string(),
         };
         emit_core_error(&app, error);
         emit_core_event(
@@ -2528,12 +2623,15 @@ fn process_user_command(
                 id: id.clone(),
                 kind: "command.failed",
                 status: AuraRuntimeStatus::Idle,
-                message: "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+                message: "Dropped-file context is blocked by AURA's Read permission policy."
+                    .to_string(),
                 command: Some(text.clone()),
                 timestamp_ms: unix_timestamp_ms(),
             },
         );
-        return Err("Dropped-file context is blocked by AURA's Read permission policy.".to_string());
+        return Err(
+            "Dropped-file context is blocked by AURA's Read permission policy.".to_string(),
+        );
     }
 
     // File attachments are reasoning context only. They never enter deterministic
@@ -2548,7 +2646,9 @@ fn process_user_command(
         match routine_route {
             Some(routine_route) if should_prefer_user_routine(&text, &base_route) => routine_route,
             _ => match director_route {
-                Some(preset_route) if should_prefer_director_preset(&text, &base_route) => preset_route,
+                Some(preset_route) if should_prefer_director_preset(&text, &base_route) => {
+                    preset_route
+                }
                 _ => base_route,
             },
         }
@@ -2564,7 +2664,8 @@ fn process_user_command(
                             id: id.clone(),
                             kind: "command.failed",
                             status: AuraRuntimeStatus::Idle,
-                            message: "Confirmation no longer matches the routed action.".to_string(),
+                            message: "Confirmation no longer matches the routed action."
+                                .to_string(),
                             command: Some(text.clone()),
                             timestamp_ms: unix_timestamp_ms(),
                         },
@@ -2594,15 +2695,14 @@ fn process_user_command(
             }
 
             match decision {
-            PermissionDecision::Allow => {
-                let worker_app = app.clone();
-                let worker_id = id.clone();
-                let worker_text = text.clone();
-                let worker_source = source.clone();
-                let worker_permission = action.permission;
+                PermissionDecision::Allow => {
+                    let worker_app = app.clone();
+                    let worker_id = id.clone();
+                    let worker_text = text.clone();
+                    let worker_source = source.clone();
+                    let worker_permission = action.permission;
 
-                thread::spawn(move || {
-                    match action.intent {
+                    thread::spawn(move || match action.intent {
                         ActionIntent::LaunchApp(target) => {
                             let display_name = target.display_name();
 
@@ -2633,10 +2733,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not open {}: {}",
-                                        display_name, error
-                                    );
+                                    let message =
+                                        format!("Could not open {}: {}", display_name, error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -2684,14 +2782,18 @@ fn process_user_command(
                                             id: worker_id,
                                             kind: "command.completed",
                                             status: AuraRuntimeStatus::Idle,
-                                            message: format!("Switched to {} — {}.", display_name, window.title),
+                                            message: format!(
+                                                "Switched to {} — {}.",
+                                                display_name, window.title
+                                            ),
                                             command: Some(worker_text),
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!("Could not switch to {}: {}", display_name, error);
+                                    let message =
+                                        format!("Could not switch to {}: {}", display_name, error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -2743,9 +2845,7 @@ fn process_user_command(
                                             status: AuraRuntimeStatus::Idle,
                                             message: format!(
                                                 "{} {} — {}.",
-                                                completed,
-                                                display_name,
-                                                window.title
+                                                completed, display_name, window.title
                                             ),
                                             command: Some(worker_text),
                                             timestamp_ms: unix_timestamp_ms(),
@@ -2811,7 +2911,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!("Could not read visible windows: {}", error);
+                                    let message =
+                                        format!("Could not read visible windows: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -2896,10 +2997,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not press {}: {}",
-                                        display_name, error
-                                    );
+                                    let message =
+                                        format!("Could not press {}: {}", display_name, error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3093,7 +3192,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!("Could not perform mouse action: {}", error);
+                                    let message =
+                                        format!("Could not perform mouse action: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3120,7 +3220,9 @@ fn process_user_command(
                         }
                         ActionIntent::Media(action) => {
                             let message = match action {
-                                MediaAction::GetVolume => "Reading Windows audio state…".to_string(),
+                                MediaAction::GetVolume => {
+                                    "Reading Windows audio state…".to_string()
+                                }
                                 MediaAction::SetVolume(percent) => {
                                     format!("Setting volume to {}%…", percent)
                                 }
@@ -3130,7 +3232,9 @@ fn process_user_command(
                                 MediaAction::Unmute => "Unmuting audio…".to_string(),
                                 MediaAction::PlayPause => "Toggling media playback…".to_string(),
                                 MediaAction::NextTrack => "Skipping to next track…".to_string(),
-                                MediaAction::PreviousTrack => "Going to previous track…".to_string(),
+                                MediaAction::PreviousTrack => {
+                                    "Going to previous track…".to_string()
+                                }
                                 MediaAction::Stop => "Stopping media playback…".to_string(),
                             };
 
@@ -3157,8 +3261,7 @@ fn process_user_command(
                                             status: AuraRuntimeStatus::Idle,
                                             message: format!(
                                                 "Windows volume: {}%{}.",
-                                                state.volume_percent,
-                                                mute_text
+                                                state.volume_percent, mute_text
                                             ),
                                             command: Some(worker_text),
                                             timestamp_ms: unix_timestamp_ms(),
@@ -3177,7 +3280,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!("Could not control Windows audio: {}", error);
+                                    let message =
+                                        format!("Could not control Windows audio: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3269,7 +3373,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!("Could not run Windows system command: {}", error);
+                                    let message =
+                                        format!("Could not run Windows system command: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3294,10 +3399,7 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::ObsAudioMute {
-                            input_name,
-                            muted,
-                        } => {
+                        ActionIntent::ObsAudioMute { input_name, muted } => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -3336,10 +3438,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not change OBS input mute state: {}",
-                                        error
-                                    );
+                                    let message =
+                                        format!("Could not change OBS input mute state: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3397,18 +3497,15 @@ fn process_user_command(
                                         status: AuraRuntimeStatus::Idle,
                                         message: format!(
                                             "OBS input {} volume set to {}%.",
-                                            changed.input_name,
-                                            changed.volume_percent
+                                            changed.input_name, changed.volume_percent
                                         ),
                                         command: Some(worker_text),
                                         timestamp_ms: unix_timestamp_ms(),
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not change OBS input volume: {}",
-                                        error
-                                    );
+                                    let message =
+                                        format!("Could not change OBS input volume: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -3453,7 +3550,8 @@ fn process_user_command(
 
                             let result = tauri::async_runtime::block_on(async {
                                 let obs = worker_app.state::<ObsController>();
-                                obs.set_source_visibility_by_name(&source_name, enabled).await
+                                obs.set_source_visibility_by_name(&source_name, enabled)
+                                    .await
                             });
 
                             match result {
@@ -3524,9 +3622,7 @@ fn process_user_command(
                                             status: AuraRuntimeStatus::Idle,
                                             message: format!(
                                                 "Current app: {} · {}{}.",
-                                                context.app_name,
-                                                context.process_name,
-                                                qualifier
+                                                context.app_name, context.process_name, qualifier
                                             ),
                                             command: Some(worker_text),
                                             timestamp_ms: unix_timestamp_ms(),
@@ -3624,48 +3720,45 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::RecentFiles => {
-                            match summarize_windows_recent_files(8) {
-                                Ok(summary) => {
-                                    emit_core_event(
-                                        &worker_app,
-                                        CoreEvent {
-                                            id: worker_id,
-                                            kind: "command.completed",
-                                            status: AuraRuntimeStatus::Idle,
-                                            message: summary,
-                                            command: Some(worker_text),
-                                            timestamp_ms: unix_timestamp_ms(),
-                                        },
-                                    );
-                                }
-                                Err(error) => {
-                                    let message =
-                                        format!("Could not read recent files: {error}");
-
-                                    emit_core_event(
-                                        &worker_app,
-                                        CoreEvent {
-                                            id: worker_id.clone(),
-                                            kind: "command.failed",
-                                            status: AuraRuntimeStatus::Idle,
-                                            message: message.clone(),
-                                            command: Some(worker_text),
-                                            timestamp_ms: unix_timestamp_ms(),
-                                        },
-                                    );
-
-                                    emit_core_error(
-                                        &worker_app,
-                                        CoreError {
-                                            id: Some(worker_id),
-                                            code: "context.recent_files_failed",
-                                            message,
-                                        },
-                                    );
-                                }
+                        ActionIntent::RecentFiles => match summarize_windows_recent_files(8) {
+                            Ok(summary) => {
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id,
+                                        kind: "command.completed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: summary,
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
                             }
-                        }
+                            Err(error) => {
+                                let message = format!("Could not read recent files: {error}");
+
+                                emit_core_event(
+                                    &worker_app,
+                                    CoreEvent {
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
+                                        status: AuraRuntimeStatus::Idle,
+                                        message: message.clone(),
+                                        command: Some(worker_text),
+                                        timestamp_ms: unix_timestamp_ms(),
+                                    },
+                                );
+
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "context.recent_files_failed",
+                                        message,
+                                    },
+                                );
+                            }
+                        },
                         ActionIntent::TerminalSkill(skill) => {
                             emit_core_event(
                                 &worker_app,
@@ -3921,7 +4014,8 @@ fn process_user_command(
                                     id: worker_id.clone(),
                                     kind: "command.processing",
                                     status: AuraRuntimeStatus::Working,
-                                    message: "Revealing the selected path in File Explorer…".to_string(),
+                                    message: "Revealing the selected path in File Explorer…"
+                                        .to_string(),
                                     command: Some(worker_text.clone()),
                                     timestamp_ms: unix_timestamp_ms(),
                                 },
@@ -3993,9 +4087,7 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not find recent files: {error}"
-                                    );
+                                    let message = format!("Could not find recent files: {error}");
                                     emit_core_event(
                                         &worker_app,
                                         CoreEvent {
@@ -4025,10 +4117,7 @@ fn process_user_command(
                                     id: worker_id.clone(),
                                     kind: "command.processing",
                                     status: AuraRuntimeStatus::Working,
-                                    message: format!(
-                                        "Searching personal folders for “{}”…",
-                                        query
-                                    ),
+                                    message: format!("Searching personal folders for “{}”…", query),
                                     command: Some(worker_text.clone()),
                                     timestamp_ms: unix_timestamp_ms(),
                                 },
@@ -4047,9 +4136,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not search personal files: {error}"
-                                    );
+                                    let message =
+                                        format!("Could not search personal files: {error}");
                                     emit_core_event(
                                         &worker_app,
                                         CoreEvent {
@@ -4072,7 +4160,7 @@ fn process_user_command(
                                 }
                             }
                         }
-                    ActionIntent::ClipboardRead => {
+                        ActionIntent::ClipboardRead => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -4152,7 +4240,8 @@ fn process_user_command(
                                     },
                                 ),
                                 Err(error) => {
-                                    let message = format!("Could not write clipboard text: {error}");
+                                    let message =
+                                        format!("Could not write clipboard text: {error}");
                                     emit_core_event(
                                         &worker_app,
                                         CoreEvent {
@@ -4228,8 +4317,10 @@ fn process_user_command(
                             let routine = find_routine_by_id(&worker_app, &routine_id);
                             match routine {
                                 Some(routine) => {
-                                    let became_sensitive =
-                                        routine_requires_sensitive_permission(&worker_app, &routine);
+                                    let became_sensitive = routine_requires_sensitive_permission(
+                                        &worker_app,
+                                        &routine,
+                                    );
                                     if became_sensitive
                                         && worker_permission != PermissionClass::Sensitive
                                     {
@@ -4266,10 +4357,7 @@ fn process_user_command(
                                             id: worker_id.clone(),
                                             kind: "command.processing",
                                             status: AuraRuntimeStatus::Working,
-                                            message: format!(
-                                                "Running routine {}…",
-                                                routine.name
-                                            ),
+                                            message: format!("Running routine {}…", routine.name),
                                             command: Some(worker_text.clone()),
                                             timestamp_ms: unix_timestamp_ms(),
                                         },
@@ -4413,43 +4501,41 @@ fn process_user_command(
                                 }
                             }
                         }
-                        ActionIntent::MemoryList => {
-                            match summarize_memories(&worker_app, 8) {
-                                Ok(summary) => emit_core_event(
+                        ActionIntent::MemoryList => match summarize_memories(&worker_app, 8) {
+                            Ok(summary) => emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id,
+                                    kind: "command.completed",
+                                    status: AuraRuntimeStatus::Idle,
+                                    message: summary,
+                                    command: Some(worker_text),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            ),
+                            Err(error) => {
+                                let message = format!("Could not read local memory: {error}");
+                                emit_core_event(
                                     &worker_app,
                                     CoreEvent {
-                                        id: worker_id,
-                                        kind: "command.completed",
+                                        id: worker_id.clone(),
+                                        kind: "command.failed",
                                         status: AuraRuntimeStatus::Idle,
-                                        message: summary,
+                                        message: message.clone(),
                                         command: Some(worker_text),
                                         timestamp_ms: unix_timestamp_ms(),
                                     },
-                                ),
-                                Err(error) => {
-                                    let message = format!("Could not read local memory: {error}");
-                                    emit_core_event(
-                                        &worker_app,
-                                        CoreEvent {
-                                            id: worker_id.clone(),
-                                            kind: "command.failed",
-                                            status: AuraRuntimeStatus::Idle,
-                                            message: message.clone(),
-                                            command: Some(worker_text),
-                                            timestamp_ms: unix_timestamp_ms(),
-                                        },
-                                    );
-                                    emit_core_error(
-                                        &worker_app,
-                                        CoreError {
-                                            id: Some(worker_id),
-                                            code: "memory.read_failed",
-                                            message,
-                                        },
-                                    );
-                                }
+                                );
+                                emit_core_error(
+                                    &worker_app,
+                                    CoreError {
+                                        id: Some(worker_id),
+                                        code: "memory.read_failed",
+                                        message,
+                                    },
+                                );
                             }
-                        }
+                        },
                         ActionIntent::MemoryForget(content) => {
                             emit_core_event(
                                 &worker_app,
@@ -4501,8 +4587,94 @@ fn process_user_command(
                                 }
                             }
                         }
-                    ActionIntent::DirectorPreset(preset_id) => {
-                            let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id) else {
+                        ActionIntent::ActivateProject(name) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Looking for project “{name}”…"),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match find_project_by_name_or_alias(&worker_app, &name) {
+                                Some(project) => {
+                                    match set_active_project(&worker_app, Some(&project.id)) {
+                                        Ok(_) => {
+                                            emit_core_event(
+                                                &worker_app,
+                                                CoreEvent {
+                                                    id: worker_id,
+                                                    kind: "command.completed",
+                                                    status: AuraRuntimeStatus::Idle,
+                                                    message: format!(
+                                                        "Active project: {}.",
+                                                        project.name
+                                                    ),
+                                                    command: Some(worker_text),
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            );
+                                        }
+                                        Err(error) => {
+                                            let message = format!(
+                                                "Could not activate project {}: {error}",
+                                                project.name
+                                            );
+                                            emit_core_event(
+                                                &worker_app,
+                                                CoreEvent {
+                                                    id: worker_id.clone(),
+                                                    kind: "command.failed",
+                                                    status: AuraRuntimeStatus::Idle,
+                                                    message: message.clone(),
+                                                    command: Some(worker_text),
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            );
+                                            emit_core_error(
+                                                &worker_app,
+                                                CoreError {
+                                                    id: Some(worker_id),
+                                                    code: "project.activate_failed",
+                                                    message,
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let message = format!(
+                                        "No saved project matches “{name}”. Create it in Project Memory first."
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "project.not_found",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        ActionIntent::DirectorPreset(preset_id) => {
+                            let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id)
+                            else {
                                 let message = "Director Mode preset no longer exists.".to_string();
 
                                 emit_core_event(
@@ -4623,7 +4795,7 @@ fn process_user_command(
                                 );
                             }
                         }
-                    ActionIntent::ObsProductionHealth => {
+                        ActionIntent::ObsProductionHealth => {
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -4739,10 +4911,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not read OBS stream duration: {}",
-                                        error
-                                    );
+                                    let message =
+                                        format!("Could not read OBS stream duration: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -4817,10 +4987,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not control OBS streaming: {}",
-                                        error
-                                    );
+                                    let message =
+                                        format!("Could not control OBS streaming: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -4887,7 +5055,9 @@ fn process_user_command(
                                             .map(|path| {
                                                 format!("OBS recording stopped. Saved to {}.", path)
                                             })
-                                            .unwrap_or_else(|| "OBS recording stopped.".to_string()),
+                                            .unwrap_or_else(|| {
+                                                "OBS recording stopped.".to_string()
+                                            }),
                                         ObsRecordingAction::Pause => {
                                             "OBS recording paused.".to_string()
                                         }
@@ -4909,10 +5079,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not control OBS recording: {}",
-                                        error
-                                    );
+                                    let message =
+                                        format!("Could not control OBS recording: {}", error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -5091,10 +5259,8 @@ fn process_user_command(
                                     );
                                 }
                                 Err(error) => {
-                                    let message = format!(
-                                        "Could not close {}: {}",
-                                        display_name, error
-                                    );
+                                    let message =
+                                        format!("Could not close {}: {}", display_name, error);
 
                                     emit_core_event(
                                         &worker_app,
@@ -5119,11 +5285,10 @@ fn process_user_command(
                                 }
                             }
                         }
-                    }
-                });
-            }
-            PermissionDecision::Ask => {
-                let message = match &action.intent {
+                    });
+                }
+                PermissionDecision::Ask => {
+                    let message = match &action.intent {
                     ActionIntent::CloseApp(target) => format!(
                         "Closing {} requires confirmation because unsaved work could be lost.",
                         target.display_name()
@@ -5354,57 +5519,60 @@ fn process_user_command(
                         "This Windows system action requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ActivateProject(name) => format!(
+                        "Setting “{name}” as the active project requires confirmation under the current Act policy."
+                    ),
                 };
 
-                let expires_at_ms = unix_timestamp_ms() + CONFIRMATION_TTL_MS;
+                    let expires_at_ms = unix_timestamp_ms() + CONFIRMATION_TTL_MS;
 
-                {
-                    let mut confirmations = state
-                        .pending_confirmations
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    {
+                        let mut confirmations = state
+                            .pending_confirmations
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-                    confirmations.retain(|_, value| {
-                        value.expires_at_ms > unix_timestamp_ms()
-                            && value.source != source
-                    });
+                        confirmations.retain(|_, value| {
+                            value.expires_at_ms > unix_timestamp_ms() && value.source != source
+                        });
 
-                    confirmations.insert(
-                        id.clone(),
-                        PendingConfirmation {
-                            command: text.clone(),
-                            source: source.clone(),
-                            permission: action.permission,
-                            expires_at_ms,
+                        confirmations.insert(
+                            id.clone(),
+                            PendingConfirmation {
+                                command: text.clone(),
+                                source: source.clone(),
+                                permission: action.permission,
+                                expires_at_ms,
+                            },
+                        );
+                    }
+
+                    emit_core_event(
+                        &app,
+                        CoreEvent {
+                            id: id.clone(),
+                            kind: "command.awaiting_confirmation",
+                            status: AuraRuntimeStatus::Waiting,
+                            message,
+                            command: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
                         },
                     );
                 }
-
-                emit_core_event(
-                    &app,
-                    CoreEvent {
-                        id: id.clone(),
-                        kind: "command.awaiting_confirmation",
-                        status: AuraRuntimeStatus::Waiting,
-                        message,
-                        command: Some(text.clone()),
-                        timestamp_ms: unix_timestamp_ms(),
-                    },
-                );
-            }
-            PermissionDecision::Never => {
-                emit_core_event(
-                    &app,
-                    CoreEvent {
-                        id: id.clone(),
-                        kind: "command.failed",
-                        status: AuraRuntimeStatus::Idle,
-                        message: "This action is blocked by AURA's permission policy.".to_string(),
-                        command: Some(text.clone()),
-                        timestamp_ms: unix_timestamp_ms(),
-                    },
-                );
-            }
+                PermissionDecision::Never => {
+                    emit_core_event(
+                        &app,
+                        CoreEvent {
+                            id: id.clone(),
+                            kind: "command.failed",
+                            status: AuraRuntimeStatus::Idle,
+                            message: "This action is blocked by AURA's permission policy."
+                                .to_string(),
+                            command: Some(text.clone()),
+                            timestamp_ms: unix_timestamp_ms(),
+                        },
+                    );
+                }
             }
         }
         RouteResult::InvalidAppSkill(message) => {
@@ -5517,7 +5685,8 @@ fn process_user_command(
                             id: id.clone(),
                             kind: "command.failed",
                             status: AuraRuntimeStatus::Idle,
-                            message: "Screen reading is blocked by AURA's Read permission policy.".to_string(),
+                            message: "Screen reading is blocked by AURA's Read permission policy."
+                                .to_string(),
                             command: Some(text.clone()),
                             timestamp_ms: unix_timestamp_ms(),
                         },
@@ -5534,14 +5703,15 @@ fn process_user_command(
                                 id: worker_id.clone(),
                                 kind: "command.processing",
                                 status: AuraRuntimeStatus::Working,
-                                message: "Looking at the requested local screen context…".to_string(),
+                                message: "Looking at the requested local screen context…"
+                                    .to_string(),
                                 command: Some(worker_text.clone()),
                                 timestamp_ms: unix_timestamp_ms(),
                             },
                         );
 
-                        let result = capture_for_vision_query(&worker_app, target)
-                            .and_then(|capture| {
+                        let result =
+                            capture_for_vision_query(&worker_app, target).and_then(|capture| {
                                 analyze_capture_internal(
                                     &worker_app,
                                     &capture,
@@ -5591,7 +5761,7 @@ fn process_user_command(
                 let worker_id = id.clone();
                 let worker_text = text.clone();
                 let worker_drop_ids = drop_ids.clone();
-    
+
                 thread::spawn(move || {
                     let attachment_count = worker_drop_ids.len();
                     let processing_message = if attachment_count > 0 {
@@ -5614,7 +5784,7 @@ fn process_user_command(
                             timestamp_ms: unix_timestamp_ms(),
                         },
                     );
-    
+
                     let manager = worker_app.state::<ModelManager>();
                     let runtime = worker_app.state::<ModelRuntime>();
                     let desktop_context = (|| -> Result<Option<String>, String> {
@@ -5651,7 +5821,7 @@ fn process_user_command(
                         if let Some(snapshot) = recent {
                             if !snapshot.items.is_empty() {
                                 if !summary.is_empty() {
-                                    summary.push_str("\n");
+                                    summary.push('\n');
                                 }
                                 let names = snapshot
                                     .items
@@ -5665,7 +5835,7 @@ fn process_user_command(
 
                         if let Some(project) = project {
                             if !summary.is_empty() {
-                                summary.push_str("\n");
+                                summary.push('\n');
                             }
                             summary.push_str(&project);
                         }
@@ -5706,7 +5876,7 @@ fn process_user_command(
                             return;
                         }
                     };
-    
+
                     match runtime.generate(
                         &worker_app,
                         &manager,
@@ -5728,7 +5898,7 @@ fn process_user_command(
                         }
                         Err(error) => {
                             let message = format!("Local model unavailable: {error}");
-    
+
                             emit_core_event(
                                 &worker_app,
                                 CoreEvent {
@@ -5740,7 +5910,7 @@ fn process_user_command(
                                     timestamp_ms: unix_timestamp_ms(),
                                 },
                             );
-    
+
                             emit_core_error(
                                 &worker_app,
                                 CoreError {
@@ -5785,10 +5955,7 @@ fn create_agent_plan(
 }
 
 #[tauri::command]
-fn get_agent_runs(
-    app: AppHandle,
-    engine: State<'_, AgentEngine>,
-) -> Result<AgentSnapshot, String> {
+fn get_agent_runs(app: AppHandle, engine: State<'_, AgentEngine>) -> Result<AgentSnapshot, String> {
     engine.snapshot(&app)
 }
 
@@ -5833,9 +6000,7 @@ fn cancel_agent_run(
 }
 
 #[tauri::command]
-fn get_saved_aura_actions(
-    app: AppHandle,
-) -> Result<Vec<SavedAuraAction>, String> {
+fn get_saved_aura_actions(app: AppHandle) -> Result<Vec<SavedAuraAction>, String> {
     list_saved_actions(&app)
 }
 
@@ -5848,10 +6013,7 @@ fn save_aura_action(
 }
 
 #[tauri::command]
-fn delete_aura_action(
-    app: AppHandle,
-    action_id: String,
-) -> Result<(), String> {
+fn delete_aura_action(app: AppHandle, action_id: String) -> Result<(), String> {
     delete_action(&app, &action_id)
 }
 
@@ -5876,9 +6038,7 @@ fn run_aura_action(
 }
 
 #[tauri::command]
-fn get_aura_automations(
-    app: AppHandle,
-) -> Result<Vec<AuraAutomation>, String> {
+fn get_aura_automations(app: AppHandle) -> Result<Vec<AuraAutomation>, String> {
     list_automations(&app)
 }
 
@@ -5891,10 +6051,7 @@ fn save_aura_automation(
 }
 
 #[tauri::command]
-fn delete_aura_automation(
-    app: AppHandle,
-    automation_id: String,
-) -> Result<(), String> {
+fn delete_aura_automation(app: AppHandle, automation_id: String) -> Result<(), String> {
     delete_automation(&app, &automation_id)
 }
 
@@ -5970,16 +6127,12 @@ fn remove_managed_runtime(
 }
 
 #[tauri::command]
-fn get_model_runtime_status(
-    runtime: State<'_, ModelRuntime>,
-) -> ModelRuntimeStatus {
+fn get_model_runtime_status(runtime: State<'_, ModelRuntime>) -> ModelRuntimeStatus {
     runtime.status()
 }
 
 #[tauri::command]
-fn clear_model_conversation(
-    runtime: State<'_, ModelRuntime>,
-) -> ModelRuntimeStatus {
+fn clear_model_conversation(runtime: State<'_, ModelRuntime>) -> ModelRuntimeStatus {
     runtime.clear_conversation();
     runtime.status()
 }
@@ -6041,6 +6194,7 @@ fn set_active_model(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn remove_model(
     app: AppHandle,
     model_id: String,
@@ -6072,9 +6226,7 @@ fn remove_model(
 }
 
 #[tauri::command]
-fn get_speech_runtime_status(
-    runtime: State<'_, SpeechRuntime>,
-) -> SpeechRuntimeStatus {
+fn get_speech_runtime_status(runtime: State<'_, SpeechRuntime>) -> SpeechRuntimeStatus {
     runtime.status()
 }
 
@@ -6097,9 +6249,7 @@ fn prepare_tts_runtime(
 }
 
 #[tauri::command]
-fn stop_tts_speaking(
-    runtime: State<'_, TtsRuntime>,
-) -> Result<TtsRuntimeStatus, String> {
+fn stop_tts_speaking(runtime: State<'_, TtsRuntime>) -> Result<TtsRuntimeStatus, String> {
     runtime.interrupt()
 }
 
@@ -6131,9 +6281,7 @@ fn test_tts_voice(
 }
 
 #[tauri::command]
-fn get_create_image_runtime_status(
-    runtime: State<'_, ImageRuntime>,
-) -> ImageRuntimeStatus {
+fn get_create_image_runtime_status(runtime: State<'_, ImageRuntime>) -> ImageRuntimeStatus {
     runtime.status()
 }
 
@@ -6157,16 +6305,12 @@ async fn generate_create_image(
 }
 
 #[tauri::command]
-fn get_vision_runtime_status(
-    runtime: State<'_, VisionRuntime>,
-) -> VisionRuntimeStatus {
+fn get_vision_runtime_status(runtime: State<'_, VisionRuntime>) -> VisionRuntimeStatus {
     runtime.status()
 }
 
 #[tauri::command]
-fn get_vision_history(
-    app: AppHandle,
-) -> Result<VisionHistorySnapshot, String> {
+fn get_vision_history(app: AppHandle) -> Result<VisionHistorySnapshot, String> {
     vision_history_snapshot(&app)
 }
 
@@ -6179,16 +6323,12 @@ fn set_vision_preferences(
 }
 
 #[tauri::command]
-fn clear_vision_history(
-    app: AppHandle,
-) -> Result<VisionHistorySnapshot, String> {
+fn clear_vision_history(app: AppHandle) -> Result<VisionHistorySnapshot, String> {
     clear_vision_history_store(&app)
 }
 
 #[tauri::command]
-fn get_last_vision_capture(
-    session: State<'_, VisionSession>,
-) -> Option<VisionCapture> {
+fn get_last_vision_capture(session: State<'_, VisionSession>) -> Option<VisionCapture> {
     session
         .last_capture
         .lock()
@@ -6197,9 +6337,7 @@ fn get_last_vision_capture(
 }
 
 #[tauri::command]
-fn clear_last_vision_capture(
-    session: State<'_, VisionSession>,
-) {
+fn clear_last_vision_capture(session: State<'_, VisionSession>) {
     if let Some(capture) = session
         .last_capture
         .lock()
@@ -6272,13 +6410,7 @@ fn capture_vision_region(
         },
     );
 
-    let capture = capture_region(
-        &app,
-        request.x,
-        request.y,
-        request.width,
-        request.height,
-    )?;
+    let capture = capture_region(&app, request.x, request.y, request.width, request.height)?;
     let capture = store_last_vision_capture(&app, capture);
 
     emit_vision_event(
@@ -6316,7 +6448,10 @@ fn analyze_last_vision_capture(
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .clone()
-        .ok_or_else(|| "Capture the screen, a window or a region before asking Vision to analyze it.".to_string())?;
+        .ok_or_else(|| {
+            "Capture the screen, a window or a region before asking Vision to analyze it."
+                .to_string()
+        })?;
 
     analyze_capture_internal(&app, &capture, &prompt)
 }
@@ -6344,9 +6479,7 @@ fn start_audio_input_test(
 }
 
 #[tauri::command]
-fn stop_audio_input_test(
-    audio: State<'_, AudioInputManager>,
-) -> AudioInputSnapshot {
+fn stop_audio_input_test(audio: State<'_, AudioInputManager>) -> AudioInputSnapshot {
     audio.stop_test()
 }
 
@@ -6359,16 +6492,12 @@ fn ingest_dropped_files(
 }
 
 #[tauri::command]
-fn get_drop_intake(
-    drops: State<'_, DropIntakeState>,
-) -> DropIntakeSnapshot {
+fn get_drop_intake(drops: State<'_, DropIntakeState>) -> DropIntakeSnapshot {
     drops.snapshot()
 }
 
 #[tauri::command]
-fn clear_drop_intake(
-    drops: State<'_, DropIntakeState>,
-) -> DropIntakeSnapshot {
+fn clear_drop_intake(drops: State<'_, DropIntakeState>) -> DropIntakeSnapshot {
     drops.clear()
 }
 
@@ -6406,7 +6535,9 @@ fn inspect_dropped_file(
         .decision_for(PermissionClass::Read)
         == PermissionDecision::Never
     {
-        return Err("Dropped-file inspection is blocked by AURA's Read permission policy.".to_string());
+        return Err(
+            "Dropped-file inspection is blocked by AURA's Read permission policy.".to_string(),
+        );
     }
 
     // Inspection is only exposed through an explicit dropped-file UI action.
@@ -6428,7 +6559,9 @@ fn stage_dropped_image_for_vision(
         .decision_for(PermissionClass::Read)
         == PermissionDecision::Never
     {
-        return Err("Dropped-image analysis is blocked by AURA's Read permission policy.".to_string());
+        return Err(
+            "Dropped-image analysis is blocked by AURA's Read permission policy.".to_string(),
+        );
     }
 
     let path = drops.path_for(&drop_id)?;
@@ -6461,9 +6594,7 @@ fn get_current_app_context(
 }
 
 #[tauri::command]
-fn get_app_skill_catalog(
-    awareness: State<'_, CurrentAppAwareness>,
-) -> AppSkillCatalog {
+fn get_app_skill_catalog(awareness: State<'_, CurrentAppAwareness>) -> AppSkillCatalog {
     let context = awareness
         .snapshot()
         .ok()
@@ -6509,10 +6640,7 @@ fn get_user_routines(app: AppHandle) -> Result<Vec<UserRoutine>, String> {
 }
 
 #[tauri::command]
-fn save_user_routine(
-    app: AppHandle,
-    request: SaveRoutineRequest,
-) -> Result<UserRoutine, String> {
+fn save_user_routine(app: AppHandle, request: SaveRoutineRequest) -> Result<UserRoutine, String> {
     save_routine(&app, request)
 }
 
@@ -6522,10 +6650,7 @@ fn delete_user_routine(app: AppHandle, routine_id: String) -> Result<(), String>
 }
 
 #[tauri::command]
-fn run_user_routine(
-    app: AppHandle,
-    routine_id: String,
-) -> Result<RoutineRunResult, String> {
+fn run_user_routine(app: AppHandle, routine_id: String) -> Result<RoutineRunResult, String> {
     let routine = find_routine_by_id(&app, &routine_id)
         .ok_or_else(|| "Routine no longer exists.".to_string())?;
 
@@ -6543,7 +6668,9 @@ fn run_user_routine(
     }
 
     let obs = app.state::<ObsController>();
-    Ok(tauri::async_runtime::block_on(run_routine(&app, &obs, &routine)))
+    Ok(tauri::async_runtime::block_on(run_routine(
+        &app, &obs, &routine,
+    )))
 }
 
 #[tauri::command]
@@ -6560,11 +6687,116 @@ fn create_memory_command(
 }
 
 #[tauri::command]
-fn delete_memory_command(
-    app: AppHandle,
-    memory_id: String,
-) -> Result<MemoryRecord, String> {
+fn delete_memory_command(app: AppHandle, memory_id: String) -> Result<MemoryRecord, String> {
     delete_memory(&app, &memory_id)
+}
+
+#[tauri::command]
+fn update_memory_command(
+    app: AppHandle,
+    request: UpdateMemoryRequest,
+) -> Result<MemoryRecord, String> {
+    update_memory(&app, request)
+}
+
+fn permission_label(class: PermissionClass) -> &'static str {
+    match class {
+        PermissionClass::Read => "Read",
+        PermissionClass::Act => "Act",
+        PermissionClass::Modify => "Modify",
+        PermissionClass::Destructive => "Destructive",
+        PermissionClass::Sensitive => "Sensitive",
+    }
+}
+
+fn authorize_explicit_desktop_action(
+    runtime: &RuntimeState,
+    class: PermissionClass,
+    confirmed: bool,
+    action: &str,
+) -> Result<(), String> {
+    let policy = runtime
+        .permission_policy
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    let decision = policy.sanitized().decision_for(class);
+
+    match decision {
+        PermissionDecision::Never => Err(format!(
+            "{action} is blocked because the {} permission is Never.",
+            permission_label(class)
+        )),
+        PermissionDecision::Ask if !confirmed => Err(format!(
+            "{action} needs confirmation because the {} permission is Ask.",
+            permission_label(class)
+        )),
+        PermissionDecision::Allow | PermissionDecision::Ask => Ok(()),
+    }
+}
+
+fn ensure_desktop_actions_resumed(runtime: &RuntimeState, action: &str) -> Result<(), String> {
+    if runtime_snapshot(runtime).paused {
+        return Err(format!("AURA is paused. Resume it before {action}."));
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod desktop_permission_tests {
+    use super::*;
+
+    #[test]
+    fn sensitive_actions_always_require_confirmation() {
+        let runtime = RuntimeState::default();
+        let blocked = authorize_explicit_desktop_action(
+            &runtime,
+            PermissionClass::Sensitive,
+            false,
+            "Starting an OBS stream",
+        );
+        assert!(blocked.unwrap_err().contains("needs confirmation"));
+
+        assert!(authorize_explicit_desktop_action(
+            &runtime,
+            PermissionClass::Sensitive,
+            true,
+            "Starting an OBS stream",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn allowed_act_actions_do_not_require_a_second_confirmation() {
+        let runtime = RuntimeState::default();
+        assert!(authorize_explicit_desktop_action(
+            &runtime,
+            PermissionClass::Act,
+            false,
+            "Switching the OBS Program scene",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn never_blocks_an_explicit_desktop_action_even_after_confirmation() {
+        let runtime = RuntimeState::default();
+        runtime
+            .permission_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .set(PermissionClass::Act, PermissionDecision::Never)
+            .expect("Act can be set to Never");
+
+        let blocked = authorize_explicit_desktop_action(
+            &runtime,
+            PermissionClass::Act,
+            true,
+            "Switching the OBS Program scene",
+        );
+        assert!(blocked.unwrap_err().contains("Never"));
+    }
 }
 
 #[tauri::command]
@@ -6581,10 +6813,7 @@ fn save_director_preset_command(
 }
 
 #[tauri::command]
-fn delete_director_preset_command(
-    app: AppHandle,
-    preset_id: String,
-) -> Result<(), String> {
+fn delete_director_preset_command(app: AppHandle, preset_id: String) -> Result<(), String> {
     delete_director_preset(&app, &preset_id)
 }
 
@@ -6592,17 +6821,33 @@ fn delete_director_preset_command(
 async fn run_director_preset_command(
     app: AppHandle,
     preset_id: String,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<DirectorPresetRunResult, String> {
     let preset = find_director_preset_by_id(&app, &preset_id)
         .ok_or_else(|| "Director Mode preset no longer exists.".to_string())?;
+    ensure_desktop_actions_resumed(&runtime, "running a Director Mode preset")?;
+    let permission = if preset_requires_sensitive_permission(&preset) {
+        PermissionClass::Sensitive
+    } else {
+        PermissionClass::Act
+    };
+    authorize_explicit_desktop_action(
+        &runtime,
+        permission,
+        confirmed.unwrap_or(false),
+        "Running this Director Mode preset",
+    )?;
 
     Ok(run_director_preset(&obs, &preset).await)
 }
 
 #[tauri::command]
-async fn get_obs_connection_state(obs: State<'_, ObsController>) -> ObsConnectionState {
-    obs.snapshot().await
+async fn get_obs_connection_state(
+    obs: State<'_, ObsController>,
+) -> Result<ObsConnectionState, String> {
+    Ok(obs.snapshot().await)
 }
 
 #[tauri::command]
@@ -6614,18 +6859,18 @@ async fn connect_obs(
 }
 
 #[tauri::command]
-async fn disconnect_obs(obs: State<'_, ObsController>) -> ObsConnectionState {
-    obs.disconnect().await
+async fn disconnect_obs(obs: State<'_, ObsController>) -> Result<ObsConnectionState, String> {
+    Ok(obs.disconnect().await)
 }
 
 #[tauri::command]
-async fn get_obs_runtime_state(obs: State<'_, ObsController>) -> ObsRuntimeState {
-    obs.runtime_state().await
+async fn get_obs_runtime_state(obs: State<'_, ObsController>) -> Result<ObsRuntimeState, String> {
+    Ok(obs.runtime_state().await)
 }
 
 #[tauri::command]
-async fn get_obs_scenes(obs: State<'_, ObsController>) -> ObsSceneList {
-    obs.scene_list().await
+async fn get_obs_scenes(obs: State<'_, ObsController>) -> Result<ObsSceneList, String> {
+    Ok(obs.scene_list().await)
 }
 
 #[tauri::command]
@@ -6643,98 +6888,193 @@ async fn get_obs_production_health(
 }
 
 #[tauri::command]
-async fn get_obs_source_items(
-    obs: State<'_, ObsController>,
-) -> Result<ObsSourceItemList, String> {
+async fn get_obs_source_items(obs: State<'_, ObsController>) -> Result<ObsSourceItemList, String> {
     obs.current_program_source_items().await
 }
 
 #[tauri::command]
 async fn set_obs_source_visibility(
     request: ObsSourceVisibilityRequest,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSourceVisibilityResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "changing OBS source visibility")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Changing OBS source visibility",
+    )?;
     obs.set_source_visibility(request).await
 }
 
 #[tauri::command]
-async fn get_obs_audio_inputs(
-    obs: State<'_, ObsController>,
-) -> Result<ObsAudioInputList, String> {
+async fn get_obs_audio_inputs(obs: State<'_, ObsController>) -> Result<ObsAudioInputList, String> {
     obs.audio_inputs().await
 }
 
 #[tauri::command]
 async fn set_obs_audio_muted(
     request: ObsAudioMuteRequest,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "changing OBS audio mute")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Changing OBS audio mute",
+    )?;
     obs.set_audio_muted(request).await
 }
 
 #[tauri::command]
 async fn set_obs_audio_volume(
     request: ObsAudioVolumeRequest,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsAudioControlResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "changing OBS audio volume")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Changing OBS audio volume",
+    )?;
     obs.set_audio_volume(request).await
 }
 
 #[tauri::command]
 async fn set_obs_program_scene(
     request: ObsSceneSwitchRequest,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "switching the OBS Program scene")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Switching the OBS Program scene",
+    )?;
     obs.set_program_scene(request).await
 }
 
 #[tauri::command]
 async fn set_obs_preview_scene(
     request: ObsSceneSwitchRequest,
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsSceneSwitchResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "switching the OBS Preview scene")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Switching the OBS Preview scene",
+    )?;
     obs.set_preview_scene(request).await
 }
 
 #[tauri::command]
 async fn start_obs_recording(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "starting OBS recording")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Starting OBS recording",
+    )?;
     obs.start_recording().await
 }
 
 #[tauri::command]
 async fn stop_obs_recording(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "stopping OBS recording")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Stopping OBS recording",
+    )?;
     obs.stop_recording().await
 }
 
 #[tauri::command]
 async fn pause_obs_recording(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "pausing OBS recording")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Pausing OBS recording",
+    )?;
     obs.pause_recording().await
 }
 
 #[tauri::command]
 async fn resume_obs_recording(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsRecordingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "resuming OBS recording")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Resuming OBS recording",
+    )?;
     obs.resume_recording().await
 }
 
 #[tauri::command]
 async fn start_obs_streaming(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsStreamingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "starting an OBS stream")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Sensitive,
+        confirmed.unwrap_or(false),
+        "Starting an OBS stream",
+    )?;
     obs.start_streaming().await
 }
 
 #[tauri::command]
 async fn stop_obs_streaming(
+    confirmed: Option<bool>,
+    runtime: State<'_, RuntimeState>,
     obs: State<'_, ObsController>,
 ) -> Result<ObsStreamingActionResult, String> {
+    ensure_desktop_actions_resumed(&runtime, "stopping an OBS stream")?;
+    authorize_explicit_desktop_action(
+        &runtime,
+        PermissionClass::Act,
+        confirmed.unwrap_or(false),
+        "Stopping an OBS stream",
+    )?;
     obs.stop_streaming().await
 }
 
@@ -7358,6 +7698,7 @@ pub fn run() {
             run_user_routine,
             get_memories,
             create_memory_command,
+            update_memory_command,
             delete_memory_command,
             get_director_presets,
             save_director_preset_command,

@@ -42,8 +42,12 @@ impl AppTarget {
             "obs" | "obs studio" | "obsstudio" => Some(Self::ObsStudio),
             "brave" | "brave browser" => Some(Self::Brave),
             "chrome" | "google chrome" => Some(Self::Chrome),
-            "explorer" | "file explorer" | "windows explorer" | "explorador"
-            | "explorador de ficheiros" | "ficheiros" => Some(Self::FileExplorer),
+            "explorer"
+            | "file explorer"
+            | "windows explorer"
+            | "explorador"
+            | "explorador de ficheiros"
+            | "ficheiros" => Some(Self::FileExplorer),
             "terminal" | "windows terminal" | "wt" => Some(Self::WindowsTerminal),
             "notepad" | "bloco de notas" => Some(Self::Notepad),
             "calculator" | "calc" | "calculadora" => Some(Self::Calculator),
@@ -102,7 +106,10 @@ impl std::fmt::Display for LaunchError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotInstalled(name) => {
-                write!(formatter, "{name} was not found in a supported Windows location.")
+                write!(
+                    formatter,
+                    "{name} was not found in a supported Windows location."
+                )
             }
             Self::SpawnFailed(message) => write!(formatter, "{message}"),
         }
@@ -148,7 +155,10 @@ fn spawn_system(program: &str) -> Result<(), LaunchError> {
 fn launch_obs() -> Result<(), LaunchError> {
     let path = existing_path([
         env_path("PROGRAMFILES", &["obs-studio", "bin", "64bit", "obs64.exe"]),
-        env_path("PROGRAMFILES(X86)", &["obs-studio", "bin", "64bit", "obs64.exe"]),
+        env_path(
+            "PROGRAMFILES(X86)",
+            &["obs-studio", "bin", "64bit", "obs64.exe"],
+        ),
     ])
     .ok_or(LaunchError::NotInstalled("OBS Studio"))?;
 
@@ -207,7 +217,6 @@ pub fn launch_app(target: AppTarget) -> Result<(), LaunchError> {
         AppTarget::Calculator => spawn_system("calc.exe"),
     }
 }
-
 
 #[cfg(test)]
 mod tests {

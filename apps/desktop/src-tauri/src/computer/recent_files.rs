@@ -1,8 +1,7 @@
 use serde::Serialize;
 use std::{
     collections::HashSet,
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -92,9 +91,7 @@ pub fn recent_files_snapshot(limit: usize) -> Result<RecentFilesSnapshot, Recent
     }
 
     let entries = fs::read_dir(&directory).map_err(|error| {
-        RecentFilesError::ReadFailed(format!(
-            "AURA could not read Windows Recent Items: {error}"
-        ))
+        RecentFilesError::ReadFailed(format!("AURA could not read Windows Recent Items: {error}"))
     })?;
 
     let mut items = Vec::new();

@@ -610,6 +610,11 @@ export default function Agents({
             <div>
               <span className="feature-kicker">AUTOMATIONS</span>
               <h3>Run trusted Actions when something happens.</h3>
+              <p>
+                Background runs only proceed when the Action&apos;s permission is
+                already Allow. Ask and Never stay in your hands; a scheduled run
+                will not pop a confirmation by itself.
+              </p>
             </div>
             <span className="feature-badge">
               {automations.filter((item) => item.enabled).length} enabled
