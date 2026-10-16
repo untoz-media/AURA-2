@@ -2,8 +2,7 @@ use crate::model_manager::ModelManager;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
-    env,
-    fs,
+    env, fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
@@ -268,8 +267,7 @@ impl ModelRuntime {
             let envelope = match envelope_result {
                 Ok(envelope) => envelope,
                 Err(error) => {
-                    let message =
-                        format!("The local model runtime stopped responding: {error}");
+                    let message = format!("The local model runtime stopped responding: {error}");
                     self.mark_process_failed(&mut process_guard, &message);
                     return Err(message);
                 }
@@ -281,15 +279,10 @@ impl ModelRuntime {
 
             match envelope.kind.as_str() {
                 "response" => {
-                    let response = envelope
-                        .text
-                        .unwrap_or_default()
-                        .trim()
-                        .to_string();
+                    let response = envelope.text.unwrap_or_default().trim().to_string();
 
                     if response.is_empty() {
-                        let message =
-                            "The local model returned an empty response.".to_string();
+                        let message = "The local model returned an empty response.".to_string();
                         if let Some(running) = process_guard.as_ref() {
                             self.set_ready_with_error(running, Some(message.clone()));
                         }
@@ -401,9 +394,7 @@ impl ModelRuntime {
         loop {
             let envelope = read_envelope(&mut stdout).map_err(|error| {
                 let _ = child.kill();
-                let message = format!(
-                    "The local model runtime exited while loading: {error}"
-                );
+                let message = format!("The local model runtime exited while loading: {error}");
                 self.set_error_status(Some(model_id.to_string()), &message);
                 message
             })?;
@@ -473,11 +464,7 @@ impl ModelRuntime {
         });
     }
 
-    fn mark_process_failed(
-        &self,
-        process_guard: &mut Option<RuntimeProcess>,
-        message: &str,
-    ) {
+    fn mark_process_failed(&self, process_guard: &mut Option<RuntimeProcess>, message: &str) {
         let model_id = process_guard
             .as_ref()
             .map(|process| process.model_id.clone());
@@ -604,7 +591,10 @@ fn find_python(app: &AppHandle) -> Option<PythonCommand> {
             command.creation_flags(CREATE_NO_WINDOW);
         }
 
-        command.status().map(|status| status.success()).unwrap_or(false)
+        command
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
     })
 }
 
@@ -636,6 +626,6 @@ mod tests {
     #[test]
     fn conversation_limit_is_even_for_turn_pairs() {
         assert_eq!(MAX_CONVERSATION_MESSAGES % 2, 0);
-        assert!(MAX_CONVERSATION_MESSAGES >= 10);
+        const { assert!(MAX_CONVERSATION_MESSAGES >= 10) };
     }
 }

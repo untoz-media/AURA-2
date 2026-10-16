@@ -4,7 +4,9 @@ M005.1 introduces the first persistent context layer in AURA-2.
 
 The scope is deliberately explicit and user-controlled: AURA only stores a memory when the user asks it to remember something or adds an entry manually in the Memory screen.
 
-Automatic context capture is not enabled in this milestone.
+Automatic writing into this explicit memory list is not enabled. Chat can still attach metadata for the current turn — foreground app, recent file names, and the active project — without storing that metadata as a memory and without reading file contents.
+
+Saved memories can be viewed, edited, and deleted from the Memory screen. Edits keep the original id and refresh the updated timestamp. Duplicate text is still rejected.
 
 ## Storage
 

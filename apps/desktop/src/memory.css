@@ -194,10 +194,22 @@
 
 .memory-record {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
   padding: 14px 16px;
+}
+
+.memory-record-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.memory-record textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
 }
 
 .memory-record-main {

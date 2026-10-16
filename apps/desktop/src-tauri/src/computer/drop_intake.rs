@@ -150,11 +150,7 @@ impl DropIntakeState {
                 kind,
                 extension,
                 size_bytes: metadata.len(),
-                modified_at_ms: metadata
-                    .modified()
-                    .ok()
-                    .map(system_time_ms)
-                    .unwrap_or(0),
+                modified_at_ms: metadata.modified().ok().map(system_time_ms).unwrap_or(0),
                 can_use_vision,
                 can_reveal: true,
                 can_inspect: true,
@@ -206,11 +202,7 @@ impl DropIntakeState {
 
         let metadata = fs::metadata(&record.path)
             .map_err(|error| format!("Could not re-check the dropped file: {error}"))?;
-        let current_modified_at_ms = metadata
-            .modified()
-            .ok()
-            .map(system_time_ms)
-            .unwrap_or(0);
+        let current_modified_at_ms = metadata.modified().ok().map(system_time_ms).unwrap_or(0);
 
         if metadata.len() != record.item.size_bytes
             || (record.item.modified_at_ms > 0
@@ -251,10 +243,7 @@ pub fn reveal_drop(state: &DropIntakeState, id: &str) -> Result<String, String> 
     Ok(format!("Revealed {} in File Explorer.", item.name))
 }
 
-pub fn inspect_drop(
-    state: &DropIntakeState,
-    id: &str,
-) -> Result<DroppedFileInspection, String> {
+pub fn inspect_drop(state: &DropIntakeState, id: &str) -> Result<DroppedFileInspection, String> {
     let path = state.path_for(id)?;
     let item = state.item_for(id)?;
 
@@ -302,12 +291,7 @@ pub fn inspect_drop(
         note = inspection_note(&item);
     }
 
-    let summary = inspection_summary(
-        &item,
-        text_preview.is_some(),
-        image_width,
-        image_height,
-    );
+    let summary = inspection_summary(&item, text_preview.is_some(), image_width, image_height);
 
     Ok(DroppedFileInspection {
         id: item.id,
@@ -416,22 +400,27 @@ Use only the supplied content/metadata and be explicit when a file is metadata-o
         .map(|(metadata, _, _)| metadata.chars().count() + 2)
         .sum::<usize>();
     let content_marker_cost = preview_count.saturating_mul(
-        "\nBEGIN_UNTRUSTED_FILE_CONTENT\n\nEND_UNTRUSTED_FILE_CONTENT".chars().count(),
+        "\nBEGIN_UNTRUSTED_FILE_CONTENT\n\nEND_UNTRUSTED_FILE_CONTENT"
+            .chars()
+            .count(),
     );
     let available_preview_chars = MAX_MODEL_DROP_CONTEXT_CHARS
         .saturating_sub(prefix.chars().count())
         .saturating_sub(metadata_cost)
         .saturating_sub(content_marker_cost);
-    let fair_preview_budget = if preview_count == 0 {
-        0
-    } else {
-        (available_preview_chars / preview_count).min(MAX_MODEL_PREVIEW_CHARS_PER_FILE)
-    };
+    let fair_preview_budget = available_preview_chars
+        .checked_div(preview_count)
+        .unwrap_or(0)
+        .min(MAX_MODEL_PREVIEW_CHARS_PER_FILE);
 
     let mut context = prefix;
 
     for (metadata, preview, was_truncated) in sections {
-        let separator = if context.ends_with("\n\n") { "" } else { "\n\n" };
+        let separator = if context.ends_with("\n\n") {
+            ""
+        } else {
+            "\n\n"
+        };
         let remaining = MAX_MODEL_DROP_CONTEXT_CHARS.saturating_sub(context.chars().count());
         if remaining == 0 {
             break;
@@ -550,7 +539,10 @@ fn read_text_preview(path: &Path) -> Result<(Option<String>, bool), String> {
         return Ok((Some(value), truncated));
     }
 
-    let preview = value.chars().take(MAX_TEXT_PREVIEW_CHARS).collect::<String>();
+    let preview = value
+        .chars()
+        .take(MAX_TEXT_PREVIEW_CHARS)
+        .collect::<String>();
     truncated = true;
     Ok((Some(preview), truncated))
 }
@@ -643,12 +635,13 @@ fn classify(extension: Option<&str>) -> &'static str {
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => "image",
         "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv" | "mts" | "m2ts" => "video",
         "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus" => "audio",
-        "pdf" | "txt" | "md" | "rtf" | "doc" | "docx" | "ppt" | "pptx" | "xls"
-        | "xlsx" | "csv" | "json" | "log" | "yaml" | "yml" | "toml" | "xml"
-        | "html" | "htm" | "css" | "scss" | "less" | "js" | "jsx" | "ts" | "tsx"
-        | "py" | "rs" | "c" | "cpp" | "h" | "hpp" | "java" | "kt" | "go" | "sql"
-        | "ini" | "conf" | "srt" | "vtt" | "ass" | "ipynb" | "vue" | "svelte"
-        | "swift" | "rb" | "php" | "cs" | "ps1" | "sh" | "bat" | "cmd" => "document",
+        "pdf" | "txt" | "md" | "rtf" | "doc" | "docx" | "ppt" | "pptx" | "xls" | "xlsx" | "csv"
+        | "json" | "log" | "yaml" | "yml" | "toml" | "xml" | "html" | "htm" | "css" | "scss"
+        | "less" | "js" | "jsx" | "ts" | "tsx" | "py" | "rs" | "c" | "cpp" | "h" | "hpp"
+        | "java" | "kt" | "go" | "sql" | "ini" | "conf" | "srt" | "vtt" | "ass" | "ipynb"
+        | "vue" | "svelte" | "swift" | "rb" | "php" | "cs" | "ps1" | "sh" | "bat" | "cmd" => {
+            "document"
+        }
         "zip" | "7z" | "rar" | "tar" | "gz" => "archive",
         _ => "other",
     }
@@ -778,7 +771,8 @@ mod tests {
         let path = std::env::temp_dir().join(format!("aura-drop-preview-{}.txt", timestamp_ms()));
         let mut file = File::create(&path).expect("create preview fixture");
         let data = "a".repeat((MAX_TEXT_PREVIEW_BYTES + 512) as usize);
-        file.write_all(data.as_bytes()).expect("write preview fixture");
+        file.write_all(data.as_bytes())
+            .expect("write preview fixture");
         drop(file);
 
         let (preview, truncated) = read_text_preview(&path).expect("read preview");
@@ -807,7 +801,9 @@ mod tests {
         file.write_all(b"-after").expect("change fixture");
         drop(file);
 
-        let error = state.path_for(&id).expect_err("changed file must be rejected");
+        let error = state
+            .path_for(&id)
+            .expect_err("changed file must be rejected");
         assert!(error.contains("changed after it was added"));
 
         let _ = fs::remove_file(path);

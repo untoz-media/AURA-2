@@ -102,9 +102,7 @@ Director Mode now has a first-class workspace showing:
 
 ## Tasks
 
-Tasks is now a permanent navigation destination for the future M008 agent/task system.
-
-No fake background task runtime is exposed before that backend exists.
+Tasks remains the workspace for user routines. Agents and Automations are a separate, implemented workspace: local plans, progress, pause, resume, cancel, Saved Actions, and event or scheduled automations. Background automations run only when the underlying permission is already Allow.
 
 ## Themes
 

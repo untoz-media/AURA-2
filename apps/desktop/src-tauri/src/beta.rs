@@ -43,18 +43,10 @@ const DIAGNOSTICS_TOP_LEVEL_FIELDS: &[&str] = &[
 ];
 const DIAGNOSTIC_CHECK_FIELDS: &[&str] = &["id", "label", "status", "detail"];
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BetaPreferences {
     pub onboarding_complete: bool,
-}
-
-impl Default for BetaPreferences {
-    fn default() -> Self {
-        Self {
-            onboarding_complete: false,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -92,7 +84,6 @@ pub struct BetaStatus {
 pub struct SetBetaPreferencesRequest {
     pub onboarding_complete: bool,
 }
-
 
 const BETA_TEST_AREAS: &[(&str, &str)] = &[
     ("install", "Install & first run"),
@@ -211,10 +202,7 @@ pub struct DiagnosticsSnapshot {
     pub generated_at_ms: u64,
 }
 
-pub fn begin_session(
-    app: &AppHandle,
-    runtime: &BetaSessionRuntime,
-) -> Result<bool, String> {
+pub fn begin_session(app: &AppHandle, runtime: &BetaSessionRuntime) -> Result<bool, String> {
     let path = session_path(app)?;
     let (previous_unclean, consecutive_unclean_sessions) = session_recovery_state(&path);
 
@@ -251,7 +239,6 @@ pub fn mark_session_clean(app: &AppHandle) -> Result<(), String> {
     write_json(&path, &marker)
 }
 
-
 pub fn repair_recovery_state(
     app: &AppHandle,
     runtime: &BetaSessionRuntime,
@@ -259,11 +246,10 @@ pub fn repair_recovery_state(
     let path = session_path(app)?;
     let now = timestamp_ms();
     let backup = if path.exists() {
-        let backup = path.with_file_name(format!(
-            "beta-session.recovery-backup-{now}.json"
-        ));
-        fs::rename(&path, &backup)
-            .map_err(|error| format!("Could not preserve the previous Beta session marker: {error}"))?;
+        let backup = path.with_file_name(format!("beta-session.recovery-backup-{now}.json"));
+        fs::rename(&path, &backup).map_err(|error| {
+            format!("Could not preserve the previous Beta session marker: {error}")
+        })?;
         Some(backup)
     } else {
         None
@@ -282,7 +268,9 @@ pub fn repair_recovery_state(
                 let _ = fs::rename(backup, &path);
             }
         }
-        return Err(format!("Could not create a repaired Beta session marker: {error}"));
+        return Err(format!(
+            "Could not create a repaired Beta session marker: {error}"
+        ));
     }
 
     runtime
@@ -295,24 +283,15 @@ pub fn repair_recovery_state(
     status(app, runtime)
 }
 
-pub fn status(
-    app: &AppHandle,
-    runtime: &BetaSessionRuntime,
-) -> Result<BetaStatus, String> {
+pub fn status(app: &AppHandle, runtime: &BetaSessionRuntime) -> Result<BetaStatus, String> {
     let preferences = load_preferences(app)?;
 
     Ok(BetaStatus {
         channel: "beta".to_string(),
         onboarding_complete: preferences.onboarding_complete,
-        previous_session_unclean: runtime
-            .previous_session_unclean
-            .load(Ordering::Relaxed),
-        consecutive_unclean_sessions: runtime
-            .consecutive_unclean_sessions
-            .load(Ordering::Relaxed),
-        crash_loop_guard_active: runtime
-            .consecutive_unclean_sessions
-            .load(Ordering::Relaxed)
+        previous_session_unclean: runtime.previous_session_unclean.load(Ordering::Relaxed),
+        consecutive_unclean_sessions: runtime.consecutive_unclean_sessions.load(Ordering::Relaxed),
+        crash_loop_guard_active: runtime.consecutive_unclean_sessions.load(Ordering::Relaxed)
             >= CRASH_LOOP_THRESHOLD,
         telemetry_enabled: false,
         automatic_crash_uploads: false,
@@ -472,7 +451,8 @@ fn writable_directory_check(
     ));
     let result = (|| -> Result<(), ()> {
         let mut file = File::create(&probe).map_err(|_| ())?;
-        file.write_all(b"AURA-2 beta health probe").map_err(|_| ())?;
+        file.write_all(b"AURA-2 beta health probe")
+            .map_err(|_| ())?;
         file.sync_all().map_err(|_| ())?;
         drop(file);
         fs::remove_file(&probe).map_err(|_| ())?;
@@ -565,7 +545,6 @@ fn beta_preferences_health_check(app: &AppHandle) -> DiagnosticCheck {
     }
 }
 
-
 fn beta_test_session_health_check(app: &AppHandle) -> DiagnosticCheck {
     let path = match test_session_path(app) {
         Ok(path) => path,
@@ -591,13 +570,11 @@ fn beta_test_session_health_check(app: &AppHandle) -> DiagnosticCheck {
         .and_then(|content| serde_json::from_str::<BetaTestSession>(&content).ok())
         .map(normalize_test_session)
     {
-        Some(session) if session.checks.len() == BETA_TEST_AREAS.len() => {
-            DiagnosticCheck::passed(
-                "beta-test-session",
-                "Beta Test Session",
-                "The local testing checklist is readable and uses only fixed privacy-safe areas.",
-            )
-        }
+        Some(session) if session.checks.len() == BETA_TEST_AREAS.len() => DiagnosticCheck::passed(
+            "beta-test-session",
+            "Beta Test Session",
+            "The local testing checklist is readable and uses only fixed privacy-safe areas.",
+        ),
         _ => DiagnosticCheck::failed(
             "beta-test-session",
             "Beta Test Session",
@@ -668,8 +645,9 @@ pub fn export_diagnostics(
 }
 
 fn validate_diagnostics_payload(snapshot: &DiagnosticsSnapshot) -> Result<(), String> {
-    let serialized = serde_json::to_vec(snapshot)
-        .map_err(|error| format!("Could not serialize diagnostics for privacy validation: {error}"))?;
+    let serialized = serde_json::to_vec(snapshot).map_err(|error| {
+        format!("Could not serialize diagnostics for privacy validation: {error}")
+    })?;
     if serialized.len() > DIAGNOSTICS_MAX_BYTES {
         return Err("Diagnostics export exceeded the local privacy size limit.".to_string());
     }
@@ -688,11 +666,15 @@ fn validate_diagnostics_payload(snapshot: &DiagnosticsSnapshot) -> Result<(), St
         }
     }
 
-    if let Some(checks) = object.get("healthChecks").and_then(|value| value.as_array()) {
+    if let Some(checks) = object
+        .get("healthChecks")
+        .and_then(|value| value.as_array())
+    {
         for check in checks {
             let Some(check_object) = check.as_object() else {
                 return Err(
-                    "Diagnostics export blocked by privacy guard: invalid health check.".to_string(),
+                    "Diagnostics export blocked by privacy guard: invalid health check."
+                        .to_string(),
                 );
             };
             for key in check_object.keys() {
@@ -789,6 +771,7 @@ fn session_recovery_state(path: &Path) -> (bool, u32) {
     }
 }
 
+#[cfg(test)]
 fn previous_session_was_unclean(path: &Path) -> bool {
     session_recovery_state(path).0
 }

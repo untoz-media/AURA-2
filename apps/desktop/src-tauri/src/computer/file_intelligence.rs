@@ -85,13 +85,19 @@ impl FileCategory {
             ),
             Self::Document => matches!(
                 extension.as_str(),
-                "pdf" | "txt" | "md" | "rtf" | "doc" | "docx" | "ppt" | "pptx" | "xls"
-                    | "xlsx" | "csv"
+                "pdf"
+                    | "txt"
+                    | "md"
+                    | "rtf"
+                    | "doc"
+                    | "docx"
+                    | "ppt"
+                    | "pptx"
+                    | "xls"
+                    | "xlsx"
+                    | "csv"
             ),
-            Self::Archive => matches!(
-                extension.as_str(),
-                "zip" | "7z" | "rar" | "tar" | "gz"
-            ),
+            Self::Archive => matches!(extension.as_str(), "zip" | "7z" | "rar" | "tar" | "gz"),
         }
     }
 }
@@ -162,10 +168,7 @@ struct SearchState {
     matches: Vec<(u16, FileSearchItem)>,
 }
 
-pub fn search_personal_files(
-    app: &AppHandle,
-    query: &str,
-) -> Result<FileSearchSnapshot, String> {
+pub fn search_personal_files(app: &AppHandle, query: &str) -> Result<FileSearchSnapshot, String> {
     let query = sanitize_query(query)?;
     let normalized = query.to_lowercase();
     let tokens = normalized
@@ -185,14 +188,7 @@ pub fn search_personal_files(
     };
 
     for root in &roots {
-        scan_directory(
-            &root.path,
-            root,
-            0,
-            &normalized,
-            &tokens,
-            &mut state,
-        );
+        scan_directory(&root.path, root, 0, &normalized, &tokens, &mut state);
 
         if state.scan_limit_reached {
             break;
@@ -211,10 +207,7 @@ pub fn search_personal_files(
     Ok(FileSearchSnapshot {
         query,
         items: state.matches.into_iter().map(|(_, item)| item).collect(),
-        roots: roots
-            .iter()
-            .map(|root| root.label.to_string())
-            .collect(),
+        roots: roots.iter().map(|root| root.label.to_string()).collect(),
         scanned_entries: state.scanned_entries,
         scan_limit_reached: state.scan_limit_reached,
         max_depth: MAX_SEARCH_DEPTH,
@@ -275,10 +268,7 @@ pub fn recent_personal_files(
     })
 }
 
-pub fn summarize_recent_files(
-    snapshot: &FileSearchSnapshot,
-    request: &RecentFileQuery,
-) -> String {
+pub fn summarize_recent_files(snapshot: &FileSearchSnapshot, request: &RecentFileQuery) -> String {
     if snapshot.items.is_empty() {
         let suffix = if snapshot.scan_limit_reached {
             " The bounded scan hit its entry limit, so the result may be incomplete."
@@ -369,7 +359,11 @@ pub fn summarize_file_search(snapshot: &FileSearchSnapshot) -> String {
         lines.push(format!(
             "…and {} more bounded result{}.",
             snapshot.items.len() - 10,
-            if snapshot.items.len() - 10 == 1 { "" } else { "s" }
+            if snapshot.items.len() - 10 == 1 {
+                ""
+            } else {
+                "s"
+            }
         ));
     }
 
@@ -381,8 +375,7 @@ pub fn summarize_file_search(snapshot: &FileSearchSnapshot) -> String {
     }
 
     lines.push(
-        "Tip: use “Reveal file <full path>” to show a result safely in File Explorer."
-            .to_string(),
+        "Tip: use “Reveal file <full path>” to show a result safely in File Explorer.".to_string(),
     );
 
     lines.join("\n")
@@ -396,7 +389,9 @@ pub fn reveal_personal_path(app: &AppHandle, value: &str) -> Result<String, Stri
 
     let target = PathBuf::from(value);
     if !target.is_absolute() {
-        return Err("Reveal file requires an absolute path from a File Intelligence result.".to_string());
+        return Err(
+            "Reveal file requires an absolute path from a File Intelligence result.".to_string(),
+        );
     }
 
     let canonical_target = fs::canonicalize(&target)
@@ -534,14 +529,7 @@ fn scan_directory(
         }
 
         if file_type.is_dir() && depth < MAX_SEARCH_DEPTH {
-            scan_directory(
-                &path,
-                root,
-                depth + 1,
-                normalized_query,
-                tokens,
-                state,
-            );
+            scan_directory(&path, root, depth + 1, normalized_query, tokens, state);
 
             if state.scan_limit_reached {
                 return;
@@ -676,21 +664,11 @@ mod tests {
     #[test]
     fn recent_query_limit_is_bounded() {
         assert_eq!(
-            RecentFileQuery::bounded(
-                FileCategory::Video,
-                PersonalRootFilter::All,
-                100,
-            )
-            .limit,
+            RecentFileQuery::bounded(FileCategory::Video, PersonalRootFilter::All, 100,).limit,
             10
         );
         assert_eq!(
-            RecentFileQuery::bounded(
-                FileCategory::Video,
-                PersonalRootFilter::All,
-                0,
-            )
-            .limit,
+            RecentFileQuery::bounded(FileCategory::Video, PersonalRootFilter::All, 0,).limit,
             1
         );
     }
@@ -704,8 +682,10 @@ mod tests {
 
     #[test]
     fn exact_name_scores_above_partial_match() {
-        assert!(match_score("report.pdf", "report.pdf", &["report.pdf"])
-            > match_score("report.pdf", "report", &["report"]));
+        assert!(
+            match_score("report.pdf", "report.pdf", &["report.pdf"])
+                > match_score("report.pdf", "report", &["report"])
+        );
     }
 
     #[test]

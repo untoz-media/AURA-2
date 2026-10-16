@@ -139,23 +139,30 @@ fn timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
+fn device_name(device: &cpal::Device) -> Option<String> {
+    device
+        .description()
+        .ok()
+        .map(|description| description.name().to_string())
+}
+
 fn input_devices() -> Result<(Vec<AudioInputDevice>, Option<String>), String> {
     let host = cpal::default_host();
     let default_name = host
         .default_input_device()
-        .and_then(|device| device.name().ok());
+        .and_then(|device| device_name(&device));
 
     let mut devices = host
         .input_devices()
         .map_err(|error| format!("Could not enumerate audio input devices: {error}"))?
-        .filter_map(|device| device.name().ok())
+        .filter_map(|device| device_name(&device))
         .map(|name| AudioInputDevice {
             is_default: default_name.as_deref() == Some(name.as_str()),
             name,
         })
         .collect::<Vec<_>>();
 
-    devices.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    devices.sort_by_key(|device| device.name.to_lowercase());
     devices.dedup_by(|left, right| left.name.eq_ignore_ascii_case(&right.name));
 
     Ok((devices, default_name))
@@ -169,10 +176,7 @@ fn find_input_device(name: Option<&str>) -> Result<cpal::Device, String> {
             .input_devices()
             .map_err(|error| format!("Could not enumerate audio input devices: {error}"))?
             .find(|device| {
-                device
-                    .name()
-                    .ok()
-                    .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+                device_name(device).is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
             })
             .ok_or_else(|| format!("Audio input device “{name}” is no longer available."));
     }
@@ -221,10 +225,11 @@ impl AudioInputManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
 
-        if selected
-            .as_ref()
-            .is_some_and(|name| !devices.iter().any(|device| device.name.eq_ignore_ascii_case(name)))
-        {
+        if selected.as_ref().is_some_and(|name| {
+            !devices
+                .iter()
+                .any(|device| device.name.eq_ignore_ascii_case(name))
+        }) {
             selected = None;
         }
 
@@ -314,14 +319,14 @@ impl AudioInputManager {
             .default_input_config()
             .map_err(|error| format!("Could not read microphone configuration: {error}"))?;
 
-        let sample_rate = supported.sample_rate().0;
+        let sample_rate = supported.sample_rate();
         let channels = supported.channels();
         let sample_format = supported.sample_format();
         let config: StreamConfig = supported.into();
 
         let level = self.level_milli.clone();
         let last_error = self.last_error.clone();
-        let error_callback = move |error: cpal::StreamError| {
+        let error_callback = move |error: cpal::Error| {
             *last_error
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) =
@@ -332,7 +337,7 @@ impl AudioInputManager {
             SampleFormat::F32 => {
                 let level = level.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[f32], _| update_level_f32(&level, data),
                     error_callback,
                     None,
@@ -341,7 +346,7 @@ impl AudioInputManager {
             SampleFormat::I16 => {
                 let level = level.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[i16], _| update_level_i16(&level, data),
                     error_callback,
                     None,
@@ -350,7 +355,7 @@ impl AudioInputManager {
             SampleFormat::U16 => {
                 let level = level.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[u16], _| update_level_u16(&level, data),
                     error_callback,
                     None,
@@ -447,7 +452,7 @@ impl AudioInputManager {
             .default_input_config()
             .map_err(|error| format!("Could not read microphone configuration: {error}"))?;
 
-        let sample_rate = supported.sample_rate().0;
+        let sample_rate = supported.sample_rate();
         let channels = supported.channels();
         let sample_format = supported.sample_format();
         let config: StreamConfig = supported.into();
@@ -456,7 +461,7 @@ impl AudioInputManager {
         let level = self.level_milli.clone();
         let buffer = self.capture_buffer.clone();
         let last_error = self.last_error.clone();
-        let error_callback = move |error: cpal::StreamError| {
+        let error_callback = move |error: cpal::Error| {
             *last_error
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) =
@@ -468,11 +473,12 @@ impl AudioInputManager {
                 let level = level.clone();
                 let buffer = buffer.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[f32], _| {
                         update_level_f32(&level, data);
-                        let mut target =
-                            buffer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let mut target = buffer
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         let remaining = max_samples.saturating_sub(target.len());
                         target.extend(data.iter().copied().take(remaining));
                     },
@@ -484,11 +490,12 @@ impl AudioInputManager {
                 let level = level.clone();
                 let buffer = buffer.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[i16], _| {
                         update_level_i16(&level, data);
-                        let mut target =
-                            buffer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let mut target = buffer
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         let remaining = max_samples.saturating_sub(target.len());
                         target.extend(
                             data.iter()
@@ -505,12 +512,13 @@ impl AudioInputManager {
                 let level = level.clone();
                 let buffer = buffer.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[u16], _| {
                         update_level_u16(&level, data);
                         let midpoint = u16::MAX as f32 / 2.0;
-                        let mut target =
-                            buffer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let mut target = buffer
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         let remaining = max_samples.saturating_sub(target.len());
                         target.extend(
                             data.iter()
@@ -634,7 +642,9 @@ impl AudioInputManager {
                     capture.samples.len(),
                     capture.sample_rate,
                     capture.channels,
-                    capture.completed_at_ms.saturating_sub(capture.started_at_ms),
+                    capture
+                        .completed_at_ms
+                        .saturating_sub(capture.started_at_ms),
                 )
             })
     }

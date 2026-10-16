@@ -1,16 +1,13 @@
 use std::mem::size_of;
 
-use windows_sys::Win32::{
-    UI::{
-        Input::KeyboardAndMouse::{
-            SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEINPUT,
-            MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN,
-            MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
-        },
-        WindowsAndMessaging::{
-            GetSystemMetrics, SetCursorPos, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-            SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-        },
+use windows_sys::Win32::UI::{
+    Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
+        MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT,
+    },
+    WindowsAndMessaging::{
+        GetSystemMetrics, SetCursorPos, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        SM_YVIRTUALSCREEN,
     },
 };
 
@@ -32,10 +29,17 @@ pub enum MouseButton {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseAction {
     MoveTo(ScreenPoint),
-    Scroll { notches: i32 },
-    Click { button: MouseButton },
+    Scroll {
+        notches: i32,
+    },
+    Click {
+        button: MouseButton,
+    },
     DoubleClick,
-    ClickAt { point: ScreenPoint, button: MouseButton },
+    ClickAt {
+        point: ScreenPoint,
+        button: MouseButton,
+    },
 }
 
 #[derive(Debug)]
@@ -51,7 +55,10 @@ pub enum MouseError {
     },
     InvalidScrollAmount,
     MoveFailed,
-    InjectionFailed { expected: u32, sent: u32 },
+    InjectionFailed {
+        expected: u32,
+        sent: u32,
+    },
 }
 
 impl std::fmt::Display for MouseError {
@@ -174,13 +181,7 @@ fn mouse_input(flags: u32, mouse_data: u32) -> INPUT {
 
 fn send_inputs(inputs: &[INPUT]) -> Result<(), MouseError> {
     let expected = inputs.len() as u32;
-    let sent = unsafe {
-        SendInput(
-            expected,
-            inputs.as_ptr(),
-            size_of::<INPUT>() as i32,
-        )
-    };
+    let sent = unsafe { SendInput(expected, inputs.as_ptr(), size_of::<INPUT>() as i32) };
 
     if sent == expected {
         Ok(())
@@ -195,10 +196,7 @@ pub fn click(button: MouseButton) -> Result<(), MouseError> {
         MouseButton::Right => (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
     };
 
-    send_inputs(&[
-        mouse_input(down, 0),
-        mouse_input(up, 0),
-    ])
+    send_inputs(&[mouse_input(down, 0), mouse_input(up, 0)])
 }
 
 pub fn double_click() -> Result<(), MouseError> {

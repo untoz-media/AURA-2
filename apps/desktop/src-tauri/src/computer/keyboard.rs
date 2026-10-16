@@ -1,10 +1,9 @@
 use std::{mem::size_of, thread, time::Duration};
 
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
-    KEYEVENTF_UNICODE, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END,
-    VK_ESCAPE, VK_F1, VK_HOME, VK_LWIN, VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN,
-    VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP, VK_LEFT,
+    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE,
+    VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_HOME, VK_LEFT, VK_LWIN,
+    VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +52,13 @@ pub enum KeyboardError {
 impl std::fmt::Display for KeyboardError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidShortcut(value) => write!(formatter, "Unsupported keyboard shortcut: {value}"),
-            Self::TextTooLong => write!(formatter, "Text input is limited to 500 characters per action."),
+            Self::InvalidShortcut(value) => {
+                write!(formatter, "Unsupported keyboard shortcut: {value}")
+            }
+            Self::TextTooLong => write!(
+                formatter,
+                "Text input is limited to 500 characters per action."
+            ),
             Self::UnsupportedControlCharacter => write!(
                 formatter,
                 "Typed text cannot contain control characters such as Enter or Tab."
@@ -109,9 +113,10 @@ impl KeyboardShortcut {
                 return Err(KeyboardError::InvalidShortcut(value.to_string()));
             }
 
-            key = Some(parse_key(&normalized).ok_or_else(|| {
-                KeyboardError::InvalidShortcut(value.to_string())
-            })?);
+            key = Some(
+                parse_key(&normalized)
+                    .ok_or_else(|| KeyboardError::InvalidShortcut(value.to_string()))?,
+            );
         }
 
         let Some(key) = key else {
@@ -282,13 +287,7 @@ fn unicode_input(unit: u16, flags: u32) -> INPUT {
 
 fn send_inputs(inputs: &[INPUT]) -> Result<(), KeyboardError> {
     let expected = inputs.len() as u32;
-    let sent = unsafe {
-        SendInput(
-            expected,
-            inputs.as_ptr(),
-            size_of::<INPUT>() as i32,
-        )
-    };
+    let sent = unsafe { SendInput(expected, inputs.as_ptr(), size_of::<INPUT>() as i32) };
 
     if sent == expected {
         Ok(())
@@ -308,10 +307,7 @@ pub fn press_shortcut(shortcut: &KeyboardShortcut) -> Result<(), KeyboardError> 
     inputs.push(key_input(virtual_key(shortcut.key), KEYEVENTF_KEYUP));
 
     for modifier in shortcut.modifiers.iter().rev() {
-        inputs.push(key_input(
-            modifier_virtual_key(*modifier),
-            KEYEVENTF_KEYUP,
-        ));
+        inputs.push(key_input(modifier_virtual_key(*modifier), KEYEVENTF_KEYUP));
     }
 
     send_inputs(&inputs)

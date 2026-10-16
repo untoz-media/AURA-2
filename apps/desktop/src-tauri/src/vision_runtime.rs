@@ -1,7 +1,4 @@
-use crate::{
-    managed_runtime::managed_python_path,
-    model_manager::ModelManager,
-};
+use crate::{managed_runtime::managed_python_path, model_manager::ModelManager};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -162,7 +159,9 @@ impl VisionRuntime {
                 .ok_or_else(|| "Vision runtime failed to start.".to_string())?;
             writeln!(running.stdin, "{request}")
                 .and_then(|_| running.stdin.flush())
-                .map_err(|error| format!("Could not send screenshot to local Vision runtime: {error}"))?;
+                .map_err(|error| {
+                    format!("Could not send screenshot to local Vision runtime: {error}")
+                })?;
         }
 
         loop {
@@ -237,11 +236,7 @@ impl VisionRuntime {
         self.set_status(VisionRuntimeStatus::default());
     }
 
-    fn start_process(
-        &self,
-        app: &AppHandle,
-        model_path: &Path,
-    ) -> Result<VisionProcess, String> {
+    fn start_process(&self, app: &AppHandle, model_path: &Path) -> Result<VisionProcess, String> {
         let python = managed_python_path(app)?;
         if !python.exists() {
             return Err(

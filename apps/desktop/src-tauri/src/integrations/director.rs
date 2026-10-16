@@ -1,6 +1,10 @@
 use super::obs::ObsController;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tauri::{AppHandle, Manager};
 
 const PRESETS_FILENAME: &str = "director-presets.json";
@@ -26,35 +30,20 @@ pub enum DirectorStreamingAction {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DirectorPresetAction {
-    ProgramScene {
-        scene_name: String,
-    },
-    PreviewScene {
-        scene_name: String,
-    },
-    SourceVisibility {
-        source_name: String,
-        enabled: bool,
-    },
-    AudioMute {
-        input_name: String,
-        muted: bool,
-    },
-    AudioVolume {
-        input_name: String,
-        percent: u8,
-    },
-    Recording {
-        action: DirectorRecordingAction,
-    },
-    Streaming {
-        action: DirectorStreamingAction,
-    },
-    Wait {
-        milliseconds: u64,
-    },
+    ProgramScene { scene_name: String },
+    PreviewScene { scene_name: String },
+    SourceVisibility { source_name: String, enabled: bool },
+    AudioMute { input_name: String, muted: bool },
+    AudioVolume { input_name: String, percent: u8 },
+    Recording { action: DirectorRecordingAction },
+    Streaming { action: DirectorStreamingAction },
+    Wait { milliseconds: u64 },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -112,7 +101,10 @@ fn timestamp_ms() -> u64 {
 }
 
 fn presets_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join(PRESETS_FILENAME))
 }
 
@@ -268,7 +260,7 @@ pub fn load_director_presets(app: &AppHandle) -> Vec<DirectorPreset> {
     };
 
     let mut presets = serde_json::from_str::<Vec<DirectorPreset>>(&content).unwrap_or_default();
-    presets.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    presets.sort_by_key(|preset| preset.name.to_lowercase());
     presets
 }
 
@@ -328,7 +320,7 @@ pub fn save_director_preset(
         presets.push(preset.clone());
     }
 
-    presets.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    presets.sort_by_key(|preset| preset.name.to_lowercase());
     write_presets(app, &presets)?;
 
     Ok(preset)
@@ -377,7 +369,9 @@ fn resolve_director_preset_from_list(
     .filter(|value| !value.is_empty());
 
     if let Some(target) = target {
-        return presets.into_iter().find(|preset| preset_matches(preset, target));
+        return presets
+            .into_iter()
+            .find(|preset| preset_matches(preset, target));
     }
 
     presets
@@ -520,11 +514,9 @@ async fn execute_action(
         DirectorPresetAction::Recording { action } => {
             let state = obs.runtime_state().await;
             if !state.available {
-                return Err(
-                    state
-                        .last_error
-                        .unwrap_or_else(|| "OBS Studio is not connected.".to_string()),
-                );
+                return Err(state
+                    .last_error
+                    .unwrap_or_else(|| "OBS Studio is not connected.".to_string()));
             }
 
             match action {
@@ -577,18 +569,15 @@ async fn execute_action(
         DirectorPresetAction::Streaming { action } => {
             let state = obs.runtime_state().await;
             if !state.available {
-                return Err(
-                    state
-                        .last_error
-                        .unwrap_or_else(|| "OBS Studio is not connected.".to_string()),
-                );
+                return Err(state
+                    .last_error
+                    .unwrap_or_else(|| "OBS Studio is not connected.".to_string()));
             }
 
             match action {
-                DirectorStreamingAction::Start if state.streaming => Ok((
-                    "skipped".to_string(),
-                    "Stream is already live.".to_string(),
-                )),
+                DirectorStreamingAction::Start if state.streaming => {
+                    Ok(("skipped".to_string(), "Stream is already live.".to_string()))
+                }
                 DirectorStreamingAction::Stop if !state.streaming => Ok((
                     "skipped".to_string(),
                     "Stream is already offline.".to_string(),
@@ -737,9 +726,11 @@ mod tests {
             updated_at_ms: 1,
         };
 
-        let by_alias =
-            resolve_director_preset_from_list(vec![preset.clone()], "Ready the match!");
-        assert_eq!(by_alias.as_ref().map(|item| item.id.as_str()), Some("prepare"));
+        let by_alias = resolve_director_preset_from_list(vec![preset.clone()], "Ready the match!");
+        assert_eq!(
+            by_alias.as_ref().map(|item| item.id.as_str()),
+            Some("prepare")
+        );
 
         let by_command =
             resolve_director_preset_from_list(vec![preset], "Run preset Prepare Match");

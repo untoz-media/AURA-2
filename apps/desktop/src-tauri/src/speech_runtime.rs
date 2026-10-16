@@ -1,7 +1,5 @@
 use crate::{
-    audio_input::CapturedAudio,
-    managed_runtime::managed_python_path,
-    model_manager::ModelManager,
+    audio_input::CapturedAudio, managed_runtime::managed_python_path, model_manager::ModelManager,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -114,10 +112,14 @@ impl SpeechRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         if let Some(mut running) = process.take() {
-            let _ = writeln!(running.stdin, "{}", json!({
-                "type": "shutdown",
-                "id": "shutdown",
-            }));
+            let _ = writeln!(
+                running.stdin,
+                "{}",
+                json!({
+                    "type": "shutdown",
+                    "id": "shutdown",
+                })
+            );
             let _ = running.stdin.flush();
             let _ = running.child.kill();
             let _ = running.child.wait();
@@ -134,7 +136,9 @@ impl SpeechRuntime {
     ) -> Result<SpeechTranscriptionResult, String> {
         let source_sample_rate = capture.sample_rate;
         let source_channels = capture.channels;
-        let duration_ms = capture.completed_at_ms.saturating_sub(capture.started_at_ms);
+        let duration_ms = capture
+            .completed_at_ms
+            .saturating_sub(capture.started_at_ms);
         let input_rms = capture.rms();
         let samples = capture.mono_16khz();
 
@@ -183,7 +187,9 @@ impl SpeechRuntime {
                 .ok_or_else(|| "Speech runtime failed to start.".to_string())?;
             writeln!(running.stdin, "{request}")
                 .and_then(|_| running.stdin.flush())
-                .map_err(|error| format!("Could not send audio to local speech runtime: {error}"))?;
+                .map_err(|error| {
+                    format!("Could not send audio to local speech runtime: {error}")
+                })?;
         }
 
         loop {
@@ -332,11 +338,7 @@ impl SpeechRuntime {
         }
     }
 
-    fn set_error(
-        &self,
-        process: Option<&SpeechProcess>,
-        message: String,
-    ) {
+    fn set_error(&self, process: Option<&SpeechProcess>, message: String) {
         self.set_status(SpeechRuntimeStatus {
             state: "error".to_string(),
             model_id: SPEECH_MODEL_ID.to_string(),

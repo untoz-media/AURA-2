@@ -1,5 +1,8 @@
 use futures_util::StreamExt;
-use reqwest::{header::{CONTENT_RANGE, RANGE}, Client, StatusCode};
+use reqwest::{
+    header::{CONTENT_RANGE, RANGE},
+    Client, StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -12,11 +15,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::{
-    fs as async_fs,
-    io::AsyncWriteExt,
-    time::sleep,
-};
+use tokio::{fs as async_fs, io::AsyncWriteExt, time::sleep};
 
 const MODEL_EVENT: &str = "aura:model-download";
 const CANCELLED: &str = "__AURA_MODEL_DOWNLOAD_CANCELLED__";
@@ -365,16 +364,14 @@ impl ModelManager {
     }
 
     pub fn start_download(&self, app: AppHandle, model_id: &str) -> Result<ModelCatalog, String> {
-        let definition = definition_for(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+        let definition =
+            definition_for(model_id).ok_or_else(|| format!("Unknown model: {model_id}."))?;
 
         if definition.source_repo.is_none() || definition.files.is_empty() {
-            return Err(
-                definition
-                    .availability_message
-                    .unwrap_or("This model is not available for download yet.")
-                    .to_string(),
-            );
+            return Err(definition
+                .availability_message
+                .unwrap_or("This model is not available for download yet.")
+                .to_string());
         }
 
         if matches!(inspect_installation(&app, &definition), Ok(Some(_))) {
@@ -391,7 +388,10 @@ impl ModelManager {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
 
             if controls.contains_key(model_id) {
-                return Err(format!("{} already has an active download.", definition.name));
+                return Err(format!(
+                    "{} already has an active download.",
+                    definition.name
+                ));
             }
         }
 
@@ -443,15 +443,11 @@ impl ModelManager {
         let manager = self.clone();
         let app_for_task = app.clone();
         tauri::async_runtime::spawn(async move {
-            let result = download_model(
-                &app_for_task,
-                &manager,
-                &definition,
-                &control,
-            )
-            .await;
+            let result = download_model(&app_for_task, &manager, &definition, &control).await;
 
-            manager.finish_download(&app_for_task, &definition, result).await;
+            manager
+                .finish_download(&app_for_task, &definition, result)
+                .await;
         });
 
         self.catalog(&app)
@@ -503,11 +499,14 @@ impl ModelManager {
     }
 
     pub fn set_active(&self, app: &AppHandle, model_id: &str) -> Result<ModelCatalog, String> {
-        let definition = definition_for(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+        let definition =
+            definition_for(model_id).ok_or_else(|| format!("Unknown model: {model_id}."))?;
 
         if !definition.selectable {
-            return Err(format!("{} is managed by its feature and cannot be selected as the assistant model.", definition.name));
+            return Err(format!(
+                "{} is managed by its feature and cannot be selected as the assistant model.",
+                definition.name
+            ));
         }
 
         match inspect_installation(app, &definition) {
@@ -527,27 +526,20 @@ impl ModelManager {
         self.catalog(app)
     }
 
-    pub fn installation_path(
-        &self,
-        app: &AppHandle,
-        model_id: &str,
-    ) -> Result<PathBuf, String> {
-        let definition = definition_for(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+    pub fn installation_path(&self, app: &AppHandle, model_id: &str) -> Result<PathBuf, String> {
+        let definition =
+            definition_for(model_id).ok_or_else(|| format!("Unknown model: {model_id}."))?;
         match inspect_installation(app, &definition)? {
             Some(_) => final_model_dir(app, model_id),
             None => Err(format!("{} is not installed.", definition.name)),
         }
     }
 
-    pub fn active_installation(
-        &self,
-        app: &AppHandle,
-    ) -> Result<(String, PathBuf), String> {
+    pub fn active_installation(&self, app: &AppHandle) -> Result<(String, PathBuf), String> {
         let catalog = self.catalog(app)?;
-        let active_id = catalog
-            .active_model_id
-            .ok_or_else(|| "No active local model is selected. Install and select a model from Models.".to_string())?;
+        let active_id = catalog.active_model_id.ok_or_else(|| {
+            "No active local model is selected. Install and select a model from Models.".to_string()
+        })?;
 
         let definition = definition_for(&active_id)
             .ok_or_else(|| format!("Unknown active model: {active_id}."))?;
@@ -566,8 +558,8 @@ impl ModelManager {
     }
 
     pub fn remove_model(&self, app: &AppHandle, model_id: &str) -> Result<ModelCatalog, String> {
-        let definition = definition_for(model_id)
-            .ok_or_else(|| format!("Unknown model: {model_id}."))?;
+        let definition =
+            definition_for(model_id).ok_or_else(|| format!("Unknown model: {model_id}."))?;
         let model_id = definition.id;
 
         {
@@ -629,8 +621,7 @@ impl ModelManager {
             Err(error) => (false, None, Some(error)),
         };
 
-        let active =
-            installed && config.active_model_id.as_deref() == Some(definition.id);
+        let active = installed && config.active_model_id.as_deref() == Some(definition.id);
 
         let state = if let Some(progress) = &current_progress {
             progress.state
@@ -701,7 +692,11 @@ impl ModelManager {
                 .or(install_error),
             availability_message: definition.availability_message.map(str::to_string),
             install_path: if installed {
-                Some(final_model_dir(app, definition.id)?.to_string_lossy().to_string())
+                Some(
+                    final_model_dir(app, definition.id)?
+                        .to_string_lossy()
+                        .to_string(),
+                )
             } else {
                 None
             },
@@ -1098,7 +1093,9 @@ async fn download_file(
             ));
         }
     } else if file_size == 0 {
-        return Err(format!("Verification failed for {display_name}: file is empty."));
+        return Err(format!(
+            "Verification failed for {display_name}: file is empty."
+        ));
     }
 
     emit_download_progress(
@@ -1145,6 +1142,7 @@ async fn wait_if_paused(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_download_progress(
     app: &AppHandle,
     manager: &ModelManager,
@@ -1373,8 +1371,8 @@ fn read_config(app: &AppHandle) -> Result<ModelManagerConfig, String> {
         return Ok(ModelManagerConfig::default());
     }
 
-    let content =
-        std_fs::read_to_string(path).map_err(|error| format!("Could not read Model Manager config: {error}"))?;
+    let content = std_fs::read_to_string(path)
+        .map_err(|error| format!("Could not read Model Manager config: {error}"))?;
 
     serde_json::from_str(&content)
         .map_err(|error| format!("Model Manager config is invalid: {error}"))
@@ -1388,7 +1386,8 @@ fn write_config(app: &AppHandle, config: &ModelManagerConfig) -> Result<(), Stri
     }
 
     let content = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
-    std_fs::write(path, content).map_err(|error| format!("Could not save Model Manager config: {error}"))
+    std_fs::write(path, content)
+        .map_err(|error| format!("Could not save Model Manager config: {error}"))
 }
 
 fn model_config_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1468,10 +1467,7 @@ mod tests {
     #[test]
     fn aura_1_uses_existing_upstream_runtime_model() {
         let aura_1 = definition_for("aura-1").unwrap();
-        assert_eq!(
-            aura_1.source_repo,
-            Some("Qwen/Qwen3-4B-Instruct-2507")
-        );
+        assert_eq!(aura_1.source_repo, Some("Qwen/Qwen3-4B-Instruct-2507"));
         assert_eq!(aura_1.license, Some("Apache-2.0"));
         assert_eq!(aura_1.files.len(), 12);
     }

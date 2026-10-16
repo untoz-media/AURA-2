@@ -26,7 +26,11 @@ const MAX_ALIASES: usize = 12;
 const MAX_WAIT_MS: u64 = 30_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum RoutineStep {
     LaunchApp { app: String },
     SwitchToApp { app: String },
@@ -99,7 +103,10 @@ fn normalize_phrase(value: &str) -> String {
 }
 
 fn routines_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join(ROUTINES_FILENAME))
 }
 
@@ -115,7 +122,7 @@ fn read_routines(app: &AppHandle) -> Result<Vec<UserRoutine>, String> {
     let mut routines = serde_json::from_str::<Vec<UserRoutine>>(&content)
         .map_err(|error| format!("Routines file is invalid and was left unchanged: {error}"))?;
 
-    routines.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    routines.sort_by_key(|routine| routine.name.to_lowercase());
     Ok(routines)
 }
 
@@ -222,7 +229,9 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         aliases.push(alias);
     }
     if aliases.len() > MAX_ALIASES {
-        return Err(format!("A routine can contain at most {MAX_ALIASES} aliases."));
+        return Err(format!(
+            "A routine can contain at most {MAX_ALIASES} aliases."
+        ));
     }
 
     let requested_id = request.id.as_deref();
@@ -254,7 +263,11 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
     } else {
         let slug = {
             let slug = slugify(&name);
-            if slug.is_empty() { "routine".to_string() } else { slug }
+            if slug.is_empty() {
+                "routine".to_string()
+            } else {
+                slug
+            }
         };
         let base = format!("routine-{slug}-{now}");
         let mut candidate = base.clone();
@@ -281,7 +294,7 @@ pub fn save_routine(app: &AppHandle, request: SaveRoutineRequest) -> Result<User
         routines.push(routine.clone());
     }
 
-    routines.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    routines.sort_by_key(|routine| routine.name.to_lowercase());
     write_routines(app, &routines)?;
     Ok(routine)
 }
@@ -380,7 +393,9 @@ pub async fn run_routine(
                     .ok_or_else(|| format!("Unsupported application: {normalized}."));
                 target.and_then(|target| {
                     switch_to_app(target)
-                        .map(|window| format!("Focused {}: {}.", target.display_name(), window.title))
+                        .map(|window| {
+                            format!("Focused {}: {}.", target.display_name(), window.title)
+                        })
                         .map_err(|error| error.to_string())
                 })
             }

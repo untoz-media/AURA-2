@@ -117,11 +117,9 @@ impl TtsRuntime {
             .clone();
 
         if !current.dependency_ready {
-            current.dependency_ready =
-                python_module_available(app, "piper").unwrap_or(false);
+            current.dependency_ready = python_module_available(app, "piper").unwrap_or(false);
         }
-        current.voice_installed =
-            manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
+        current.voice_installed = manager.installation_path(app, DEFAULT_TTS_MODEL_ID).is_ok();
         current.refreshed_at_ms = timestamp_ms();
 
         current
@@ -149,13 +147,7 @@ impl TtsRuntime {
             let message =
                 "Piper installation finished but the managed Python runtime cannot import it."
                     .to_string();
-            self.set_error(
-                app,
-                manager,
-                DEFAULT_TTS_MODEL_ID,
-                None,
-                message.clone(),
-            );
+            self.set_error(app, manager, DEFAULT_TTS_MODEL_ID, None, message.clone());
             return Err(message);
         }
 
@@ -363,8 +355,7 @@ impl TtsRuntime {
         let python = managed_python_path(app)?;
         if !python.exists() {
             return Err(
-                "AURA Managed Runtime is not installed. Install it from Models first."
-                    .to_string(),
+                "AURA Managed Runtime is not installed. Install it from Models first.".to_string(),
             );
         }
 
@@ -492,7 +483,6 @@ fn timestamp_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
-
 
 #[cfg(test)]
 mod tests {

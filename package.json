@@ -12,6 +12,8 @@
     "frontend:build": "npm --workspace @untoz/aura-desktop run build",
     "icons": "npm --workspace @untoz/aura-desktop run icons",
     "beta:validate": "node scripts/validate-beta.mjs",
+    "beta:source-check": "node scripts/check-beta-source.mjs",
+    "beta:release-gate": "npm run beta:validate && npm run beta:source-check && node scripts/check-beta-publication.mjs",
     "beta:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-beta-windows.ps1",
     "beta:verify:artifact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-beta-artifact.ps1",
     "preview:release-check": "node scripts/check-testing-preview.mjs",

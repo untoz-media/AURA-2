@@ -341,6 +341,11 @@ export type CreateMemoryRequest = {
   content: string;
 };
 
+export type UpdateMemoryRequest = {
+  id: string;
+  content: string;
+};
+
 export type MemoryCreateResult = {
   record: MemoryRecord;
   created: boolean;

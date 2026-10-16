@@ -64,7 +64,6 @@ fn timestamp_ms() -> u64 {
 
 fn normalize(value: &str) -> String {
     value
-        .trim()
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -83,7 +82,10 @@ fn validate_text(value: &str, label: &str, max_chars: usize) -> Result<String, S
 }
 
 fn projects_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     Ok(directory.join(PROJECTS_FILENAME))
 }
 
@@ -98,11 +100,9 @@ fn read_store(app: &AppHandle) -> Result<ProjectStore, String> {
     let mut store = serde_json::from_str::<ProjectStore>(&content)
         .map_err(|error| format!("Project memory is invalid and was left unchanged: {error}"))?;
 
-    store.projects.sort_by(|left, right| {
-        left.name
-            .to_lowercase()
-            .cmp(&right.name.to_lowercase())
-    });
+    store
+        .projects
+        .sort_by_key(|project| project.name.to_lowercase());
 
     if store
         .active_project_id
@@ -142,7 +142,12 @@ fn slugify(value: &str) -> String {
         .join("-")
 }
 
-fn clean_unique(values: Vec<String>, label: &str, limit: usize, max_chars: usize) -> Result<Vec<String>, String> {
+fn clean_unique(
+    values: Vec<String>,
+    label: &str,
+    limit: usize,
+    max_chars: usize,
+) -> Result<Vec<String>, String> {
     let mut output = Vec::new();
 
     for value in values {
@@ -191,12 +196,7 @@ pub fn save_project(app: &AppHandle, request: SaveProjectRequest) -> Result<Proj
         .filter(|alias| normalize(alias) != normalize(&name))
         .collect::<Vec<_>>();
     let notes = clean_unique(request.notes, "Project note", MAX_NOTES, 500)?;
-    let routine_ids = clean_unique(
-        request.routine_ids,
-        "Routine link",
-        MAX_ROUTINE_LINKS,
-        160,
-    )?;
+    let routine_ids = clean_unique(request.routine_ids, "Routine link", MAX_ROUTINE_LINKS, 160)?;
 
     let requested_id = request.id.as_deref();
     let mut requested_keys = vec![normalize(&name)];
@@ -229,7 +229,11 @@ pub fn save_project(app: &AppHandle, request: SaveProjectRequest) -> Result<Proj
     } else {
         let slug = {
             let slug = slugify(&name);
-            if slug.is_empty() { "project".to_string() } else { slug }
+            if slug.is_empty() {
+                "project".to_string()
+            } else {
+                slug
+            }
         };
         let base = format!("project-{slug}-{now}");
         let mut candidate = base.clone();
@@ -258,11 +262,9 @@ pub fn save_project(app: &AppHandle, request: SaveProjectRequest) -> Result<Proj
         store.projects.push(project.clone());
     }
 
-    store.projects.sort_by(|left, right| {
-        left.name
-            .to_lowercase()
-            .cmp(&right.name.to_lowercase())
-    });
+    store
+        .projects
+        .sort_by_key(|project| project.name.to_lowercase());
 
     write_store(app, &store)?;
     Ok(project)
@@ -291,7 +293,11 @@ pub fn set_active_project(
     let mut store = read_store(app)?;
 
     if let Some(project_id) = project_id {
-        if !store.projects.iter().any(|project| project.id == project_id) {
+        if !store
+            .projects
+            .iter()
+            .any(|project| project.id == project_id)
+        {
             return Err("Project no longer exists.".to_string());
         }
         store.active_project_id = Some(project_id.to_string());
@@ -303,19 +309,16 @@ pub fn set_active_project(
     project_snapshot(app)
 }
 
+#[allow(dead_code)]
 pub fn find_project_by_name_or_alias(app: &AppHandle, value: &str) -> Option<ProjectMemory> {
     let candidate = normalize(value);
-    read_store(app)
-        .ok()?
-        .projects
-        .into_iter()
-        .find(|project| {
-            normalize(&project.name) == candidate
-                || project
-                    .aliases
-                    .iter()
-                    .any(|alias| normalize(alias) == candidate)
-        })
+    read_store(app).ok()?.projects.into_iter().find(|project| {
+        normalize(&project.name) == candidate
+            || project
+                .aliases
+                .iter()
+                .any(|alias| normalize(alias) == candidate)
+    })
 }
 
 pub fn active_project(app: &AppHandle) -> Result<Option<ProjectMemory>, String> {
@@ -361,7 +364,10 @@ mod tests {
 
     #[test]
     fn normalizes_project_names() {
-        assert_eq!(normalize("  Artemis   Documentary  "), "artemis documentary");
+        assert_eq!(
+            normalize("  Artemis   Documentary  "),
+            "artemis documentary"
+        );
     }
 
     #[test]
