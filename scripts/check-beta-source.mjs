@@ -111,6 +111,13 @@ requireFragments("apps/desktop/src/Memory.tsx", [
   "does not include file",
 ]);
 
+requireFragments("apps/desktop/src-tauri/src/lib.rs", [
+  "fn accept_wake_phrase(",
+  "wake_transcript_is_playback_echo",
+  "find_project_by_name_or_alias",
+  "ActionIntent::ActivateProject",
+]);
+
 requireFragments("apps/desktop/src/bridge/aura.ts", [
   "update_memory_command",
   "start_obs_streaming",

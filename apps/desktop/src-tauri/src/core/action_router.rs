@@ -79,6 +79,7 @@ pub enum ActionIntent {
     CalculatorSkill(CalculatorSkill),
     OpenPersonalFolder(PersonalFolderSkill),
     UserRoutine(String),
+    ActivateProject(String),
 }
 
 #[derive(Debug, Clone)]
@@ -399,6 +400,32 @@ fn memory_request(input: &str) -> Option<ActionIntent> {
     }
 
     None
+}
+
+fn project_request(input: &str) -> Option<ActionIntent> {
+    const PREFIXES: &[&str] = &[
+        "switch to project ",
+        "switch project to ",
+        "activate project ",
+        "use project ",
+        "open project ",
+        "set active project ",
+        "set project ",
+        "muda para o projeto ",
+        "mudar para o projeto ",
+        "ativa o projeto ",
+        "ativar o projeto ",
+        "usa o projeto ",
+        "usar o projeto ",
+        "abre o projeto ",
+        "abrir o projeto ",
+        "define o projeto ",
+    ];
+
+    value_after_prefix(input, PREFIXES).and_then(|value| {
+        let name = unwrap_text_quotes(value).trim();
+        (!name.is_empty()).then(|| ActionIntent::ActivateProject(name.to_string()))
+    })
 }
 
 fn terminal_skill_request(input: &str) -> Option<ActionIntent> {
@@ -1762,6 +1789,20 @@ pub fn route_command(input: &str, policy: &PermissionPolicy) -> RouteResult {
         });
     }
 
+    if let Some(intent) = project_request(input) {
+        let ActionIntent::ActivateProject(_) = &intent else {
+            return RouteResult::InternalError(
+                "Project parser returned a non-project intent.".to_string(),
+            );
+        };
+        let permission = PermissionClass::Act;
+        return RouteResult::Action(RoutedAction {
+            intent,
+            permission,
+            decision: policy.decision_for(permission),
+        });
+    }
+
     if let Some(intent) = terminal_skill_request(input) {
         let permission = PermissionClass::Act;
         return RouteResult::Action(RoutedAction {
@@ -2763,6 +2804,35 @@ mod tests {
                 })
             ));
         }
+    }
+
+    #[test]
+    fn routes_project_activation_by_name() {
+        let policy = PermissionPolicy::default();
+
+        assert!(matches!(
+            route_command("Switch to project Artemis", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(name),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if name == "Artemis"
+        ));
+        assert!(matches!(
+            route_command("Ativa o projeto \"Match Day\"", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(name),
+                permission: PermissionClass::Act,
+                decision: PermissionDecision::Allow,
+            }) if name == "Match Day"
+        ));
+        assert!(!matches!(
+            route_command("Open Brave", &policy),
+            RouteResult::Action(RoutedAction {
+                intent: ActionIntent::ActivateProject(_),
+                ..
+            })
+        ));
     }
 
     #[test]

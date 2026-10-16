@@ -1227,7 +1227,7 @@ export default function Settings({
 
               <SettingRow
                 title="Wake Phrase (experimental)"
-                description="Continuously checks short local audio windows with Whisper. More private than cloud wake-word services, but uses noticeably more CPU/GPU."
+                description="When enabled, AURA listens locally for the wake phrase, including while it is speaking. During speech, and for a few seconds after, it requires a louder level and rejects audio that matches its own playback. Off by default."
                 trailing={
                   <Toggle
                     checked={voicePreferences.wakeWordEnabled}
@@ -1269,7 +1269,7 @@ export default function Settings({
                 description={
                   voiceCapture?.phase === "captured"
                     ? `Last capture: ${(voiceCapture.durationMs / 1000).toFixed(1)}s · ${voiceCapture.sampleCount.toLocaleString()} samples. Local speech-to-text runs after you release push-to-talk.`
-                    : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released. Pressing push-to-talk stops speech that is already playing. The wake phrase waits until speech finishes."
+                    : "Hold Ctrl + Shift + F8 anywhere in Windows. AURA listens while held and stops when released. Pressing push-to-talk stops speech that is already playing. With the wake phrase enabled, a louder matching phrase during speech also stops playback."
                 }
                 trailing={
                   audioInput.pushToTalk ? (

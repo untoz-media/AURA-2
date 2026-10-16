@@ -98,8 +98,9 @@ use model_manager::{ModelCatalog, ModelManager};
 use model_runtime::{ModelRuntime, ModelRuntimeStatus};
 use permissions::{PermissionClass, PermissionDecision, PermissionPolicy};
 use project_memory::{
-    delete_project, project_snapshot, save_project, set_active_project, summarize_active_project,
-    ProjectMemory, ProjectMemorySnapshot, SaveProjectRequest,
+    delete_project, find_project_by_name_or_alias, project_snapshot, save_project,
+    set_active_project, summarize_active_project, ProjectMemory, ProjectMemorySnapshot,
+    SaveProjectRequest,
 };
 use routines::{
     delete_routine, find_routine_by_id, list_routines, resolve_routine_command,
@@ -588,6 +589,47 @@ mod voice_command_tests {
     #[test]
     fn wake_word_alone_is_not_a_command() {
         assert_eq!(normalize_voice_command("AURA"), "");
+    }
+
+    #[test]
+    fn wake_phrase_stays_off_by_default() {
+        assert!(!VoicePreferences::default().wake_word_enabled);
+    }
+
+    #[test]
+    fn wake_barge_in_needs_a_louder_phrase_and_ignores_playback_echo() {
+        assert_eq!(
+            accept_wake_phrase(
+                "AURA, open Brave",
+                "AURA",
+                0.03,
+                true,
+                Some("I can help you edit the timeline")
+            )
+            .as_deref(),
+            Some("open Brave")
+        );
+        assert!(accept_wake_phrase(
+            "AURA stop",
+            "AURA",
+            0.005,
+            true,
+            Some("I can help you edit")
+        )
+        .is_none());
+        assert!(accept_wake_phrase(
+            "AURA can help you edit",
+            "AURA",
+            0.08,
+            true,
+            Some("AURA can help you edit")
+        )
+        .is_none());
+        assert_eq!(
+            accept_wake_phrase("AURA, open Brave", "AURA", 0.01, false, None).as_deref(),
+            Some("open Brave")
+        );
+        assert!(accept_wake_phrase("AURA", "AURA", 0.001, false, None).is_none());
     }
 
     #[test]
@@ -1515,6 +1557,58 @@ fn start_conversation_follow_up(app: tauri::AppHandle, force: bool) {
     });
 }
 
+const WAKE_IDLE_RMS: f32 = 0.004;
+const WAKE_BARGE_IN_RMS: f32 = 0.02;
+
+fn wake_rms_floor(speaking: bool) -> f32 {
+    if speaking {
+        WAKE_BARGE_IN_RMS
+    } else {
+        WAKE_IDLE_RMS
+    }
+}
+
+fn normalize_echo_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn wake_transcript_is_playback_echo(transcript: &str, spoken_text: Option<&str>) -> bool {
+    let Some(spoken) = spoken_text.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    let transcript_norm = normalize_echo_text(transcript);
+    let spoken_norm = normalize_echo_text(spoken);
+    transcript_norm.chars().count() >= 4 && spoken_norm.contains(&transcript_norm)
+}
+
+fn accept_wake_phrase(
+    transcript: &str,
+    wake_phrase: &str,
+    rms: f32,
+    speaking: bool,
+    spoken_text: Option<&str>,
+) -> Option<String> {
+    if rms < wake_rms_floor(speaking) {
+        return None;
+    }
+    if speaking && wake_transcript_is_playback_echo(transcript, spoken_text) {
+        return None;
+    }
+    extract_wake_command(transcript, wake_phrase)
+}
+
 fn extract_wake_command(transcript: &str, wake_phrase: &str) -> Option<String> {
     let transcript = transcript.trim();
     let wake_phrase = wake_phrase.trim();
@@ -1595,11 +1689,6 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
             continue;
         }
 
-        if app.state::<TtsRuntime>().is_speaking() {
-            thread::sleep(Duration::from_millis(500));
-            continue;
-        }
-
         let audio = app.state::<AudioInputManager>();
         if audio.capture_active() {
             thread::sleep(Duration::from_millis(500));
@@ -1629,7 +1718,9 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
             continue;
         };
 
-        if capture.rms() < 0.004 {
+        let level = capture.rms();
+        let (speaking, spoken_text) = app.state::<TtsRuntime>().playback_guard();
+        if level < wake_rms_floor(speaking) {
             thread::sleep(Duration::from_millis(600));
             continue;
         }
@@ -1641,10 +1732,20 @@ fn spawn_wake_monitor(app: tauri::AppHandle, generation: u64) {
             continue;
         };
 
-        let Some(command) = extract_wake_command(&result.text, &preferences.wake_phrase) else {
+        let Some(command) = accept_wake_phrase(
+            &result.text,
+            &preferences.wake_phrase,
+            level,
+            speaking,
+            spoken_text.as_deref(),
+        ) else {
             thread::sleep(Duration::from_millis(600));
             continue;
         };
+
+        if app.state::<TtsRuntime>().is_speaking() {
+            let _ = app.state::<TtsRuntime>().interrupt();
+        }
 
         emit_voice_capture_event(
             &app,
@@ -1728,17 +1829,20 @@ fn emit_core_event(app: &tauri::AppHandle, event: CoreEvent) {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
 
-            if should_speak && preferences.auto_speak {
-                let _ = tts.speak(
+            let interrupted = if should_speak && preferences.auto_speak {
+                tts.speak(
                     &app_for_tts,
                     &manager,
                     &text,
                     preferences.tts_speed,
                     &preferences.tts_voice_id,
-                );
-            }
+                )
+                .is_ok_and(|status| status.state == "interrupted")
+            } else {
+                false
+            };
 
-            if !cancelled && preferences.conversation_mode {
+            if !cancelled && !interrupted && preferences.conversation_mode {
                 start_conversation_follow_up(app_for_tts.clone(), false);
             } else {
                 resume_wake_monitor_if_enabled(app_for_tts.clone());
@@ -4483,6 +4587,91 @@ fn process_user_command(
                                 }
                             }
                         }
+                        ActionIntent::ActivateProject(name) => {
+                            emit_core_event(
+                                &worker_app,
+                                CoreEvent {
+                                    id: worker_id.clone(),
+                                    kind: "command.processing",
+                                    status: AuraRuntimeStatus::Working,
+                                    message: format!("Looking for project “{name}”…"),
+                                    command: Some(worker_text.clone()),
+                                    timestamp_ms: unix_timestamp_ms(),
+                                },
+                            );
+
+                            match find_project_by_name_or_alias(&worker_app, &name) {
+                                Some(project) => {
+                                    match set_active_project(&worker_app, Some(&project.id)) {
+                                        Ok(_) => {
+                                            emit_core_event(
+                                                &worker_app,
+                                                CoreEvent {
+                                                    id: worker_id,
+                                                    kind: "command.completed",
+                                                    status: AuraRuntimeStatus::Idle,
+                                                    message: format!(
+                                                        "Active project: {}.",
+                                                        project.name
+                                                    ),
+                                                    command: Some(worker_text),
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            );
+                                        }
+                                        Err(error) => {
+                                            let message = format!(
+                                                "Could not activate project {}: {error}",
+                                                project.name
+                                            );
+                                            emit_core_event(
+                                                &worker_app,
+                                                CoreEvent {
+                                                    id: worker_id.clone(),
+                                                    kind: "command.failed",
+                                                    status: AuraRuntimeStatus::Idle,
+                                                    message: message.clone(),
+                                                    command: Some(worker_text),
+                                                    timestamp_ms: unix_timestamp_ms(),
+                                                },
+                                            );
+                                            emit_core_error(
+                                                &worker_app,
+                                                CoreError {
+                                                    id: Some(worker_id),
+                                                    code: "project.activate_failed",
+                                                    message,
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let message = format!(
+                                        "No saved project matches “{name}”. Create it in Project Memory first."
+                                    );
+                                    emit_core_event(
+                                        &worker_app,
+                                        CoreEvent {
+                                            id: worker_id.clone(),
+                                            kind: "command.failed",
+                                            status: AuraRuntimeStatus::Idle,
+                                            message: message.clone(),
+                                            command: Some(worker_text),
+                                            timestamp_ms: unix_timestamp_ms(),
+                                        },
+                                    );
+                                    emit_core_error(
+                                        &worker_app,
+                                        CoreError {
+                                            id: Some(worker_id),
+                                            code: "project.not_found",
+                                            message,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                         ActionIntent::DirectorPreset(preset_id) => {
                             let Some(preset) = find_director_preset_by_id(&worker_app, &preset_id)
                             else {
@@ -5330,6 +5519,9 @@ fn process_user_command(
                         "This Windows system action requires confirmation under the current permission policy."
                             .to_string()
                     }
+                    ActionIntent::ActivateProject(name) => format!(
+                        "Setting “{name}” as the active project requires confirmation under the current Act policy."
+                    ),
                 };
 
                     let expires_at_ms = unix_timestamp_ms() + CONFIRMATION_TTL_MS;

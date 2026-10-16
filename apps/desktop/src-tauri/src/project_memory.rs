@@ -309,16 +309,21 @@ pub fn set_active_project(
     project_snapshot(app)
 }
 
-#[allow(dead_code)]
+pub fn project_matches_query(name: &str, aliases: &[String], query: &str) -> bool {
+    let candidate = normalize(query);
+    if candidate.is_empty() {
+        return false;
+    }
+
+    normalize(name) == candidate || aliases.iter().any(|alias| normalize(alias) == candidate)
+}
+
 pub fn find_project_by_name_or_alias(app: &AppHandle, value: &str) -> Option<ProjectMemory> {
-    let candidate = normalize(value);
-    read_store(app).ok()?.projects.into_iter().find(|project| {
-        normalize(&project.name) == candidate
-            || project
-                .aliases
-                .iter()
-                .any(|alias| normalize(alias) == candidate)
-    })
+    read_store(app)
+        .ok()?
+        .projects
+        .into_iter()
+        .find(|project| project_matches_query(&project.name, &project.aliases, value))
 }
 
 pub fn active_project(app: &AppHandle) -> Result<Option<ProjectMemory>, String> {
@@ -361,6 +366,31 @@ pub fn summarize_active_project(app: &AppHandle) -> Result<Option<String>, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_lookup_matches_name_or_alias_case_insensitively() {
+        let aliases = vec!["Artemis doc".to_string(), "Documentary".to_string()];
+        assert!(project_matches_query(
+            "Artemis Documentary",
+            &aliases,
+            "  artemis   documentary "
+        ));
+        assert!(project_matches_query(
+            "Artemis Documentary",
+            &aliases,
+            "documentary"
+        ));
+        assert!(!project_matches_query(
+            "Artemis Documentary",
+            &aliases,
+            "other show"
+        ));
+        assert!(!project_matches_query(
+            "Artemis Documentary",
+            &aliases,
+            "   "
+        ));
+    }
 
     #[test]
     fn normalizes_project_names() {

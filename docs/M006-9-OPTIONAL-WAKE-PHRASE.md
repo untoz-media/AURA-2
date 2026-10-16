@@ -24,6 +24,7 @@ AURA:
 4. checks whether the transcription starts with the configured wake phrase
 5. if a command follows the phrase, submits it to AURA Core
 6. if only the wake phrase is heard, opens a Conversation Mode follow-up window
+7. while AURA is speaking, and for a few seconds after playback, accepts the phrase only when the microphone level is louder than the idle gate and the transcript is not an echo of that spoken text. A match interrupts TTS before the follow-up command runs
 
 Example:
 
@@ -40,7 +41,7 @@ For that reason:
 - it is opt-in
 - it is clearly labelled experimental
 - it requires the local STT model
-- it pauses while AURA is speaking
+- while speech is playing, and for a few seconds after, it requires a louder level and ignores playback echo
 - manual Push-to-Talk preempts it
 
 A later release can replace this detector with a dedicated OpenWakeWord-compatible model without changing the Voice → AURA Core boundary.

@@ -137,7 +137,7 @@ OBS WebSocket v5 connection, live state detection, scene/source/audio control, r
 Persistent local memory, app/window/recent-file context, user routines and project-scoped memory.
 
 ### M006 — Voice ✅
-Local microphone capture, Push-to-Talk (Ctrl+Shift+F8), Whisper STT, Piper TTS, and Conversation Mode. Push-to-talk stops speech that is already playing. The optional wake phrase is local and off by default; it waits until speech finishes instead of interrupting it.
+Local microphone capture, Push-to-Talk (Ctrl+Shift+F8), Whisper STT, Piper TTS, and Conversation Mode. Push-to-talk stops speech that is already playing. The optional wake phrase is local and off by default. When it is enabled, a louder matching phrase during speech, and for a few seconds after, also stops playback, and a transcript that repeats AURA's own spoken text is ignored.
 
 ### M007 — Vision ✅
 Explicit Windows screenshot/region capture, active-window understanding, local multimodal UI analysis and privacy-first history.
