@@ -147,6 +147,141 @@ if (!lock.packages || Object.keys(lock.packages).length < 10) {
   failures.push("package-lock.json does not look like a resolved npm lockfile.");
 }
 
+const reservedPowerShellVariables = new Set([
+  "$",
+  "_",
+  "?",
+  "^",
+  "args",
+  "consolefilename",
+  "error",
+  "event",
+  "eventargs",
+  "eventsubscriber",
+  "executioncontext",
+  "false",
+  "foreach",
+  "home",
+  "host",
+  "input",
+  "matches",
+  "myinvocation",
+  "null",
+  "pid",
+  "profile",
+  "psboundparameters",
+  "pscmdlet",
+  "pscommandpath",
+  "psculture",
+  "psdebugcontext",
+  "pshome",
+  "psitem",
+  "psscriptroot",
+  "pssenderinfo",
+  "psuiculture",
+  "psversiontable",
+  "pwd",
+  "sender",
+  "shellid",
+  "stacktrace",
+  "switch",
+  "this",
+  "true",
+]);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripPowerShellComment(line) {
+  let quote = null;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quote) {
+      if (char === "`") {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "#") return line.slice(0, index);
+  }
+  return line;
+}
+
+function reservedPowerShellName(name) {
+  const bare = name.replace(/^(?:script|global|local|private|using):/i, "");
+  return reservedPowerShellVariables.has(bare.toLowerCase()) ? bare : null;
+}
+
+function findReservedPowerShellAssignments(text) {
+  const names = [...reservedPowerShellVariables].map(escapeRegExp).join("|");
+  const scope = String.raw`(?:script|global|local|private|using):`;
+  const assign = String.raw`(?:\+\+|--|[-+*/%]?=)`;
+  const patterns = [
+    new RegExp(String.raw`\$(?:${scope})?(${names})(?![A-Za-z0-9_])\s*${assign}`, "gi"),
+    new RegExp(String.raw`\$\{(?:${scope})?(${names})\}(?![A-Za-z0-9_])\s*${assign}`, "gi"),
+    new RegExp(String.raw`(?:\+\+|--)\$(?:${scope})?(${names})(?![A-Za-z0-9_])`, "gi"),
+    new RegExp(String.raw`(?:\+\+|--)\$\{(?:${scope})?(${names})\}`, "gi"),
+  ];
+  const hits = [];
+
+  text.split(/\r?\n/).forEach((rawLine, index) => {
+    const line = stripPowerShellComment(rawLine);
+    const found = new Set();
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0;
+      for (const match of line.matchAll(pattern)) {
+        const reserved = reservedPowerShellName(match[1]);
+        if (reserved) found.add(reserved.toLowerCase());
+      }
+    }
+    const setter = line.match(/\b(?:Set-Variable|New-Variable)\b(.*)$/i);
+    if (setter) {
+      const named = setter[1].match(/-Name(?:\s+|:)['"]?([A-Za-z0-9_?^$]+)['"]?/i);
+      const positional = setter[1].match(/^\s+['"]?([A-Za-z0-9_?^$]+)['"]?/);
+      const candidate = named?.[1] ?? (positional && !positional[1].startsWith("-") ? positional[1] : null);
+      const reserved = candidate ? reservedPowerShellName(candidate) : null;
+      if (reserved) found.add(reserved.toLowerCase());
+    }
+    for (const name of found) {
+      hits.push({ line: index + 1, name });
+    }
+  });
+
+  return hits;
+}
+
+const reservedAssignmentSamples = [
+  ["$host = 'x'", true],
+  ["$Host += 1", true],
+  ["$global:pid = 1", true],
+  ["${pwd} = 'C:\\'", true],
+  ["Set-Variable -Name Host -Value 1", true],
+  ["New-Variable input -Value 1", true],
+  ["$input++", true],
+  ["++$args", true],
+  ["$true = $false", true],
+  ["$hostLine = 'x'", false],
+  ["$ErrorActionPreference = 'Stop'", false],
+  ["$matches[1]", false],
+  ["$sdkLib = $null", false],
+  ["$pythonOk = $false", false],
+  ["$script:VsDevCmd = $null", false],
+  ['Write-Host "$rustVersion - $rustHost"', false],
+];
+for (const [sample, shouldFlag] of reservedAssignmentSamples) {
+  const flagged = findReservedPowerShellAssignments(sample).length > 0;
+  if (flagged !== shouldFlag) {
+    failures.push(`PowerShell reserved-variable detector mismatch for: ${sample}`);
+  }
+}
+
 const ps1Files = fs
   .readdirSync("scripts")
   .filter((name) => name.endsWith(".ps1"))
@@ -162,6 +297,11 @@ for (const file of ps1Files) {
   if (text.includes("&&") || text.includes("||")) {
     failures.push(
       `${file} must not use && or ||. Windows PowerShell 5.1 rejects them as statement separators.`,
+    );
+  }
+  for (const hit of findReservedPowerShellAssignments(text)) {
+    failures.push(
+      `${file}:${hit.line} assigns reserved PowerShell variable $${hit.name}. Rename it; Windows PowerShell 5.1 treats these as read-only or automatic.`,
     );
   }
 }
@@ -187,4 +327,4 @@ if (failures.length > 0) {
 }
 
 console.log(`AURA-2 Beta source checks OK: ${sourceFiles.length} source files scanned.`);
-console.log("Permission, memory, OBS, skill and lockfile invariants are present.");
+console.log("Permission, memory, OBS, skill, lockfile and PowerShell invariants are present.");

@@ -129,11 +129,11 @@ $rustc = Get-Command rustc.exe -ErrorAction SilentlyContinue
 if ($cargo -and $rustc) {
   $rustVersion = (& rustc --version).Trim()
   $hostLine = (& rustc -vV | Select-String "^host:" | Select-Object -First 1).ToString()
-  $host = ($hostLine -replace "^host:\s*", "").Trim()
-  if ($host -eq "x86_64-pc-windows-msvc") {
-    Write-DoctorResult "PASS" "Rust MSVC toolchain" "$rustVersion - $host"
+  $rustHost = ($hostLine -replace "^host:\s*", "").Trim()
+  if ($rustHost -eq "x86_64-pc-windows-msvc") {
+    Write-DoctorResult "PASS" "Rust MSVC toolchain" "$rustVersion - $rustHost"
   } else {
-    Add-Blocker "Rust MSVC toolchain" "Detected host '$host'. Install/select stable-x86_64-pc-windows-msvc."
+    Add-Blocker "Rust MSVC toolchain" "Detected host '$rustHost'. Install/select stable-x86_64-pc-windows-msvc."
   }
 } else {
   Add-Blocker "Rust" "cargo.exe/rustc.exe were not found. Install Rust with the MSVC host toolchain."
