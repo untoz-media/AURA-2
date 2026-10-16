@@ -202,7 +202,12 @@ mod tests {
     fn clipboard_summary_truncates_large_text() {
         let text = "x".repeat(MAX_CLIPBOARD_READ_CHARS + 25);
         let summary = summarize_text(&text);
-        assert!(summary.contains("showing the first 4000"));
-        assert_eq!(summary.matches('x').count(), MAX_CLIPBOARD_READ_CHARS);
+        let Some((header, visible)) = summary.split_once("\n\n") else {
+            panic!("clipboard summary should separate its header from the visible text");
+        };
+        assert!(header.contains("showing the first 4000"));
+        assert!(header.contains("4025 characters"));
+        assert_eq!(visible.chars().count(), MAX_CLIPBOARD_READ_CHARS);
+        assert!(visible.chars().all(|character| character == 'x'));
     }
 }

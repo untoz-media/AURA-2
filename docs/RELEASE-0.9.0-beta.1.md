@@ -99,6 +99,10 @@ These capabilities are implemented in the desktop app. They still need a real Wi
 
 Node 24 refuses to start `npm.cmd` from `spawnSync` when `shell` is false. `scripts/validate-beta.mjs` launches that shim through `cmd.exe /d /s /c` with the fixed argument list. `cargo.exe`, `node.exe`, and the PowerShell `npm` calls in the Windows build scripts are real executables or shell commands, so they stay as they are.
 
+Windows PowerShell 5.1 reads a UTF-8 script without a BOM using the system ANSI code page, so an em dash in `windows-build-doctor.ps1` was parsed as a stray quote. The Windows scripts are ASCII-only and do not use `&&` or `||`. The Visual Studio environment import writes a temporary `.cmd` and runs `set` on the next line. `scripts/build-beta-windows.ps1` still runs `cargo test --locked` after the doctor.
+
+`apps/desktop/src-tauri/icons/icon.ico` and the PNG sizes named by `tauri.conf.json` are committed. A fresh checkout can compile and test without running `npm run icons` first. `npm run build` still refreshes the set from `aura-app-icon.svg` before the installer is produced.
+
 `package.json` `allowScripts` permits the locked `esbuild@0.28.2` postinstall and the optional macOS `fsevents@2.3.3` install script. Those are the only two packages in the lockfile with install scripts. esbuild's script checks the platform binary that npm already installs as an optional dependency. No other dependency install script is approved.
 
 ## Local validation on Linux

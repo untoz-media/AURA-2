@@ -26,7 +26,7 @@ function Write-DoctorResult {
     "WARN" { "[WARN]" }
     default { "[FAIL]" }
   }
-  Write-Host ("{0} {1} — {2}" -f $prefix, $Name, $Detail)
+  Write-Host ("{0} {1} - {2}" -f $prefix, $Name, $Detail)
 }
 
 function Add-Blocker {
@@ -64,8 +64,15 @@ function Find-VisualStudioInstallation {
 function Import-VsDevEnvironment {
   param([Parameter(Mandatory = $true)][string]$VsDevCmd)
 
-  $command = "call `"$VsDevCmd`" -no_logo -arch=x64 -host_arch=x64 && set"
-  $lines = & $env:ComSpec /d /c $command
+  $batchPath = Join-Path $env:TEMP "aura-vsdevcmd.cmd"
+  $batchLine = 'call "' + $VsDevCmd + '" -no_logo -arch=x64 -host_arch=x64'
+  @(
+    "@echo off",
+    $batchLine,
+    "if errorlevel 1 exit /b 1",
+    "set"
+  ) | Set-Content -Path $batchPath -Encoding ASCII
+  $lines = & $env:ComSpec /d /c $batchPath
   if ($LASTEXITCODE -ne 0) {
     throw "Visual Studio developer environment exited with code $LASTEXITCODE."
   }
@@ -124,7 +131,7 @@ if ($cargo -and $rustc) {
   $hostLine = (& rustc -vV | Select-String "^host:" | Select-Object -First 1).ToString()
   $host = ($hostLine -replace "^host:\s*", "").Trim()
   if ($host -eq "x86_64-pc-windows-msvc") {
-    Write-DoctorResult "PASS" "Rust MSVC toolchain" "$rustVersion · $host"
+    Write-DoctorResult "PASS" "Rust MSVC toolchain" "$rustVersion - $host"
   } else {
     Add-Blocker "Rust MSVC toolchain" "Detected host '$host'. Install/select stable-x86_64-pc-windows-msvc."
   }

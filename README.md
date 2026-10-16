@@ -14,7 +14,7 @@ The 0.9 Beta candidate adds first-run onboarding, explicit no-telemetry policy, 
 
 A guarded **AURA-2 Alpha v1 — Testing Preview** release pipeline is now prepared. It will publish only as a GitHub pre-release after a real Windows build passes the release gate. GitHub-hosted jobs currently fail before step 1 because the organization account is locked for billing, so they do not count as validation. Preview builds embed privacy-safe build provenance (commit/source/label) in local diagnostics and ship with installer checksum + build manifest. The npm dependency lock is committed as `package-lock.json`.
 
-For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance.
+For local Windows validation, the repository now includes **Windows Build Doctor**. Run `npm run beta:doctor:windows` before building; `npm run beta:build:windows` invokes it automatically, checks the MSVC/Visual Studio/SDK toolchain, and embeds traceable local-smoke build provenance. The doctor and the other Windows scripts are ASCII and parse in Windows PowerShell 5.1. The Tauri icon set, including `icons/icon.ico`, is committed, so `cargo test` does not need a prior `npm run icons`.
 
 ---
 

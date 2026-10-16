@@ -147,6 +147,39 @@ if (!lock.packages || Object.keys(lock.packages).length < 10) {
   failures.push("package-lock.json does not look like a resolved npm lockfile.");
 }
 
+const ps1Files = fs
+  .readdirSync("scripts")
+  .filter((name) => name.endsWith(".ps1"))
+  .map((name) => path.join("scripts", name));
+for (const file of ps1Files) {
+  const bytes = fs.readFileSync(file);
+  if (bytes.some((byte) => byte > 127)) {
+    failures.push(
+      `${file} must stay ASCII so Windows PowerShell 5.1 does not misread a UTF-8 file without a BOM.`,
+    );
+  }
+  const text = bytes.toString("ascii");
+  if (text.includes("&&") || text.includes("||")) {
+    failures.push(
+      `${file} must not use && or ||. Windows PowerShell 5.1 rejects them as statement separators.`,
+    );
+  }
+}
+
+for (const icon of [
+  "apps/desktop/src-tauri/icons/icon.ico",
+  "apps/desktop/src-tauri/icons/32x32.png",
+  "apps/desktop/src-tauri/icons/128x128.png",
+  "apps/desktop/src-tauri/icons/128x128@2x.png",
+]) {
+  if (!fs.existsSync(icon)) {
+    failures.push(`${icon} must be committed so cargo test works on a fresh checkout.`);
+  }
+}
+if (read(".gitignore").includes("apps/desktop/src-tauri/icons/")) {
+  failures.push(".gitignore must not hide the committed Tauri icon set.");
+}
+
 if (failures.length > 0) {
   console.error("AURA-2 Beta source checks failed:");
   for (const failure of failures) console.error(`  - ${failure}`);
