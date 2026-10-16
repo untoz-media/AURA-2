@@ -75,7 +75,7 @@ Diagnostics stay local. A lightweight health report is generated automatically a
 
 This commit is a Beta Candidate, not yet the published Public Beta.
 
-Public Beta publication stays closed until a Windows machine builds the NSIS installer with `npm run beta:build:windows` and `npm run beta:verify:artifact` passes on that artifact. GitHub-hosted Actions cannot provide that evidence while the organization account is locked.
+A local Windows build at `7e83a90` passed end to end: Build Doctor reported 0 blockers, `cargo test --locked` passed 239/239, the NSIS installer was produced, and `npm run beta:verify:artifact` accepted it. Installer SHA-256: `e1d35835f652f852f8163a16474798b21e95e7c8e7c979436ef6944f268a7ebf`. Authenticode status: NotSigned. Public Beta publication stays closed: this branch is not tagged or merged, and GitHub-hosted Actions still cannot run while the organization account is locked.
 
 ## What 0.9.0-beta.1 actually does
 
@@ -101,7 +101,7 @@ Node 24 refuses to start `npm.cmd` from `spawnSync` when `shell` is false. `scri
 
 Windows PowerShell 5.1 reads a UTF-8 script without a BOM using the system ANSI code page, so an em dash in `windows-build-doctor.ps1` was parsed as a stray quote. The Windows scripts are ASCII-only and do not use `&&` or `||`. They also do not assign automatic variables such as `$Host`; the Rust target triple is stored in `$rustHost`. The Visual Studio environment import writes a temporary `.cmd` and runs `set` on the next line. `scripts/build-beta-windows.ps1` still runs `cargo test --locked` after the doctor.
 
-`apps/desktop/src-tauri/icons/icon.ico` and the PNG sizes named by `tauri.conf.json` are committed. A fresh checkout can compile and test without running `npm run icons` first. `npm run build` still refreshes the set from `aura-app-icon.svg` before the installer is produced.
+`apps/desktop/src-tauri/icons/icon.ico` and the PNG sizes named by `tauri.conf.json` are committed. A fresh checkout can compile and test without running `npm run icons` first. `npm run build` regenerates that set only when `icons/source.sha256` no longer matches `aura-app-icon.svg`. `tauri icon` does not write `icon.icns` deterministically, so an up-to-date build leaves the committed files alone. `apps/desktop/src-tauri/gen/` is build output and is gitignored.
 
 `package.json` `allowScripts` permits the locked `esbuild@0.28.2` postinstall and the optional macOS `fsevents@2.3.3` install script. Those are the only two packages in the lockfile with install scripts. esbuild's script checks the platform binary that npm already installs as an optional dependency. No other dependency install script is approved.
 

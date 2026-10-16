@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -318,6 +319,24 @@ for (const icon of [
 }
 if (read(".gitignore").includes("apps/desktop/src-tauri/icons/")) {
   failures.push(".gitignore must not hide the committed Tauri icon set.");
+}
+if (!read(".gitignore").includes("apps/desktop/src-tauri/gen/")) {
+  failures.push(".gitignore must ignore apps/desktop/src-tauri/gen/; Tauri rewrites it during a build.");
+}
+const iconStamp = "apps/desktop/src-tauri/icons/source.sha256";
+const iconSvg = "apps/desktop/src-tauri/aura-app-icon.svg";
+if (!fs.existsSync(iconStamp)) {
+  failures.push(`${iconStamp} must record the SVG hash used for the committed icon set.`);
+} else {
+  const recorded = fs.readFileSync(iconStamp, "utf8").trim();
+  const actual = createHash("sha256").update(fs.readFileSync(iconSvg)).digest("hex");
+  if (recorded !== actual) {
+    failures.push(`${iconStamp} does not match ${iconSvg}. Run npm run icons and commit the result.`);
+  }
+}
+const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
+if (!desktopPackage.scripts?.["tauri:build"]?.includes("ensure-app-icons.mjs")) {
+  failures.push("tauri:build must use ensure-app-icons.mjs so an up-to-date icon set is not regenerated.");
 }
 
 if (failures.length > 0) {
